@@ -32,6 +32,12 @@ const DEFAULT_MODELS = [
   'qwen2.5:7b-instruct', 'olmo2:7b',
 ];
 const MODELS = process.argv.length > 3 ? process.argv.slice(3) : DEFAULT_MODELS;
+// With --cleanup, each model is deleted once measured. A survey of thirty
+// candidates is hundreds of GB; keeping them all would need a volume nobody
+// wants to pay for, and nothing here needs the model after its numbers are in.
+// Models named in KEEP are never deleted - those are the ones being served.
+const CLEANUP = process.argv.includes('--cleanup');
+const KEEP = new Set((process.env.KEEP_MODELS || 'granite4:tiny-h,gemma3:4b,granite-embedding:278m').split(','));
 
 // Real specification facts, the sort a retriever would hand the model.
 const DOCS = `
@@ -137,7 +143,7 @@ async function quality(model) {
   for (const model of MODELS) {
     process.stdout.write(`pulling ${model} ... `);
     const pull = await post('/api/pull', { model, stream: false }, 3600000);
-    if (pull.error) { console.log(`skip (${String(pull.error).slice(0, 60)})`); continue; }
+    if (pull.error) { console.log(`skip (${String(pull.error).slice(0, 60)})`); results.push({ model, error: String(pull.error).slice(0, 80) }); continue; }
     console.log('ok');
     try {
       const s = await speed(model);
@@ -148,6 +154,16 @@ async function quality(model) {
     } catch (err) {
       console.log(`  ${model}: FAILED ${err.message}`);
       results.push({ model, error: err.message });
+    }
+    // Written after every model: a survey this long must not lose everything
+    // to one crash at the end.
+    fs.writeFileSync('bench-results.json', `${JSON.stringify(results, null, 2)}\n`);
+    if (CLEANUP && !KEEP.has(model)) {
+      await fetch(`${base}/api/delete`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+      }).then(() => console.log(`  (removed ${model})`)).catch(() => {});
     }
   }
 
