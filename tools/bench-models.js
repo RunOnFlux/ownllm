@@ -68,7 +68,19 @@ const post = async (path, body, ms = 900000) => {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(ms),
   });
-  return res.json();
+  // /api/pull answers with a stream of NDJSON progress objects even when asked
+  // not to stream, so a plain res.json() throws on the second line. Take the
+  // last complete object, which is the final status either way.
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const lines = text.split('\n').filter(l => l.trim());
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      try { return JSON.parse(lines[i]); } catch { /* keep walking back */ }
+    }
+    return { error: `unparseable response: ${text.slice(0, 120)}` };
+  }
 };
 
 const rate = (count, ns) => (ns ? count / (ns / 1e9) : 0);
@@ -112,7 +124,7 @@ async function quality(model) {
   const results = [];
   for (const model of MODELS) {
     process.stdout.write(`pulling ${model} ... `);
-    const pull = await post('/api/pull', { model }, 3600000);
+    const pull = await post('/api/pull', { model, stream: false }, 3600000);
     if (pull.error) { console.log(`skip (${String(pull.error).slice(0, 60)})`); continue; }
     console.log('ok');
     try {
