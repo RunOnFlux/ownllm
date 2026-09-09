@@ -41,9 +41,28 @@ const REGISTRY = arg('registry', 'ghcr.io/runonflux');
 // Read from images/gate/VERSION, the same file CI tags the image with, so a
 // generated spec can never point at a version that was never published.
 const GATE_VERSION = fs.readFileSync(path.join(__dirname, '..', 'images', 'gate', 'VERSION'), 'utf8').trim();
-// The real key only ever lands in the .plaintext.json (gitignored) that feeds
-// the encrypter - never in the envelope that goes on chain.
-const API_KEY = arg('api-key', process.env.OWNLLM_API_KEY || crypto.randomBytes(32).toString('base64url'));
+/**
+ * The real key only ever lands in the .plaintext.json (gitignored) that feeds
+ * the encrypter - never in the envelope that goes on chain.
+ *
+ * An existing key is REUSED. Minting a new one on every run silently
+ * desynchronises the files from an app that is already deployed: the running
+ * instances keep the key they were built with, and every request signed with
+ * the newly generated one comes back 401 with nothing to explain why. Pass
+ * --rotate-key to deliberately mint a new one, and redeploy after you do.
+ */
+function existingApiKey(specsDir, basename) {
+  try {
+    const prior = JSON.parse(fs.readFileSync(path.join(specsDir, `${basename}.plaintext.json`), 'utf8'));
+    for (const component of prior.compose || []) {
+      const entry = (component.environmentParameters || []).find(e => e.startsWith('API_KEY='));
+      if (entry) return entry.slice('API_KEY='.length);
+    }
+  } catch {
+    // no prior spec, or it predates the gate - fall through and mint one
+  }
+  return null;
+}
 // API-only: drop the UI entirely. Every instance becomes stateless and
 // identical, which is what makes horizontal scaling and node migration a
 // non-event - there is no dataset to keep in sync.
@@ -154,6 +173,14 @@ const boot = {
 // stopped as hot standbys (advancedWorkflows.js:2513). It also earns a 20%
 // discount on the Flux Home quote.
 const WEBUI_MOUNT = INSTANCES > 1 ? 'g:/app/backend/data' : '/app/backend/data';
+
+const SPECS_DIR = path.join(__dirname, '..', 'specs');
+const KEY_BASENAME = `${APP}-${API_ONLY ? `${PROFILE}-api` : `${PROFILE}-enterprise`}`;
+const ROTATE = argv.includes('--rotate-key');
+const REUSED = !ROTATE && !arg('api-key', null) && !process.env.OWNLLM_API_KEY
+  ? existingApiKey(SPECS_DIR, KEY_BASENAME)
+  : null;
+const API_KEY = arg('api-key', process.env.OWNLLM_API_KEY || REUSED || crypto.randomBytes(32).toString('base64url'));
 
 const gate = {
   name: 'gate',
@@ -350,6 +377,7 @@ if (API_ONLY) {
 }
 if (ENTERPRISE || API_ONLY) {
   console.log(`  api key   ${API_KEY}`);
+  console.log(`            ${REUSED ? 'reused from the existing spec - deployed instances keep working' : 'NEWLY MINTED - anything already deployed still uses its old key'}`);
   console.log('            (stored only in the .plaintext.json, which .gitignore excludes)');
 }
 console.log(`  routing   https://${APP}.app.runonflux.io -> FDM, health-checked across ${spec.instances} instance(s)`);
