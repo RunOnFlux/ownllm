@@ -24,6 +24,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # github.repository_owner is "RunOnFlux", but registry paths must be
+      # lowercase. Computed rather than hardcoded so forks keep working.
+      - id: owner
+        run: echo "lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: images/gate
@@ -34,5 +39,5 @@ jobs:
           # registration will fail validation.
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/ownllm-gate:1.0.0
-            ghcr.io/${{ github.repository_owner }}/ownllm-gate:latest
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:1.0.0
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:latest
