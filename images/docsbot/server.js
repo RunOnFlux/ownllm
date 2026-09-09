@@ -20,6 +20,11 @@ const CHAT_MODEL = process.env.CHAT_MODEL || 'granite4:tiny-h';
 const EMBED_MODEL = process.env.EMBED_MODEL || 'granite-embedding:278m';
 const DOCS_DIR = process.env.DOCS_DIR || '/app/docs';
 const TOP_K = Number(process.env.TOP_K || 5);
+// Files listed here are prepended to every prompt, in a fixed order, ahead of
+// the retrieved chunks. That gives every request an identical prefix, which is
+// what llama.cpp's KV cache can actually reuse - retrieved chunks differ per
+// question and can never be cached, but the instruction plus core facts can.
+const PINNED = (process.env.PINNED_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
 const CHUNK_CHARS = Number(process.env.CHUNK_CHARS || 1200);
 const CHUNK_OVERLAP = Number(process.env.CHUNK_OVERLAP || 200);
 
@@ -83,8 +88,30 @@ async function buildIndex() {
     batch.forEach((c, j) => index.push({ ...c, vec: vecs[j], mag: norm(vecs[j]) }));
     status = `embedded ${index.length}/${chunks.length}`;
   }
+  buildPinned();
+
+  // Warm start: pull both models into RAM and lay down the KV cache for the
+  // invariant prefix now, so the first real user does not pay for a 4 GB load
+  // from disk plus a cold prefill. Ollama unloads on a timer, so the engine is
+  // configured with OLLAMA_KEEP_ALIVE=-1 to keep them there.
+  status = 'warming models';
+  console.log(status);
+  const t0 = Date.now();
+  await fetch(`${ENGINE}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      prompt: buildPrompt('warmup', []),
+      stream: false,
+      options: { num_predict: 1, temperature: 0 },
+    }),
+    signal: AbortSignal.timeout(900000),
+  }).catch(err => console.log(`warmup generate failed (continuing): ${err.message}`));
+  console.log(`warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
   ready = true;
-  status = `${index.length} chunks indexed from ${files.length} files`;
+  status = `${index.length} chunks indexed from ${files.length} files, models warm`;
   console.log(status);
 }
 
@@ -101,11 +128,22 @@ function retrieve(queryVec) {
  * model asked to answer only from context reliably says so when the context is
  * silent, which is the failure mode we want.
  */
+let pinnedBlock = '';
+function buildPinned() {
+  const chunks = index.filter(c => PINNED.some(p => c.source === p || c.source.startsWith(p)));
+  pinnedBlock = chunks.map(c => `(${c.source})\n${c.text}`).join('\n\n');
+  if (pinnedBlock) console.log(`pinned prefix: ${chunks.length} chunks, ~${Math.round(pinnedBlock.length / 4)} tokens`);
+}
+
 function buildPrompt(question, hits) {
   const ctx = hits.map((h, i) => `[${i + 1}] (${h.source})\n${h.text}`).join('\n\n');
+  // Invariant part first (instruction + pinned), variable part after: anything
+  // before the first difference is a cache hit on the next request.
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
     + `If the documentation does not contain the answer, reply exactly: "Not covered in the documentation." `
-    + `Never guess and never use outside knowledge.\n\nDOCUMENTATION:\n${ctx}\n\nQUESTION: ${question}\n\nANSWER:`;
+    + `Never guess and never use outside knowledge.\n\n`
+    + (pinnedBlock ? `CORE DOCUMENTATION:\n${pinnedBlock}\n\n` : '')
+    + `RETRIEVED DOCUMENTATION:\n${ctx}\n\nQUESTION: ${question}\n\nANSWER:`;
 }
 
 async function answer(question) {

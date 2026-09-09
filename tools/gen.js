@@ -89,6 +89,24 @@ const PROFILES = {
   // ~1B active params and hybrid-Mamba layers, so it is neither bandwidth nor
   // KV-cache bound the way the dense and MoE transformers are.
   granite: { cpu: 6.4, ram: 8000, hdd: 15, threads: 6, models: 'granite4:tiny-h', loaded: 1, ctx: 16384 },
+  // Docs bot: chat model AND embedding model must both stay resident. With
+  // loaded: 1 they evict each other on every single query - embed the question,
+  // which unloads the chat model, then generate, which unloads the embedder -
+  // paying a multi-GB reload twice per request. ram covers both plus runtime.
+  // Two models, chosen on measured strengths rather than one compromise:
+  // granite4:tiny-h answers documentation questions (153 tok/s prefill, 1.8x
+  // gemma3:4b, identical 7/9 grounding score) and gemma3:4b writes the prose
+  // (it was the only model that obeyed "no hashtags" and did not leak a
+  // "Here is a possible..." preamble). Plus the embedder. loaded: 3 keeps all
+  // three in RAM so no request ever pays a reload.
+  staff: {
+    cpu: 6.4, ram: 16000, hdd: 15, threads: 6, loaded: 3, ctx: 16384,
+    models: 'granite4:tiny-h gemma3:4b granite-embedding:278m',
+  },
+  docsbot: {
+    cpu: 6.4, ram: 12000, hdd: 15, threads: 6,
+    models: 'granite4:tiny-h granite-embedding:278m', loaded: 2, ctx: 16384,
+  },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },
   big: { cpu: 12, ram: 40000, hdd: 80, threads: 12, models: 'gpt-oss:20b qwen3-coder:30b qwen3:4b', loaded: 2, ctx: 32768 },
 };
@@ -153,7 +171,9 @@ const engine = {
     `OLLAMA_CONTEXT_LENGTH=${P.ctx}`,
     `OLLAMA_MAX_LOADED_MODELS=${P.loaded}`,
     'OLLAMA_NUM_PARALLEL=1',
-    'OLLAMA_KEEP_ALIVE=30m',
+    // -1 never unloads. A reload costs a multi-GB read from the volume, which
+    // on a cold node is minutes; there is nothing else competing for this RAM.
+    'OLLAMA_KEEP_ALIVE=-1',
     'OLLAMA_FLASH_ATTENTION=1',
     'OLLAMA_KV_CACHE_TYPE=q8_0',
   ],
