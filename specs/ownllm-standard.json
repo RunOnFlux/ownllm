@@ -71,7 +71,6 @@
         "WEBUI_AUTH=true",
         "ENABLE_API_KEY=true",
         "ENABLE_SIGNUP=true",
-        "WEBUI_SECRET_KEY=<CHANGE_ME_RANDOM_64_HEX>",
         "ENABLE_OPENAI_API=false"
       ],
       "commands": [],

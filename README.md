@@ -70,8 +70,7 @@ want to keep an existing key across regenerations.
 The *encrypted* envelope (`specs/*-api.json` after `encrypt-enterprise.js`) is
 safe to commit — the blob is ciphertext only ArcaneOS nodes can open.
 
-No licence file is included; pick one deliberately rather than inheriting a
-default. MIT is the usual choice for deployment tooling like this.
+Licensed MIT.
 
 ## Which JSON to deploy
 

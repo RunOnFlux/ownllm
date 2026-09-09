@@ -190,7 +190,10 @@ const webui = {
     // Leave signup on for the first boot to create the admin account, then set
     // to false and push a spec update.
     'ENABLE_SIGNUP=true',
-    'WEBUI_SECRET_KEY=<CHANGE_ME_RANDOM_64_HEX>',
+    // WEBUI_SECRET_KEY is deliberately absent: Open WebUI generates one on
+    // first boot and persists it in its data dir. Setting it here would put a
+    // session-signing secret into a non-enterprise spec, which is public on
+    // chain - anyone could forge a session.
     'ENABLE_OPENAI_API=false',
   ],
   commands: [],
