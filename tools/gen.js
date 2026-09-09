@@ -38,6 +38,9 @@ const ENTERPRISE = argv.includes('--enterprise');
 // Where the gate image is published. A public image needs no repoauth: the
 // gate holds no secret, the API key arrives at runtime from the encrypted env.
 const REGISTRY = arg('registry', 'ghcr.io/runonflux');
+// Read from images/gate/VERSION, the same file CI tags the image with, so a
+// generated spec can never point at a version that was never published.
+const GATE_VERSION = fs.readFileSync(path.join(__dirname, '..', 'images', 'gate', 'VERSION'), 'utf8').trim();
 // The real key only ever lands in the .plaintext.json (gitignored) that feeds
 // the encrypter - never in the envelope that goes on chain.
 const API_KEY = arg('api-key', process.env.OWNLLM_API_KEY || crypto.randomBytes(32).toString('base64url'));
@@ -155,7 +158,7 @@ const WEBUI_MOUNT = INSTANCES > 1 ? 'g:/app/backend/data' : '/app/backend/data';
 const gate = {
   name: 'gate',
   description: 'Bearer-token proxy in front of the OpenAI-compatible API',
-  repotag: `${REGISTRY}/ownllm-gate:1.0.0`,
+  repotag: `${REGISTRY}/ownllm-gate:${GATE_VERSION}`,
   ports: [PORT],
   containerPorts: [8080],
   domains: [''],

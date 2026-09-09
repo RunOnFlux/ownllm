@@ -13,8 +13,16 @@ Exactly **one image** needs building — the gate. Everything else in the
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/<your-org>/ownllm-gate:1.0.0 --push images/gate
+  -t "ghcr.io/<your-org>/ownllm-gate:$(cat images/gate/VERSION)" --push images/gate
 ```
+
+`images/gate/VERSION` is the single source of truth: CI tags the image from it
+and `tools/gen.js` reads the same file when it writes a repotag, so a spec can
+never name a version that was never published. **Bump it to publish; never move
+an existing version tag** - a moved tag means running instances and newly placed
+ones silently differ, and nothing in Flux would show you that. CI also pushes a
+`sha-<commit>` tag, so there is always an immutable reference even if a version
+tag does get reused.
 
 **`--platform linux/amd64` is not optional.** Enterprise apps are rejected
 unless every component supports amd64 (`appConstants.js`,

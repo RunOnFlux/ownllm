@@ -29,6 +29,14 @@ jobs:
       - id: owner
         run: echo "lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
+      # images/gate/VERSION is the single source of truth for the gate's
+      # version - tools/gen.js reads the same file when it writes a repotag, so
+      # the spec and the published image cannot drift. Bump it to publish;
+      # never move an existing version tag, or running instances and new ones
+      # silently differ.
+      - id: version
+        run: echo "v=$(tr -d '[:space:]' < images/gate/VERSION)" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: images/gate
@@ -39,5 +47,6 @@ jobs:
           # registration will fail validation.
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:1.0.0
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:${{ steps.version.outputs.v }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:sha-${{ github.sha }}
             ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:latest
