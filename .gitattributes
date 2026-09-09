@@ -1,0 +1,2 @@
+images/docsbot/docs/corpus.jsonl filter=lfs diff=lfs merge=lfs -text
+images/docsbot/docs/corpus.jsonl.vec filter=lfs diff=lfs merge=lfs -text

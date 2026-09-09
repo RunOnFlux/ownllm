@@ -1,0 +1,13 @@
+{
+  "name": "flux-llm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deployable Flux v8 app specs for a self-hosted CPU LLM endpoint",
+  "scripts": {
+    "gen": "node tools/gen.js",
+    "register": "node tools/register.js"
+  },
+  "dependencies": {
+    "bitcoinjs-message": "2.2.0"
+  }
+}

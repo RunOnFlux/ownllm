@@ -1,0 +1,10 @@
+node_modules/
+
+# These carry the real API key in cleartext - they are the input to the
+# encrypter, never something that should reach a public repository.
+specs/*.plaintext.json
+
+# Envelopes are safe once encrypted (the blob is ciphertext), but a
+# freshly generated one still holds the key until encrypt-enterprise.js runs.
+# Uncomment if you would rather not commit specs at all.
+# specs/*.json
