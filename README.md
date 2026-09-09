@@ -32,7 +32,7 @@ envelope:
 | file | for |
 |---|---|
 | `specs/<name>-<profile>-api.ui.json` | **importing into Flux Home** - full compose, `enterprise: false` |
-| `specs/<name>-<profile>-api.json` | `tools/register.js` - envelope with the encrypted blob |
+| `specs/<name>-<profile>-api.register.json` | `tools/register.js` only - `compose: []`, which the UI rejects |
 | `specs/<name>-<profile>-api.plaintext.json` | input to `tools/encrypt-enterprise.js` |
 
 **Turn the enterprise toggle ON before you submit.** The `.ui.json` carries
@@ -235,8 +235,8 @@ for this profile today, roughly 1100 network-wide.
 
 ```sh
 node tools/gen.js --profile wide --api-only --instances 10
-FLUX_WIF=<WIF> node tools/encrypt-enterprise.js specs/ownllm-wide-api.json
-FLUX_WIF=<WIF> node tools/register.js         specs/ownllm-wide-api.json
+FLUX_WIF=<WIF> node tools/encrypt-enterprise.js specs/ownllm-wide-api.register.json
+FLUX_WIF=<WIF> node tools/register.js         specs/ownllm-wide-api.register.json
 ```
 
 `--api-only` implies enterprise, because the whole point is the preset

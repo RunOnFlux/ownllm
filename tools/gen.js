@@ -309,9 +309,11 @@ const envelope = (ENTERPRISE || API_ONLY)
   : spec;
 
 const suffix = API_ONLY ? `${PROFILE}-api` : (ENTERPRISE ? `${PROFILE}-enterprise` : PROFILE);
-const out = path.join(__dirname, '..', 'specs', `${APP}-${suffix}.json`);
+const out = path.join(__dirname, '..', 'specs', (ENTERPRISE || API_ONLY)
+  ? `${APP}-${suffix}.register.json`
+  : `${APP}-${suffix}.json`);
 fs.writeFileSync(out, `${JSON.stringify(envelope, null, 2)}\n`);
-console.log(`wrote ${out}`);
+console.log(`wrote ${out}${(ENTERPRISE || API_ONLY) ? '  (tools/register.js only - compose is empty, the UI will reject it)' : ''}`);
 
 // For deploying through Flux Home rather than tools/register.js: the UI wants
 // the compose in cleartext and does the encrypting itself when you turn on the
@@ -320,7 +322,7 @@ if (ENTERPRISE || API_ONLY) {
   const uiSpec = { ...spec, enterprise: false };
   const uiOut = path.join(__dirname, '..', 'specs', `${APP}-${suffix}.ui.json`);
   fs.writeFileSync(uiOut, `${JSON.stringify(uiSpec, null, 2)}\n`);
-  console.log(`wrote ${uiOut}  (import this into Flux Home, then TURN ON the enterprise toggle)`);
+  console.log(`wrote ${uiOut}\n        ^ THIS is the file to import into Flux Home. Turn ON the enterprise toggle.`);
 }
 
 if (ENTERPRISE || API_ONLY) {

@@ -11,7 +11,7 @@
  * gets written after a node has actually decrypted and validated it - if none
  * of the candidates works, you get an error instead of an app nobody can run.
  *
- *   FLUX_WIF=<WIF> node tools/encrypt-enterprise.js specs/ownllm-small-api.json
+ *   FLUX_WIF=<WIF> node tools/encrypt-enterprise.js specs/ownllm-small-api.register.json
  *
  * Writes the envelope back with "enterprise" filled in, reading the plaintext
  * from the matching specs/<name>.plaintext.json.
