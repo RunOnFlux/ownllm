@@ -69,9 +69,10 @@ const post = async (path, body, ms = 900000) => {
     signal: AbortSignal.timeout(ms),
   });
   // /api/pull answers with a stream of NDJSON progress objects even when asked
-  // not to stream, so a plain res.json() throws on the second line. Take the
-  // last complete object, which is the final status either way.
-  const text = await res.text();
+  // not to stream. Buffering that whole stream is what killed an earlier run:
+  // a 19 GB model emits enough progress lines to exhaust memory. Read
+  // incrementally and keep only the tail, which holds the final status.
+  const text = await tailOf(res);
   try {
     return JSON.parse(text);
   } catch {
@@ -82,6 +83,17 @@ const post = async (path, body, ms = 900000) => {
     return { error: `unparseable response: ${text.slice(0, 120)}` };
   }
 };
+
+/** Drains a response, retaining only the last 4 KB - enough for the final object. */
+async function tailOf(res) {
+  if (!res.body) return '';
+  const decoder = new TextDecoder();
+  let tail = '';
+  for await (const piece of res.body) {
+    tail = (tail + decoder.decode(piece, { stream: true })).slice(-4096);
+  }
+  return tail;
+}
 
 const rate = (count, ns) => (ns ? count / (ns / 1e9) : 0);
 
