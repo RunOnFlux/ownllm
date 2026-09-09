@@ -227,11 +227,20 @@ published port across every instance. You get one stable URL; put that in
 `opencode.json` and never think about node addresses.
 
 **Migration.** When an instance moves, the new node starts with an empty volume
-and has to pull 13 GB. `images/gate` exists partly for this: it polls
-`/api/tags` and answers `/healthz` with **503 until every model in `MODELS` is
-actually present**, so FDM keeps the instance out of rotation while it
-downloads. Ollama answers 200 on `/api/tags` from the moment it boots, which is
-why "is the engine up" is the wrong health check.
+and has to pull 13 GB. The gate polls `/api/tags` and serves **503 until every
+model in `MODELS` is actually present**, so an instance that cannot answer is
+reported unhealthy rather than handed traffic. Ollama returns 200 on
+`/api/tags` from the moment it boots, which is why "is the engine up" is the
+wrong readiness signal.
+
+FDM is HAProxy, and an app with no entry in `flux-domain-manager`'s
+`src/services/application/custom.js` is checked with
+`option httpchk` + `http-check send meth GET uri /` - no `expect status`, so
+HAProxy's default of "2xx or 3xx is healthy" applies. The gate therefore answers
+readiness on **`/`** (as well as `/health`, which FDM's custom entries use, and
+`/healthz`) and leaves those three unauthenticated. Requiring the bearer token
+on `/` would return 401 to the health check and mark the backend down
+permanently, model or no model.
 
 **The ceiling is 100, not hundreds.** `maximumInstances` is 100
 (`appValidator.js:826`). For more, register several apps (`ownllm1`, `ownllm2`,

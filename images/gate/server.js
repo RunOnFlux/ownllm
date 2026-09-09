@@ -60,7 +60,14 @@ function authorized(req) {
 const server = http.createServer(async (req, res) => {
   // Unauthenticated, because FDM's health check cannot carry a bearer token.
   // It exposes only readiness, never anything about the models or the key.
-  if (req.url === '/healthz') {
+  //
+  // '/' matters most: FDM is HAProxy, and an app with no custom entry gets
+  // `option httpchk` + `http-check send meth GET uri /` (flux-domain-manager,
+  // src/services/application/custom.js). Answering 401 there - which is what
+  // requiring the bearer token on every path would do - marks the backend down
+  // for good. '/health' is the path FDM's custom entries use; '/healthz' is
+  // kept because things may already point at it.
+  if (req.url === '/' || req.url === '/health' || req.url === '/healthz') {
     res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain' });
     res.end(ready ? 'ok' : readyDetail);
     return;
