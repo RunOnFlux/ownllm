@@ -35,10 +35,18 @@ envelope:
 | `specs/<name>-<profile>-api.register.json` | `tools/register.js` only - `compose: []`, which the UI rejects |
 | `specs/<name>-<profile>-api.plaintext.json` | input to `tools/encrypt-enterprise.js` |
 
-**Turn the enterprise toggle ON before you submit.** The `.ui.json` carries
-`API_KEY` in cleartext because the UI has to see it in order to encrypt it - if
-you submit without enabling enterprise, that key is written to the chain in the
-clear and anyone can read it. Rotate it by regenerating if that happens.
+Leave `enterprise: false` in the imported file - the UI decides for itself
+(`SimpleDeploy.vue`): it enables Enterprise mode when the spec has a private
+image, a non-empty enterprise field, or an environment variable whose *name*
+looks like a secret. `src/utils/detectSecrets.js` matches `/api[._-]?key/i`, so
+`API_KEY=` triggers it. Setting `enterprise: true` yourself breaks things -
+`specificationFormatter` stringifies the boolean to `"true"`, which is truthy,
+and the node then tries to decrypt `"true"` as a blob.
+
+Confirm the Enterprise badge is on before you pay. The `.ui.json` carries
+`API_KEY` in cleartext because the UI has to see it in order to encrypt it; a
+non-enterprise submission writes that key to the chain where anyone can read it.
+Regenerate for a fresh key if that happens.
 
 Going through the UI means `encrypt-enterprise.js` and `register.js` are not in
 your path, and you pay the marketplace quote rather than the consensus price.

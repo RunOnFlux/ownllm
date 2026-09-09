@@ -28,6 +28,19 @@ const specPath = process.argv[2];
 if (!specPath) throw new Error('usage: FLUX_WIF=... node tools/encrypt-enterprise.js <envelope.json>');
 if (!WIF) throw new Error('FLUX_WIF is not set (WIF private key of the owner ZelID)');
 
+/**
+ * /apps/getpublickey returns a base64 SPKI DER key, not PEM - the Flux Home UI
+ * imports it with subtle.importKey('spki', ...) in src/utils/enterpriseCrypto.js.
+ * crypto.publicEncrypt needs PEM or a KeyObject, so convert.
+ */
+function toPublicKey(raw) {
+  const s = String(raw).trim();
+  if (s.includes('-----BEGIN')) return crypto.createPublicKey(s);
+  return crypto.createPublicKey({ key: Buffer.from(s, 'base64'), format: 'der', type: 'spki' });
+}
+
+// The UI uses RSA-OAEP with SHA-256 (enterpriseCrypto.js importRsaPublicKey), so
+// that is tried first; the others remain as a fallback in case that changes.
 const PADDINGS = [
   { name: 'OAEP-SHA256', opts: { padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' } },
   { name: 'OAEP-SHA1', opts: { padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha1' } },
@@ -64,7 +77,8 @@ function buildBlob(publicKey, plaintextJson, padding) {
   const zelidauth = `zelid=${envelope.owner}&signature=${encodeURIComponent(sign(loginPhrase))}&loginPhrase=${loginPhrase}`;
 
   console.log(`requesting app public key for ${envelope.name} ...`);
-  const publicKey = await post(NODE, '/apps/getpublickey', { owner: envelope.owner, name: envelope.name }, { zelidauth });
+  const publicKeyRaw = await post(NODE, '/apps/getpublickey', { owner: envelope.owner, name: envelope.name }, { zelidauth });
+  const publicKey = toPublicKey(publicKeyRaw);
 
   const plaintextJson = JSON.stringify(plaintext);
   for (const padding of PADDINGS) {
