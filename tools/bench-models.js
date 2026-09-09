@@ -31,7 +31,10 @@ const DEFAULT_MODELS = [
   'phi4-mini:latest', 'mistral:7b', 'qwen3:4b-instruct',
   'qwen2.5:7b-instruct', 'olmo2:7b',
 ];
-const MODELS = process.argv.length > 3 ? process.argv.slice(3) : DEFAULT_MODELS;
+// Flags and model names share argv, so strip the flags or "--cleanup" gets
+// pulled as though it were a model.
+const ARGS = process.argv.slice(3).filter(a => !a.startsWith('--'));
+const MODELS = ARGS.length ? ARGS : DEFAULT_MODELS;
 // With --cleanup, each model is deleted once measured. A survey of thirty
 // candidates is hundreds of GB; keeping them all would need a volume nobody
 // wants to pay for, and nothing here needs the model after its numbers are in.
