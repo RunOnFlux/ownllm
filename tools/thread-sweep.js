@@ -30,6 +30,35 @@ const post = async body => {
   });
   return res.json();
 };
+/** Drains a response keeping only the tail: pull progress is megabytes of NDJSON. */
+async function tailOf(res) {
+  if (!res.body) return '';
+  const decoder = new TextDecoder();
+  let tail = '';
+  for await (const piece of res.body) tail = (tail + decoder.decode(piece, { stream: true })).slice(-4096);
+  return tail;
+}
+
+/**
+ * Pull before measuring. Every tool in this directory has now been written
+ * once without this and reported "model not found" as though it were a result:
+ * six identical failures in a row look like a broken model rather than a
+ * missing download.
+ */
+async function ensure(model) {
+  const res = await fetch(`${base}/api/pull`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, stream: false }),
+    signal: AbortSignal.timeout(3600000),
+  });
+  const text = await tailOf(res);
+  const last = text.split('\n').filter(l => l.trim()).pop();
+  try { const o = JSON.parse(last); if (o.error) throw new Error(String(o.error).slice(0, 80)); } catch (e) {
+    if (e.message && !/JSON/.test(e.message)) throw e;
+  }
+}
+
 // Fresh every call: a repeated prompt would be served from the prefix cache and
 // report a prefill rate that has nothing to do with the model.
 const filler = () => Array.from({ length: 2500 }, () => Math.random().toString(36).slice(2, 9)).join(' ');
@@ -39,6 +68,7 @@ const filler = () => Array.from({ length: 2500 }, () => Math.random().toString(3
   for (const model of MODELS) {
     out[model] = [];
     console.log(`\n${model}`);
+    try { await ensure(model); } catch (err) { console.log(`  pull failed: ${err.message}`); continue; }
     console.log('  threads   generation      prefill');
     for (const n of THREADS) {
       try {
