@@ -80,6 +80,38 @@ const WRITING = [
     check: t => t.split(/[.!?]\s/).filter(Boolean).length <= 3 && t.length > 40 },
 ];
 
+/** Drains a response keeping only the tail: pull progress is megabytes of NDJSON. */
+async function tailOf(res) {
+  if (!res.body) return '';
+  const decoder = new TextDecoder();
+  let tail = '';
+  for await (const piece of res.body) tail = (tail + decoder.decode(piece, { stream: true })).slice(-4096);
+  return tail;
+}
+
+/**
+ * Ensure the model is present. Without this the whole run reports 0/9 with
+ * "model not found" for every test, which looks like a catastrophic quality
+ * result rather than a missing download.
+ */
+async function ensure(model) {
+  const res = await fetch(`${base}/api/pull`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, stream: false }),
+    signal: AbortSignal.timeout(3600000),
+  });
+  const text = await tailOf(res);
+  const lines = text.split('\n').filter(l => l.trim());
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const obj = JSON.parse(lines[i]);
+      if (obj.error) throw new Error(String(obj.error).slice(0, 80));
+      return;
+    } catch (err) { if (err.message && !/JSON/.test(err.message)) throw err; }
+  }
+}
+
 async function gen(model, prompt, opts) {
   const res = await fetch(`${base}/api/generate`, {
     method: 'POST',
@@ -96,6 +128,9 @@ async function gen(model, prompt, opts) {
   const all = [];
   for (const model of MODELS) {
     const row = { model, tests: {}, writing: {}, score: 0, max: 0 };
+    process.stdout.write(`pulling ${model} ... `);
+    try { await ensure(model); console.log('ok'); }
+    catch (err) { console.log(`skip (${err.message})`); continue; }
     for (const t of TESTS) {
       row.max += t.weight;
       try {
