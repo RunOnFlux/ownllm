@@ -23,6 +23,26 @@ Silicon Mac produces an arm64-only manifest — the registration fails validatio
 with no obvious clue why. `.github/workflows/gate.yml` builds both
 architectures on push, which is the safer route.
 
+### Deploying through Flux Home instead of the CLI
+
+The UI does its own encrypting, so it wants the compose in **cleartext** and the
+enterprise toggle switched on at submit time. Import the `.ui.json`, not the
+envelope:
+
+| file | for |
+|---|---|
+| `specs/<name>-<profile>-api.ui.json` | **importing into Flux Home** - full compose, `enterprise: false` |
+| `specs/<name>-<profile>-api.json` | `tools/register.js` - envelope with the encrypted blob |
+| `specs/<name>-<profile>-api.plaintext.json` | input to `tools/encrypt-enterprise.js` |
+
+**Turn the enterprise toggle ON before you submit.** The `.ui.json` carries
+`API_KEY` in cleartext because the UI has to see it in order to encrypt it - if
+you submit without enabling enterprise, that key is written to the chain in the
+clear and anyone can read it. Rotate it by regenerating if that happens.
+
+Going through the UI means `encrypt-enterprise.js` and `register.js` are not in
+your path, and you pay the marketplace quote rather than the consensus price.
+
 ### One thing to do by hand after the first build
 
 A package pushed to GHCR by Actions starts **private**, even in a public repo.

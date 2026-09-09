@@ -313,6 +313,16 @@ const out = path.join(__dirname, '..', 'specs', `${APP}-${suffix}.json`);
 fs.writeFileSync(out, `${JSON.stringify(envelope, null, 2)}\n`);
 console.log(`wrote ${out}`);
 
+// For deploying through Flux Home rather than tools/register.js: the UI wants
+// the compose in cleartext and does the encrypting itself when you turn on the
+// enterprise toggle. Same secret exposure as the plaintext file, so gitignored.
+if (ENTERPRISE || API_ONLY) {
+  const uiSpec = { ...spec, enterprise: false };
+  const uiOut = path.join(__dirname, '..', 'specs', `${APP}-${suffix}.ui.json`);
+  fs.writeFileSync(uiOut, `${JSON.stringify(uiSpec, null, 2)}\n`);
+  console.log(`wrote ${uiOut}  (import this into Flux Home, then TURN ON the enterprise toggle)`);
+}
+
 if (ENTERPRISE || API_ONLY) {
   // What goes INSIDE the encrypted blob, and the only file that holds API_KEY
   // in cleartext - .gitignore excludes it. tools/encrypt-enterprise.js reads it

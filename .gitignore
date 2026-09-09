@@ -8,3 +8,6 @@ specs/*.plaintext.json
 # freshly generated one still holds the key until encrypt-enterprise.js runs.
 # Uncomment if you would rather not commit specs at all.
 # specs/*.json
+
+# Holds API_KEY in cleartext for Flux Home import - the UI encrypts it on submit.
+specs/*.ui.json
