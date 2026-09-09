@@ -84,6 +84,11 @@ const PROFILES = {
   // gives up little on tokens/sec versus 8 - it is prefill that suffers. Buys a
   // far better model than 'small' for a small extra cost, and still fits NIMBUS.
   wide: { cpu: 4, ram: 16000, hdd: 25, threads: 4, models: 'gpt-oss:20b', loaded: 1, ctx: 8192 },
+  // Measured on a stratus node, 12.6 app cores: 14.3 tok/s generation and
+  // 184.6 tok/s prefill, against 5.9/53.5 for gpt-oss:20b on the same machine.
+  // ~1B active params and hybrid-Mamba layers, so it is neither bandwidth nor
+  // KV-cache bound the way the dense and MoE transformers are.
+  granite: { cpu: 6.4, ram: 8000, hdd: 15, threads: 6, models: 'granite4:tiny-h', loaded: 1, ctx: 16384 },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },
   big: { cpu: 12, ram: 40000, hdd: 80, threads: 12, models: 'gpt-oss:20b qwen3-coder:30b qwen3:4b', loaded: 2, ctx: 32768 },
 };
@@ -95,6 +100,19 @@ if (!P) throw new Error(`Unknown profile ${PROFILE}. Use: ${Object.keys(PROFILES
 // --models overrides the profile default; sizes are only used for the disk
 // warning below.
 if (arg('models', null)) P.models = arg('models', null).trim();
+
+// --cpu overrides the engine's core count. It also moves OLLAMA_NUM_THREAD and
+// OMP_NUM_THREADS with it: NanoCPUs is a cgroup quota, so the container still
+// sees every host core and would spawn nproc threads that then fight over the
+// quota. The two must never drift apart, which is why one flag sets both.
+// ram/hdd overrides: a model swap changes the resident set and the blob store
+// independently of the profile's core count.
+if (arg('ram', null)) P.ram = Number(arg('ram', null));
+if (arg('hdd', null)) P.hdd = Number(arg('hdd', null));
+if (arg('cpu', null)) {
+  P.cpu = Number(arg('cpu', null));
+  P.threads = Math.max(1, Math.round(P.cpu));
+}
 
 const MODEL_SIZES_GB = {
   'qwen3:4b': 2.6, 'qwen3:8b': 5.2, 'gpt-oss:20b': 13, 'qwen3-coder:30b': 18, 'qwen3:30b-a3b': 18,

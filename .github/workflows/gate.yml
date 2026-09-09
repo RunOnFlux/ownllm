@@ -1,14 +1,17 @@
-name: build gate image
+name: build images
 
 on:
   push:
     branches: [main, master]
-    paths: ['images/gate/**', '.github/workflows/gate.yml']
+    paths: ['images/**', '.github/workflows/gate.yml']
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [gate, docsbot]
     permissions:
       contents: read
       packages: write
@@ -39,7 +42,7 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: images/gate
+          context: images/${{ matrix.image }}
           push: true
           # amd64 is MANDATORY: enterprise apps are rejected unless every
           # component supports it (appConstants.js enterpriseRequiredArchitectures).
@@ -47,6 +50,6 @@ jobs:
           # registration will fail validation.
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:${{ steps.version.outputs.v }}
-            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:sha-${{ github.sha }}
-            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-gate:latest
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-${{ matrix.image }}:${{ steps.version.outputs.v }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-${{ matrix.image }}:sha-${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-${{ matrix.image }}:latest
