@@ -75,6 +75,22 @@ if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(APP) || APP.length > 63) 
 }
 if (/^(flux|zel)/i.test(APP)) throw new Error('App name must not start with flux/zel');
 
+/**
+ * Thread count for a given core allocation.
+ *
+ * Measured on granite4:tiny-h, sweeping num_thread on one node:
+ *   threads   2     4     6     8    10    12
+ *   gen    21.8  25.4  26.5  27.2  26.6  24.0  tok/s
+ *   prefill  69   123   167   193   169   162  tok/s
+ *
+ * Both peak at 8 and fall away after: past that, synchronisation costs more
+ * than the extra parallelism returns. Never hand ollama more threads than
+ * that, however many cores the app is allocated - 12 threads measured 19%
+ * slower at prefill than 8.
+ */
+const THREAD_PEAK = 8;
+const threadsFor = cpu => Math.max(1, Math.min(THREAD_PEAK, Math.round(cpu)));
+
 const PROFILES = {
   small: { cpu: 4, ram: 8000, hdd: 20, threads: 4, models: 'qwen3:4b', loaded: 1, ctx: 16384 },
   // Sized to fit a NIMBUS node too: nimbus offers 7.0 cores / 28000 MB to apps,
@@ -108,7 +124,7 @@ const PROFILES = {
     models: 'granite4:tiny-h granite-embedding:278m', loaded: 2, ctx: 16384,
   },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },
-  big: { cpu: 12, ram: 40000, hdd: 80, threads: 12, models: 'gpt-oss:20b qwen3-coder:30b qwen3:4b', loaded: 2, ctx: 32768 },
+  big: { cpu: 12, ram: 40000, hdd: 80, threads: 8, models: 'gpt-oss:20b qwen3-coder:30b qwen3:4b', loaded: 2, ctx: 32768 },
 };
 const P = PROFILES[PROFILE];
 if (!P) throw new Error(`Unknown profile ${PROFILE}. Use: ${Object.keys(PROFILES).join(', ')}`);
@@ -129,7 +145,7 @@ if (arg('ram', null)) P.ram = Number(arg('ram', null));
 if (arg('hdd', null)) P.hdd = Number(arg('hdd', null));
 if (arg('cpu', null)) {
   P.cpu = Number(arg('cpu', null));
-  P.threads = Math.max(1, Math.round(P.cpu));
+  P.threads = threadsFor(P.cpu);
 }
 
 const MODEL_SIZES_GB = {
