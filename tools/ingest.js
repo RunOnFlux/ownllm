@@ -29,6 +29,20 @@ const OUT = one('--out', 'corpus.jsonl');
 const MAX_CHARS = Number(one('--chunk', 1200));
 const OVERLAP = Number(one('--overlap', 200));
 const MAX_PAGES = Number(one('--max-pages', 400));
+// Sitemaps carry far more than you want. sspwallet.io lists 2226 URLs, which is
+// 159 pages in 14 languages: ingesting all of it would put fourteen
+// translations of every page into the corpus and wreck retrieval.
+const INCLUDE = one('--include', null) ? new RegExp(one('--include', null)) : null;
+const EXCLUDE = one('--exclude', null) ? new RegExp(one('--exclude', null)) : null;
+/**
+ * Trust tier, carried through to every chunk. Documentation and marketing
+ * should not be weighed the same: a 2021 announcement stating the old node
+ * tiers is not wrong so much as stale, and a bot that cites it as current is
+ * worse than one that has never heard of it.
+ */
+const TIER = one('--tier', 'docs');
+
+const keepUrl = u => (!INCLUDE || INCLUDE.test(u)) && (!EXCLUDE || !EXCLUDE.test(u));
 
 const chunks = [];
 
@@ -123,7 +137,7 @@ async function sitemapUrls(site) {
     if (!fs.existsSync(dir)) { console.log(`skip ${dir} (missing)`); continue; }
     const files = walk(dir);
     for (const f of files) {
-      addText(fs.readFileSync(f, 'utf8'), { source: path.relative(dir, f), origin: dir, url: '' });
+      addText(fs.readFileSync(f, 'utf8'), { source: path.relative(dir, f), origin: dir, url: '', tier: TIER });
     }
     console.log(`${dir}: ${files.length} files`);
   }
@@ -131,30 +145,54 @@ async function sitemapUrls(site) {
   for (const pdf of many('--pdf')) {
     try {
       const text = execFileSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8', maxBuffer: 64e6 });
-      addText(text, { source: path.basename(pdf), origin: 'pdf', url: '' });
+      addText(text, { source: path.basename(pdf), origin: 'pdf', url: '', tier: TIER });
       console.log(`${pdf}: ${text.length} chars`);
     } catch (err) {
       console.log(`SKIPPED ${pdf}: ${/ENOENT/.test(err.message) ? 'pdftotext not installed (brew install poppler)' : err.message}`);
     }
   }
 
+  for (const feed of many('--rss')) {
+    // Medium serves 403 to scrapers and its sitemap returns HTML, so the feed
+    // is the only reliable way in - but it caps at the ten most recent posts.
+    // Anything older has to be exported or fetched by hand.
+    try {
+      const xml = await fetchText(feed);
+      const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1]);
+      for (const item of items) {
+        const title = (item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || item.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || 'untitled';
+        const link = (item.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || '';
+        const date = (item.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || '';
+        const body = (item.match(/<content:encoded><!\[CDATA\[([\s\S]*?)\]\]><\/content:encoded>/) || [])[1] || '';
+        if (body) addText(`# ${title}\n${htmlToText(body)}`, { source: title.trim(), origin: feed, url: link.trim(), tier: TIER, date: date.trim() });
+      }
+      console.log(`${feed}: ${items.length} items (RSS shows only the latest 10)`);
+    } catch (err) { console.log(`SKIPPED ${feed}: ${err.message}`); }
+  }
+
   for (const site of many('--site')) {
     let urls = await sitemapUrls(site);
     if (!urls.length) { console.log(`${site}: no sitemap, fetching the single page`); urls = [site]; }
-    urls = urls.slice(0, MAX_PAGES);
+    const before = urls.length;
+    urls = urls.filter(keepUrl).slice(0, MAX_PAGES);
+    if (before !== urls.length) console.log(`${site}: ${before} URLs -> ${urls.length} after filtering`);
     let ok = 0;
     for (const url of urls) {
       try {
         const html = await fetchText(url);
         const before = chunks.length;
-        addText(htmlToText(html), { source: titleOf(html) || url, origin: site, url });
+        addText(htmlToText(html), { source: titleOf(html) || url, origin: site, url, tier: TIER });
         if (chunks.length > before) ok += 1;
       } catch { /* a dead link should not stop the crawl */ }
     }
     console.log(`${site}: ${ok}/${urls.length} pages`);
   }
 
-  fs.writeFileSync(OUT, `${chunks.map(c => JSON.stringify(c)).join('\n')}\n`);
+  const line = `${chunks.map(c => JSON.stringify(c)).join('\n')}\n`;
+  if (argv.includes('--append') && fs.existsSync(OUT)) fs.appendFileSync(OUT, line);
+  else fs.writeFileSync(OUT, line);
   const words = chunks.reduce((a, c) => a + c.text.split(/\s+/).length, 0);
+  const byTier = chunks.reduce((a, c) => ({ ...a, [c.tier || 'docs']: (a[c.tier || 'docs'] || 0) + 1 }), {});
   console.log(`\nwrote ${OUT}: ${chunks.length} chunks, ~${words.toLocaleString()} words`);
+  console.log(`  by tier: ${Object.entries(byTier).map(([t, n]) => `${t}=${n}`).join(', ')}`);
 })();
