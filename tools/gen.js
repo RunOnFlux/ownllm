@@ -67,6 +67,8 @@ function existingApiKey(specsDir, basename) {
 // identical, which is what makes horizontal scaling and node migration a
 // non-event - there is no dataset to keep in sync.
 const API_ONLY = argv.includes('--api-only');
+// Adds the grounded docs bot alongside the raw model API, on the next port.
+const DOCSBOT = argv.includes('--docsbot');
 
 // Flux rules enforced in appValidator.js: app name is alphanumeric + inner
 // hyphens, max 63, and must not start with "flux" or "zel".
@@ -120,7 +122,7 @@ const PROFILES = {
     models: 'granite4:tiny-h gemma3:4b granite-embedding:278m',
   },
   docsbot: {
-    cpu: 6.4, ram: 12000, hdd: 15, threads: 6,
+    cpu: 6.0, ram: 12000, hdd: 15, threads: 6,
     models: 'granite4:tiny-h granite-embedding:278m', loaded: 2, ctx: 16384,
   },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },
@@ -260,6 +262,34 @@ const gate = {
   hdd: 2,
 };
 
+const docsbot = {
+  name: 'docsbot',
+  description: 'Grounded documentation bot: retrieval over baked-in docs, with citations',
+  repotag: `${REGISTRY}/ownllm-docsbot:${GATE_VERSION}`,
+  ports: [PORT + 1],
+  containerPorts: [8080],
+  domains: [''],
+  environmentParameters: [
+    `UPSTREAM=${ENGINE_URL}`,
+    `API_KEY=${API_KEY}`,
+    'CHAT_MODEL=granite4:tiny-h',
+    'EMBED_MODEL=granite-embedding:278m',
+    // Always in front of the retrieved chunks, so the prompt prefix is
+    // identical between requests and the KV cache covers it.
+    'PINNED_DOCS=app-spec-v8.md',
+    'TOP_K=5',
+  ],
+  commands: [],
+  // The index lives in memory, rebuilt at boot from documents baked into the
+  // image. Nothing to persist, so this mount is only here because Flux
+  // requires one.
+  containerData: '/tmp',
+  repoauth: '',
+  cpu: 0.3,
+  ram: 500,
+  hdd: 1,
+};
+
 const webui = {
   name: 'webui',
   description: 'Open WebUI - browser UI plus authenticated OpenAI-compatible API',
@@ -294,7 +324,7 @@ const spec = {
   description: 'Self-hosted CPU LLM endpoint (Ollama + Open WebUI) on Flux',
   owner: OWNER,
   compose: API_ONLY
-    ? [engine, boot, gate]
+    ? (DOCSBOT ? [engine, boot, gate, docsbot] : [engine, boot, gate])
     : (ENTERPRISE ? [engine, boot, gate, webui] : [engine, boot, webui]),
   instances: INSTANCES,
   contacts: [],
@@ -305,7 +335,7 @@ const spec = {
   datacenter: false,
   // A truthy value here means the compose is encrypted. The blob is produced by
   // Flux Home (see README); this generator emits the plaintext to feed it.
-  enterprise: ENTERPRISE || API_ONLY ? '<PASTE_ENCRYPTED_BLOB>' : false,
+  enterprise: ENTERPRISE || API_ONLY || DOCSBOT ? '<PASTE_ENCRYPTED_BLOB>' : false,
 };
 
 // --- sanity checks against the rules in appValidator.js -------------------
@@ -326,7 +356,9 @@ spec.compose.forEach((c) => {
   });
   if (!/^[a-zA-Z0-9]+$/.test(c.name)) throw new Error(`${c.name}: component names are alphanumeric only`);
   if (/^(flux|zel)/.test(c.name)) throw new Error(`${c.name}: must not start with flux/zel`);
-  tc += c.cpu; tr += c.ram; th += c.hdd;
+  // Floating point: 0.5 + 6.0 + 0.3 + 0.1 lands on 6.899999999999999. Flux
+  // validates cpu in units of 0.1, so work in tenths and convert back.
+  tc = Math.round((tc + c.cpu) * 10) / 10; tr += c.ram; th += c.hdd;
 });
 if (INSTANCES < 1 || INSTANCES > 100) {
   throw new Error(`instances must be 1-100 (appValidator.js:826); got ${INSTANCES}`);
@@ -423,7 +455,7 @@ console.log(`  profile   ${PROFILE}${ENTERPRISE ? ' + enterprise gate' : ''}  ->
 console.log(`  models    ${P.models}`);
 console.log(`  engine    reachable in-app at ${ENGINE_URL}`);
 if (API_ONLY) {
-  console.log(`  published :${PORT} (authenticated API, no UI)`);
+  console.log(`  published :${PORT} (authenticated model API)${DOCSBOT ? `  :${PORT + 1} (grounded docs bot)` : ''}`);
   console.log('  state     none - every instance identical, nothing to sync');
 } else {
   console.log(`  published ${ENTERPRISE ? `:${PORT} (authenticated API)  :${PORT + 1} (Open WebUI)` : `:${PORT} (Open WebUI)`}`);
