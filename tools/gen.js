@@ -118,11 +118,17 @@ const PROFILES = {
   // "Here is a possible..." preamble). Plus the embedder. loaded: 3 keeps all
   // three in RAM so no request ever pays a reload.
   staff: {
-    cpu: 6.4, ram: 16000, hdd: 15, threads: 6, loaded: 3, ctx: 16384,
+    cpu: 12.0, ram: 28000, hdd: 40, threads: 8, parallel: 3, loaded: 3, ctx: 16384,
     models: 'granite4:tiny-h gemma3:4b granite-embedding:278m',
   },
+  // Sized with headroom rather than to the minimum. Flux capacity is cheap and
+  // the failure modes of being tight are expensive: a 500 MB docsbot was
+  // OOM-killed at 86% indexed after two hours, and would have repeated that
+  // forever. 8 engine cores also takes the measured thread peak (8 threads gave
+  // 205 tok/s prefill against 174 at 6), which costs the NIMBUS placement pool
+  // but buys real speed on a corpus this size.
   docsbot: {
-    cpu: 6.0, ram: 12000, hdd: 15, threads: 6,
+    cpu: 12.0, ram: 24000, hdd: 60, threads: 8, parallel: 3,
     models: 'granite4:tiny-h granite-embedding:278m', loaded: 2, ctx: 16384,
   },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },
@@ -188,7 +194,10 @@ const engine = {
     `OMP_NUM_THREADS=${P.threads}`,
     `OLLAMA_CONTEXT_LENGTH=${P.ctx}`,
     `OLLAMA_MAX_LOADED_MODELS=${P.loaded}`,
-    'OLLAMA_NUM_PARALLEL=1',
+    // Cores beyond the 8-thread peak do not speed up one request - measured,
+    // 12 threads was 19% slower than 8 - but they do let separate requests run
+    // at the same time instead of queueing. That is what the extra cores buy.
+    `OLLAMA_NUM_PARALLEL=${P.parallel || 1}`,
     // -1 never unloads. A reload costs a multi-GB read from the volume, which
     // on a cold node is minutes; there is nothing else competing for this RAM.
     'OLLAMA_KEEP_ALIVE=-1',
@@ -290,8 +299,8 @@ const docsbot = {
   // vectors alone, plus BM25 term maps, chunk text and V8 heap overhead. At
   // 500 MB the container was OOM-killed at 86% indexed, losing two hours of
   // embedding and starting over - forever, since it never reached the end.
-  ram: 2500,
-  hdd: 1,
+  ram: 4000,
+  hdd: 2,
 };
 
 const webui = {

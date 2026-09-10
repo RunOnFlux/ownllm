@@ -1,0 +1,15 @@
+{
+  "version": 8,
+  "name": "ownllmdocsbot",
+  "description": "Self-hosted CPU LLM endpoint (Ollama + Open WebUI) on Flux",
+  "owner": "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH",
+  "compose": [],
+  "instances": 3,
+  "contacts": [],
+  "geolocation": [],
+  "expire": 88000,
+  "nodes": [],
+  "staticip": false,
+  "datacenter": false,
+  "enterprise": "<PASTE_ENCRYPTED_BLOB>"
+}
