@@ -325,11 +325,36 @@ http.createServer(async (req, res) => {
   }
 }).listen(PORT, () => console.log(`docsbot on :${PORT} -> ${ENGINE}`));
 
-// Retry rather than exit: the engine is a separate component and may still be
-// pulling its models when this container starts.
+/**
+ * Two error classes, and they need opposite handling.
+ *
+ * The engine is a separate component that may still be pulling multi-GB models,
+ * so "model not found" and connection failures are expected and retried
+ * indefinitely.
+ *
+ * A failure to read the corpus is not transient. It ships inside this image, so
+ * an EIO or ENOENT means the layer is unreadable on this node - retrying reads
+ * the same broken bytes forever. One instance sat in exactly that loop
+ * reporting "EIO: i/o error, open '/app/docs/corpus.jsonl'" while the other two
+ * indexed. Exiting hands the problem to Docker and FluxOS, which can restart the
+ * container or replace the instance; staying up cannot fix it.
+ */
+const FATAL = /^(EIO|ENOENT|EACCES|EISDIR)\b/;
+
 (async function start() {
+  let corpusFailures = 0;
   for (;;) {
     try { await buildIndex(); return; } catch (err) {
+      const fatal = FATAL.test(err.code || '') || FATAL.test(err.message || '');
+      if (fatal) {
+        corpusFailures += 1;
+        console.error(`corpus unreadable (attempt ${corpusFailures}): ${err.message}`);
+        // One retry, in case it was a partially-materialised layer.
+        if (corpusFailures >= 2) {
+          console.error('exiting so the platform can restart or replace this instance');
+          process.exit(1);
+        }
+      }
       status = `waiting for engine: ${err.message}`;
       console.log(status);
       await new Promise(r => { setTimeout(r, 15000); });
