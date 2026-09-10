@@ -1,8 +1,8 @@
 [
   {
     "model": "granite4:tiny-h",
-    "genTps": 19.388358765684288,
-    "preTps": 155.0595030437522,
+    "genTps": 14.56931742409047,
+    "preTps": 125.46470620868438,
     "grounded": {
       "pass": true,
       "text": "The maximum container image size is 5 GB. One month is equivalent to 88000 blocks."
@@ -11,6 +11,6 @@
       "pass": true,
       "text": "Not covered in the documentation."
     },
-    "tweet": "Discover Flux's latest innovation: private AI models running on decentralised nodes. Experience enhanced security and privacy with our cutting-edge technology. Trust Flux for your AI needs. [link]"
+    "tweet": "Exciting news! Flux now operates private AI models on decentralized nodes. Experience enhanced privacy and security with our cutting-edge technology. #FluxAI #DecentralizedAI"
   }
 ]

@@ -1,174 +1,43 @@
 [
   {
-    "model": "granite4:tiny-h",
+    "model": "lfm2.5:8b-a1b-q4_K_M",
     "tests": {
       "distractor-ram": {
-        "pass": true,
-        "text": "According to the documentation, a NIMBUS node offers applications 7.0 cores and 28000 MB RAM. Therefore, an application can use up to 28000 MB (28 GB) of RAM on a NIMBUS node."
+        "pass": false,
+        "text": "<think>\nWe need to answer based strictly from the documentation. The question: \"How much RAM can an application use on a NIMBUS node?\" According to the documentation, under [A] Flux app resource limit"
       },
       "distractor-size": {
-        "pass": true,
-        "text": "The maximum size of a container image is 5 GB or smaller."
+        "pass": false,
+        "text": "ERROR fetch failed"
       },
       "multi-hop": {
         "pass": false,
-        "text": "Based on the documentation in section [C], the maximum expire value is 1056000 blocks. Since a block takes about 30 seconds, 1056000 blocks would be approximately one month. Therefore, deploying for t"
+        "text": "ERROR fetch failed"
       },
       "refusal-plausible": {
-        "pass": true,
-        "text": "Not covered in the documentation."
+        "pass": false,
+        "text": "ERROR fetch failed"
       },
       "refusal-adjacent": {
-        "pass": true,
-        "text": "Not covered in the documentation."
+        "pass": false,
+        "text": "ERROR fetch failed"
       },
       "no-overreach": {
-        "pass": true,
-        "text": "An application may have between 1 and 100 instances."
+        "pass": false,
+        "text": "ERROR fetch failed"
       }
     },
     "writing": {
       "tweet": {
         "ok": false,
-        "chars": 184,
-        "text": "Exciting news! Flux now enables running private AI models on decentralised nodes. Empower your data privacy and security while harnessing the power of AI. #DataPrivacy #DecentralisedAI"
+        "text": "ERROR fetch failed"
       },
       "intro": {
-        "ok": true,
-        "chars": 290,
-        "text": "Deploying an AI model on Flux can be a complex task, but with the right guidance, it can be simplified into manageable steps. In this blog post, we will walk you through the process of deploying your own AI model on Flux, from setting up your environment to successfully running your model."
-      }
-    },
-    "score": 7,
-    "max": 9
-  },
-  {
-    "model": "granite4:micro-h",
-    "tests": {
-      "distractor-ram": {
-        "pass": true,
-        "text": "According to the documentation under section [A] Flux app resource limits, a NIMBUS node offers applications 7.0 cores and 28000 MB (or 28 GB) of RAM. Therefore, an application can use up to 28 GB of "
-      },
-      "distractor-size": {
-        "pass": true,
-        "text": "The maximum size of a container image is 5 GB, as per the Image and filesystem limits section in the documentation."
-      },
-      "multi-hop": {
-        "pass": false,
-        "text": "If you deploy for the maximum allowed expire, which is 1056000 blocks, and since a block takes about 30 seconds, then roughly that would be 88000 blocks. Given that 88000 blocks is one month, the answ"
-      },
-      "refusal-plausible": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-adjacent": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "no-overreach": {
-        "pass": true,
-        "text": "According to the documentation, an application may have between 1 and 100 instances."
-      }
-    },
-    "writing": {
-      "tweet": {
         "ok": false,
-        "chars": 154,
-        "text": "\"Exciting news: Flux now enables running private AI models on decentralized nodes. Enhancing privacy & security. Stay tuned for more updates. #FluxUpdate\""
-      },
-      "intro": {
-        "ok": true,
-        "chars": 351,
-        "text": "Embarking on the journey of deploying your own AI model on Flux can seem daunting at first, but with the right guidance, it can open up a world of possibilities for innovation and problem-solving. This blog post will walk you through the essential steps to successfully deploy your AI model, ensuring you achieve your goals with precision and clarity."
+        "text": "ERROR fetch failed"
       }
     },
-    "score": 7,
-    "max": 9
-  },
-  {
-    "model": "gemma3:4b",
-    "tests": {
-      "distractor-ram": {
-        "pass": true,
-        "text": "28000 MB"
-      },
-      "distractor-size": {
-        "pass": true,
-        "text": "The container image must be 5 GB or smaller."
-      },
-      "multi-hop": {
-        "pass": false,
-        "text": "C"
-      },
-      "refusal-plausible": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-adjacent": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "no-overreach": {
-        "pass": true,
-        "text": "An application may have between 1 and 100 instances."
-      }
-    },
-    "writing": {
-      "tweet": {
-        "ok": true,
-        "chars": 171,
-        "text": "Flux is now running private AI models on decentralized nodes. Users gain control and privacy while accessing powerful AI capabilities. Learn more at [link to Flux website]"
-      },
-      "intro": {
-        "ok": true,
-        "chars": 249,
-        "text": "Deploying AI models used to feel like a huge, complicated undertaking – now, it’s surprisingly straightforward. We’ll walk you through getting a simple model running on Flux, demonstrating how you can quickly move from experimentation to production."
-      }
-    },
-    "score": 7,
-    "max": 9
-  },
-  {
-    "model": "llama3.2:3b",
-    "tests": {
-      "distractor-ram": {
-        "pass": true,
-        "text": "According to the documentation, a NIMBUS node offers applications 28000 MB RAM."
-      },
-      "distractor-size": {
-        "pass": true,
-        "text": "The maximum size of a container image is 5 GB."
-      },
-      "multi-hop": {
-        "pass": false,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-plausible": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-adjacent": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "no-overreach": {
-        "pass": true,
-        "text": "An application may have between 1 and 100 instances."
-      }
-    },
-    "writing": {
-      "tweet": {
-        "ok": true,
-        "chars": 147,
-        "text": "\"Flux is now powering private AI models on decentralized nodes, enhancing security, scalability, and control for our clients' most sensitive data.\""
-      },
-      "intro": {
-        "ok": true,
-        "chars": 479,
-        "text": "Here is a possible two-sentence opening for a blog post about deploying your own AI model on Flux:\n\nTo deploy your own machine learning model on Flux, you'll need to follow a series of steps that involve generating and optimizing your model, packaging it into a suitable format, and configuring Flux to serve it from your server. This process can be broken down into several manageable tasks, but it requires a solid understanding of both the model itself and the Flux framework."
-      }
-    },
-    "score": 7,
+    "score": 0,
     "max": 9
   }
 ]

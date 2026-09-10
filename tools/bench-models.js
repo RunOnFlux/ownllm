@@ -15,6 +15,7 @@
  * Pulls each model on demand and writes bench-results.json alongside the table.
  */
 const fs = require('node:fs');
+const ollama = require('./ollama.js');
 
 const HOST = process.argv[2];
 const KEY = process.env.FLUX_LLM_KEY;
@@ -70,70 +71,38 @@ const TESTS = [
   },
 ];
 
-const post = async (path, body, ms = 900000) => {
-  const res = await fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(ms),
-  });
-  // /api/pull answers with a stream of NDJSON progress objects even when asked
-  // not to stream. Buffering that whole stream is what killed an earlier run:
-  // a 19 GB model emits enough progress lines to exhaust memory. Read
-  // incrementally and keep only the tail, which holds the final status.
-  const text = await tailOf(res);
-  try {
-    return JSON.parse(text);
-  } catch {
-    const lines = text.split('\n').filter(l => l.trim());
-    for (let i = lines.length - 1; i >= 0; i -= 1) {
-      try { return JSON.parse(lines[i]); } catch { /* keep walking back */ }
-    }
-    return { error: `unparseable response: ${text.slice(0, 120)}` };
-  }
-};
 
-/** Drains a response, retaining only the last 4 KB - enough for the final object. */
-async function tailOf(res) {
-  if (!res.body) return '';
-  const decoder = new TextDecoder();
-  let tail = '';
-  for await (const piece of res.body) {
-    tail = (tail + decoder.decode(piece, { stream: true })).slice(-4096);
-  }
-  return tail;
-}
 
-const rate = (count, ns) => (ns ? count / (ns / 1e9) : 0);
 
 async function speed(model) {
-  const gen = await post('/api/generate', {
+  const gen = await ollama.generate(base, KEY, {
     model, prompt: 'Write one sentence about decentralised computing.',
     stream: false, options: { num_predict: 60 },
   });
-  if (gen.error) throw new Error(String(gen.error).slice(0, 90));
-  // A fresh random prompt every run so nothing can be served from the prefix cache.
-  const filler = Array.from({ length: 2500 }, () => Math.random().toString(36).slice(2, 9)).join(' ');
-  const pre = await post('/api/generate', {
-    model, prompt: `${filler}\nReply: done`, stream: false, options: { num_predict: 3 },
+  const pre = await ollama.generate(base, KEY, {
+    model, prompt: `${ollama.filler()}\nReply: done`, stream: false, options: { num_predict: 3 },
   });
   return {
-    genTps: rate(gen.eval_count, gen.eval_duration),
-    preTps: rate(pre.prompt_eval_count, pre.prompt_eval_duration),
+    genTps: ollama.rate(gen.eval_count, gen.eval_duration),
+    preTps: ollama.rate(pre.prompt_eval_count, pre.prompt_eval_duration),
   };
 }
 
 async function quality(model) {
   const out = {};
   for (const t of TESTS) {
-    const r = await post('/api/generate', {
-      model, prompt: `${SYSTEM}\n\nQUESTION: ${t.q}\n\nANSWER:`,
+    const r = await ollama.generate(base, KEY, {
+      model, prompt: `${SYSTEM}
+
+QUESTION: ${t.q}
+
+ANSWER:`,
       stream: false, options: { num_predict: 200, temperature: 0.1 },
     });
     const text = (r.response || '').trim();
     out[t.name] = { pass: t.pass(text), text: text.slice(0, 300) };
   }
-  const tweet = await post('/api/generate', {
+  const tweet = await ollama.generate(base, KEY, {
     model, prompt: 'Write one tweet (under 280 characters) announcing that Flux now runs private AI models on decentralised nodes. No hashtags.',
     stream: false, options: { num_predict: 120, temperature: 0.7 },
   });
@@ -145,9 +114,8 @@ async function quality(model) {
   const results = [];
   for (const model of MODELS) {
     process.stdout.write(`pulling ${model} ... `);
-    const pull = await post('/api/pull', { model, stream: false }, 3600000);
-    if (pull.error) { console.log(`skip (${String(pull.error).slice(0, 60)})`); results.push({ model, error: String(pull.error).slice(0, 80) }); continue; }
-    console.log('ok');
+    try { await ollama.pull(base, KEY, model); console.log('ok'); }
+    catch (err) { console.log(`skip (${err.message.slice(0, 60)})`); results.push({ model, error: err.message.slice(0, 80) }); continue; }
     try {
       const s = await speed(model);
       const q = await quality(model);
@@ -162,11 +130,8 @@ async function quality(model) {
     // to one crash at the end.
     fs.writeFileSync('bench-results.json', `${JSON.stringify(results, null, 2)}\n`);
     if (CLEANUP && !KEEP.has(model)) {
-      await fetch(`${base}/api/delete`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model }),
-      }).then(() => console.log(`  (removed ${model})`)).catch(() => {});
+      await ollama.remove(base, KEY, model);
+      console.log(`  (removed ${model})`);
     }
   }
 

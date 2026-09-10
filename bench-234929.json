@@ -1,0 +1,122 @@
+[
+  {
+    "model": "--cleanup",
+    "error": "invalid model name"
+  },
+  {
+    "model": "granite4.1:3b",
+    "genTps": 4.0548353562068,
+    "preTps": 0,
+    "grounded": {
+      "pass": true,
+      "text": "The maximum container image size is 5 GB. One month is 88000 blocks."
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": "Exciting news! Flux now runs private AI models on decentralized nodes, enhancing security and independence for our users. #innovation #decentralization"
+  },
+  {
+    "model": "granite4.2:3b",
+    "genTps": 5.104982692832426,
+    "preTps": 0,
+    "grounded": {
+      "pass": true,
+      "text": "We need to answer strictly from the documentation. The question: \"What is the maximum container image size, and how many blocks is one month?\" The documentation says:\n\n- Maximum container image size is 5 GB.\n- Minimum expire is 1 block; maximum is 1056000 blocks. 88000 blocks is one month.\n\nThus ans"
+    },
+    "refusal": {
+      "pass": true,
+      "text": "We have a documentation about Flux application specification v8. The question: \"How many GPUs can I attach to a Flux app?\" We need to answer strictly from the documentation. If the answer is not in it, reply exactly: \"Not covered in the documentation.\"\n\nWe need to see if the documentation mentions G"
+    },
+    "tweet": "We need to write a tweet under 280 characters announcing that Flux now runs private AI models on decentralized nodes. No hashtags. So just plain text, no hashtags. Must be under 280 characters. Include no hashtags (like #Flux). Should be concise.\n\nWe need to ensure it's under 280 characters. Let's c"
+  },
+  {
+    "model": "qwen3.5:0.8b",
+    "genTps": 9.996499559071065,
+    "preTps": 0,
+    "grounded": {
+      "pass": false,
+      "text": ""
+    },
+    "refusal": {
+      "pass": false,
+      "text": ""
+    },
+    "tweet": ""
+  },
+  {
+    "model": "qwen3.5:2b",
+    "genTps": 7.964663443190379,
+    "preTps": 0,
+    "grounded": {
+      "pass": false,
+      "text": ""
+    },
+    "refusal": {
+      "pass": false,
+      "text": ""
+    },
+    "tweet": ""
+  },
+  {
+    "model": "qwen3.5:4b",
+    "genTps": 3.6203876336971437,
+    "preTps": 0,
+    "grounded": {
+      "pass": false,
+      "text": ""
+    },
+    "refusal": {
+      "pass": false,
+      "text": ""
+    },
+    "tweet": ""
+  },
+  {
+    "model": "nemotron-3-nano:4b",
+    "genTps": 4.8486935609112995,
+    "preTps": 0,
+    "grounded": {
+      "pass": true,
+      "text": "The maximum container image size is 5 GB, and one month is 88000 blocks."
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": ""
+  },
+  {
+    "model": "falcon3:3b",
+    "genTps": 10.583718536589238,
+    "preTps": 0,
+    "grounded": {
+      "pass": true,
+      "text": "5 GB, 88000 blocks."
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": ""
+  },
+  {
+    "model": "exaone3.5:2.4b",
+    "error": "llama-server process has terminated: exit status 1: llama_init_from_model: K cache type q8"
+  },
+  {
+    "model": "ministral-3:3b",
+    "genTps": 6.6503010147916,
+    "preTps": 0,
+    "grounded": {
+      "pass": false,
+      "text": ""
+    },
+    "refusal": {
+      "pass": false,
+      "text": ""
+    },
+    "tweet": "🚀 **Flux just got smarter & more private.** Now running AI models on decentralized nodes for faster, secure, and open-source innovation. Next-gen AI, built for trust. 💙"
+  }
+]
