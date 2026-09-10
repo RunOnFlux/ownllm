@@ -17,4 +17,4 @@ specs/*.ui.json
 # fluxai-beaver, fluxai-fluxedge) and this repository is public. Committing the
 # corpus would republish their contents, and baking it into a public GHCR image
 # would do the same. See README, "Private sources".
-images/docsbot/docs/corpus.jsonl
+# images/docsbot/docs/corpus.jsonl
