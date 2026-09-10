@@ -70,6 +70,19 @@ for SITE in https://fluxedge.ai https://fluxcore.ai https://fluxai.io https://br
 done
 
 echo
+echo "### tier: enterprise (SSP Enterprise - public material only)"
+# The enterprise repos are mostly internal: integration plans, roadmaps,
+# fundraising decks and meeting prep naming specific counterparties. The
+# ingester refuses those by default and prints what it refused; only the
+# genuinely descriptive files come through. Read that refusal list before
+# publishing - it is the difference between a product bot and a leak.
+for R in "$R/ssp-enterprise" "$R/ssp-enterprise-app"; do
+  [ -d "$R" ] && node tools/ingest.js --out "$OUT" --append --tier enterprise --dir "$R"
+done
+# The customer-facing enterprise story lives on the website, and that is already
+# covered by the sspwallet.io academy scrape above.
+
+echo
 echo "### tier: product-repo (what the thin marketing sites do not say)"
 # fluxedge, fluxcore, brimley and beaver have little or no public
 # documentation, but their repositories do: fluxai-enterprise alone carries 390

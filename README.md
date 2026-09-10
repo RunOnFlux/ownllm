@@ -490,3 +490,31 @@ docs site that renders client-side returns one near-empty page - which is what
 `https://docs.runonflux.io` did in testing. For those, ingest the documentation
 **source repository** instead: the markdown behind the site is better input than
 the rendered page anyway, since it has clean headings and no navigation chrome.
+
+### Internal documents are refused by default
+
+Product repositories carry a lot that is not for customers: unreleased
+integration plans, roadmaps, fundraising decks, growth plans, and meeting prep
+naming specific counterparties. `ssp-enterprise-app` alone holds
+`SOLANA_INTEGRATION_PLAN.md`, `ADVANCED_POLICY_ENGINE_ROADMAP.md`,
+`MIDAS_EVERSTAKE_MEETING_PREP.md` and `SSP_OUTREACH_PLAYBOOK.md`.
+
+A retrieval bot has no notion of confidentiality. Ingest those and *"what is SSP
+planning for Solana?"* is answered from the unreleased plan, with a citation and
+in the same confident tone as a documentation answer.
+
+So `ingest.js` refuses files whose names look internal — plan, roadmap, deck,
+narrative, prep, playbook, audit, internal, private, secret, strategy, meeting,
+outreach, growth — along with anything under `.claude/`, `worktrees/` or
+`node_modules/`. It prints what it refused:
+
+```
+REFUSED 24 internal documents (--allow-internal to override):
+  ssp-enterprise-app/GSR_MEETING_PREP.md
+  ssp-enterprise-app/SOLANA_INTEGRATION_PLAN.md
+  ...
+```
+
+The filter is a name-based heuristic, not a security control. **Read the refusal
+list, and skim what did get through, before publishing a bot to users.** A file
+called `NOTES.md` containing next quarter's pricing would pass it happily.

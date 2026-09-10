@@ -44,6 +44,30 @@ const TIER = one('--tier', 'docs');
 
 const keepUrl = u => (!INCLUDE || INCLUDE.test(u)) && (!EXCLUDE || !EXCLUDE.test(u));
 
+/**
+ * Internal documents, refused by default when reading local repositories.
+ *
+ * Product repos are full of material that is not for customers: unreleased
+ * integration plans, roadmaps, fundraising decks, growth plans, and meeting
+ * prep naming specific counterparties. ssp-enterprise-app alone carries
+ * SOLANA_INTEGRATION_PLAN, ADVANCED_POLICY_ENGINE_ROADMAP,
+ * MIDAS_EVERSTAKE_MEETING_PREP and SSP_OUTREACH_PLAYBOOK.
+ *
+ * A retrieval bot has no notion of confidentiality: ingest these and "what is
+ * SSP planning for Solana?" answers from the unreleased plan, with a citation.
+ * So the default is to refuse, name what was refused, and require
+ * --allow-internal to override.
+ */
+const INTERNAL = /(^|\/|_)(plan|roadmap|deck|narrative|prep|playbook|audit|internal|private|secret|strategy|principles|instructions|meeting|outreach|growth|launch-copy)([._-]|$)/i;
+const IN_WORKTREE = /(^|\/)(\.claude|\.git|worktrees|node_modules)(\/|$)/;
+const ALLOW_INTERNAL = argv.includes('--allow-internal');
+const refused = [];
+
+function isInternal(relPath) {
+  if (IN_WORKTREE.test(relPath)) return true;
+  return INTERNAL.test(relPath.split('/').pop());
+}
+
 const chunks = [];
 
 /**
@@ -179,10 +203,14 @@ async function ingestApi(endpoint) {
   for (const dir of many('--dir')) {
     if (!fs.existsSync(dir)) { console.log(`skip ${dir} (missing)`); continue; }
     const files = walk(dir);
+    let used = 0;
     for (const f of files) {
-      addText(fs.readFileSync(f, 'utf8'), { source: path.relative(dir, f), origin: dir, url: '', tier: TIER });
+      const rel = path.relative(dir, f);
+      if (!ALLOW_INTERNAL && isInternal(rel)) { refused.push(`${path.basename(dir)}/${rel}`); continue; }
+      addText(fs.readFileSync(f, 'utf8'), { source: rel, origin: dir, url: '', tier: TIER });
+      used += 1;
     }
-    console.log(`${dir}: ${files.length} files`);
+    console.log(`${dir}: ${used}/${files.length} files${used < files.length ? ` (${files.length - used} internal, refused)` : ''}`);
   }
 
   for (const pdf of many('--pdf')) {
@@ -252,4 +280,9 @@ async function ingestApi(endpoint) {
   const byTier = chunks.reduce((a, c) => ({ ...a, [c.tier || 'docs']: (a[c.tier || 'docs'] || 0) + 1 }), {});
   console.log(`\nwrote ${OUT}: ${chunks.length} chunks, ~${words.toLocaleString()} words`);
   console.log(`  by tier: ${Object.entries(byTier).map(([t, n]) => `${t}=${n}`).join(', ')}`);
+  if (refused.length) {
+    console.log(`\n  REFUSED ${refused.length} internal documents (--allow-internal to override):`);
+    for (const r of refused.slice(0, 12)) console.log(`    ${r}`);
+    if (refused.length > 12) console.log(`    ... and ${refused.length - 12} more`);
+  }
 })();
