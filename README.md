@@ -600,3 +600,14 @@ So the docs bot on 33001 is at `https://ownllmdocs_33001.app.runonflux.io`.
 443 and routes by hostname, not by the port in the URL. That failure looks like
 a connection error rather than a 404, which makes it easy to misread as the app
 being down.
+
+### A note on OLLAMA_KV_CACHE_TYPE
+
+The engine sets `OLLAMA_KV_CACHE_TYPE=q8_0`, which halves KV cache memory. It
+works with granite4:tiny-h and gemma3:4b, both verified.
+
+It is not universally supported. During the model survey `exaone3.5:2.4b` failed
+to load with `llama_init_from_model: K cache type q8_0`, and the failure is a
+container that will not start rather than a warning. If you swap the chat model,
+test it before deploying, or drop the variable - the memory it saves is small
+next to what the weights use.

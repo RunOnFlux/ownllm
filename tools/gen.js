@@ -285,8 +285,12 @@ const docsbot = {
     'EMBED_MODEL=granite-embedding:278m',
     // Always in front of the retrieved chunks, so the prompt prefix is
     // identical between requests and the KV cache covers it.
-    'PINNED_DOCS=app-spec-v8.md',
-    'TOP_K=5',
+    // flux-facts.md first: it is generated from config/default.js, so unlike a
+    // hand-written page it cannot drift from the code it describes, and it
+    // states derived values (1,056,000 blocks is 12 months) that the model
+    // cannot reliably compute for itself.
+    'PINNED_DOCS=flux-facts.md,app-spec-v8.md',
+    'TOP_K=6',
   ],
   commands: [],
   // The index lives in memory, rebuilt at boot from documents baked into the
