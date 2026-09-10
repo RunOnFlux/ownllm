@@ -86,7 +86,7 @@ function addText(text, meta) {
     if (body.length < 40) return; // navigation scraps and stray link lists
     for (let i = 0; i < body.length; i += MAX_CHARS - OVERLAP) {
       const piece = body.slice(i, i + MAX_CHARS).trim();
-      if (piece.length >= 40) chunks.push({ ...meta, heading: heading.join(' > '), text: piece });
+      if (piece.length >= 40) chunks.push({ ...meta, heading: heading.join(' > '), text: redact(piece) });
       if (body.length <= MAX_CHARS) break;
     }
   };
@@ -127,6 +127,73 @@ function cleanPdfText(raw) {
     .replace(/^\s*\d{1,4}\s*$/gm, '')
     .replace(/^\s*page \d+ of \d+\s*$/gim, '')
     .replace(/\n{3,}/g, '\n\n');
+}
+
+/**
+ * Masks credential-shaped values on the way into the corpus.
+ *
+ * Deciding that documentation may be published is not the same as deciding that
+ * a live Twilio account identifier or a generated test password may be. Those
+ * turn up incidentally in API specs and training guides, and once a corpus is
+ * baked into a public image there is no taking them back. Placeholders get
+ * masked too, which costs nothing: nobody needs to read "your-api-key-here".
+ *
+ * This is a safety net, not a secret scanner. It catches shapes it knows.
+ */
+const SECRET_PATTERNS = [
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[REDACTED private key]'],
+  [/\bAKIA[0-9A-Z]{16}\b/g, '[REDACTED aws key]'],
+  [/\bAC[a-f0-9]{32}\b/g, '[REDACTED twilio sid]'],
+  [/\bsk_(?:live|test)_[A-Za-z0-9]{16,}/g, '[REDACTED stripe key]'],
+  [/\bgh[pousr]_[A-Za-z0-9]{30,}/g, '[REDACTED github token]'],
+  [/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/g, '[REDACTED jwt]'],
+  [/((?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis):\/\/[^:\s"']+:)[^@\s"']+@/g, '$1[REDACTED]@'],
+  [/((?i:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*["'`]?)([^\s"'`<>{},]{8,})/g, '$1[REDACTED]'],
+];
+
+let redactions = 0;
+function redact(text) {
+  let out = text;
+  for (const [pat, rep] of SECRET_PATTERNS) {
+    out = out.replace(pat, (...m) => { redactions += 1; return typeof rep === 'string' && rep.includes('$1') ? rep.replace('$1', m[1]) : rep; });
+  }
+  return out;
+}
+
+/**
+ * Turns a local checkout path into a GitHub blob URL, so a citation points at
+ * something a reader can open. Without this, every chunk sourced from a repo
+ * cites an absolute path on one laptop.
+ *
+ * Derived from the checkout itself - remote, branch and position within the
+ * repo - rather than configured, so it stays correct as repos move.
+ */
+function githubBase(dir) {
+  try {
+    const run = args => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+    const root = run(['rev-parse', '--show-toplevel']);
+    const remote = run(['remote', 'get-url', 'origin']);
+    const m = remote.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/i);
+    if (!m) return null;
+    // The remote's default branch, not the local checkout's. A citation should
+    // point at the canonical version of a file: someone reading it does not
+    // care which feature branch happened to be checked out when the corpus was
+    // built, and that branch may not exist by the time they follow the link.
+    let branch;
+    try {
+      branch = run(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']).replace('refs/remotes/origin/', '');
+    } catch {
+      branch = run(['rev-parse', '--abbrev-ref', 'HEAD']);
+    }
+    if (!branch || branch === 'HEAD') branch = 'master'; // detached, e.g. a --depth 1 clone
+    return {
+      repo: `${m[1]}/${m[2]}`,
+      // Path from the repo root, since --dir is often a subdirectory of it.
+      prefix: path.relative(root, path.resolve(dir)),
+      url: (rel) => `https://github.com/${m[1]}/${m[2]}/blob/${branch}/`
+        + [path.relative(root, path.resolve(dir)), rel].filter(Boolean).join('/'),
+    };
+  } catch { return null; }
 }
 
 function walk(dir) {
@@ -228,6 +295,8 @@ async function ingestApi(endpoint) {
   for (const dir of many('--dir')) {
     if (!fs.existsSync(dir)) { console.log(`skip ${dir} (missing)`); continue; }
     const files = walk(dir);
+    const gh = githubBase(dir);
+    if (gh) console.log(`${dir}: linking to github.com/${gh.repo}`);
     let used = 0;
     for (const f of files) {
       const rel = path.relative(dir, f);
@@ -235,7 +304,12 @@ async function ingestApi(endpoint) {
       // --exclude applies to local paths as well as sitemap URLs, so a whole
       // subtree can be left out by topic rather than by name.
       if (EXCLUDE && EXCLUDE.test(rel)) { skipped.push(`${path.basename(dir)}/${rel}`); continue; }
-      addText(fs.readFileSync(f, 'utf8'), { source: rel, origin: dir, url: '', tier: TIER });
+      addText(fs.readFileSync(f, 'utf8'), {
+        source: gh ? `${gh.repo}/${gh.prefix ? `${gh.prefix}/` : ''}${rel}` : rel,
+        origin: gh ? gh.repo : path.basename(dir),
+        url: gh ? gh.url(rel) : '',
+        tier: TIER,
+      });
       used += 1;
     }
     console.log(`${dir}: ${used}/${files.length} files${used < files.length ? ` (${files.length - used} internal, refused)` : ''}`);
@@ -309,6 +383,7 @@ async function ingestApi(endpoint) {
   const byTier = chunks.reduce((a, c) => ({ ...a, [c.tier || 'docs']: (a[c.tier || 'docs'] || 0) + 1 }), {});
   console.log(`\nwrote ${OUT}: ${chunks.length} chunks, ~${words.toLocaleString()} words`);
   console.log(`  by tier: ${Object.entries(byTier).map(([t, n]) => `${t}=${n}`).join(', ')}`);
+  if (redactions) console.log(`  redacted ${redactions} credential-shaped values`);
   if (skipped.length) {
     console.log(`\n  excluded ${skipped.length} files by --exclude:`);
     for (const r of skipped.slice(0, 6)) console.log(`    ${r}`);
