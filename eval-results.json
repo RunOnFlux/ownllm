@@ -47,5 +47,54 @@
     },
     "score": 7,
     "max": 9
+  },
+  {
+    "model": "granite4.2:3b",
+    "tests": {
+      "distractor-ram": {
+        "pass": false,
+        "chars": 884,
+        "text": "We need to answer strictly from the documentation. The question: \"How much RAM can an application use on a NIMBUS node?\" The documentation includes [A] Flux app resource limits: \"A NIMBUS node offers "
+      },
+      "distractor-size": {
+        "pass": true,
+        "chars": 891,
+        "text": "We need to answer strictly from the documentation. The question: \"What is the maximum size of a container image?\" The documentation includes [B] Image and filesystem limits: \"The container image must "
+      },
+      "multi-hop": {
+        "pass": true,
+        "chars": 713,
+        "text": "We need to answer strictly from the documentation. The question: \"If I deploy for the maximum allowed expire, roughly how many months is that?\" We have documentation: [C] Lifetime: Minimum expire is 1"
+      },
+      "refusal-plausible": {
+        "pass": true,
+        "chars": 752,
+        "text": "We have a documentation that lists various sections: [A] Flux app resource limits, [B] Image and filesystem limits, [C] Lifetime, [D] Instances, [E] Enterprise.\n\nThe question: \"How much does a STRATUS"
+      },
+      "refusal-adjacent": {
+        "pass": true,
+        "chars": 861,
+        "text": "We have a documentation that includes sections [A] Flux app resource limits, [B] Image and filesystem limits, [C] Lifetime, [D] Instances, [E] Enterprise.\n\nThe question: \"How many GPU cores does a NIM"
+      },
+      "no-overreach": {
+        "pass": true,
+        "chars": 925,
+        "text": "We need to answer strictly from the documentation. The question: \"How many instances can an application have?\" The documentation includes [D] Instances: \"An application may have between 1 and 100 inst"
+      }
+    },
+    "writing": {
+      "tweet": {
+        "ok": false,
+        "chars": 754,
+        "text": "Okay, the user wants a tweet under 280 characters announcing that Flux now runs private AI models on decentralized nodes. No hashtags, no emojis.\n\nI need to keep it concise. Focus on the key points: Flux, private AI models, decentralized nodes.\n\nAvoid hashtags and emojis as specified.\n\nMake sure it's under 280 characters.\n\nLet me draft a short, clear statement.\n\nExample: \"Flux now runs private AI models on decentralized nodes, giving you full control over your data and infrastructure.\"\n\nCount characters.\n\nLet's count: \n\"Flux now runs private AI models on decentralized nodes, giving you full control over your data and infrastructure.\"\n\nCharacters: \nF l u x (4) + space (1) =5\n\"now\" (3) -> total 8\nspace ->9\n\"runs\" (4) ->13\nspace ->14\n\"private\" (7)"
+      },
+      "intro": {
+        "ok": false,
+        "chars": 935,
+        "text": "Okay, the user wants a two-sentence opening for a blog post about deploying an AI model on Flux. They specified it should be plain, concrete, and avoid marketing cliches.\n\nI need to focus on clear, actionable steps without hype. No fluff like \"unlock your potential\" or \"revolutionize your workflow.\" Just straightforward instructions.\n\nFirst sentence: Set the scene—maybe mention preparing the model and environment. Second sentence: Give a concrete next step like running the deployment command.\n\nMake sure it's exactly two sentences, no extra words. Keep language simple.\n\nExample: \"Start by packaging your trained model into a Flux container and push it to your Flux registry. Then, use the Flux CLI to deploy the container on your chosen environment.\"\n\nThat's two sentences, plain, concrete, no marketing. Good.\n</think>\nPackage your trained model into a Flux container and push it to your Flux registry. Then, use the Flux CLI to"
+      }
+    },
+    "score": 8,
+    "max": 9
   }
 ]

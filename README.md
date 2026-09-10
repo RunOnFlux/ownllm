@@ -445,3 +445,48 @@ Verified live via `/apps/deploymentinformation`:
 
 `Content-Type: application/json` hangs until the gateway 504s — FluxOS reads the
 raw body itself. Use `text/plain`. `tools/verify.sh` already does.
+
+## Building the knowledge corpus
+
+`tools/ingest.js` collects local markdown, websites and PDFs into a single
+`corpus.jsonl`, one chunk per line, each carrying `source`, `heading` and `url`
+so an answer can cite something a reader can open.
+
+```sh
+node tools/ingest.js --out images/docsbot/docs/corpus.jsonl \
+  --dir ../flux/docs \
+  --dir ../ssp-docs \
+  --site https://docs.runonflux.io \
+  --pdf whitepapers/flux-whitepaper.pdf
+```
+
+Then rebuild the docsbot image; the corpus ships inside it.
+
+**Source text is kept verbatim, never summarised.** Having a model summarise the
+corpus first is tempting and wrong: a summary is a paraphrase, so it bakes that
+model's mistakes in permanently and there is no longer anything truthful to
+quote. The bot's whole claim to trust is that its answers can be checked against
+real text.
+
+PDFs need `pdftotext` (`brew install poppler`); without it they are skipped with
+a message rather than silently dropped.
+
+### Retrieval is hybrid, and that matters here
+
+Answers are retrieved by embeddings **and** BM25 keyword scoring, combined after
+each is normalised to its own maximum (BM25 is unbounded, cosine is capped at 1,
+so raw addition would let keywords drown the embeddings).
+
+Pure vector search is weakest exactly where technical documentation needs to be
+strongest. "ram must be a multiple of 100" and "hdd must be a whole number of
+GB" embed almost identically, and a question about port 27017 finds nothing
+because a bare number carries little semantic signal. Keyword scoring pins the
+literal terms; embeddings handle the paraphrases.
+
+### Known gap: JavaScript-rendered sites
+
+`--site` follows the site's own sitemap and parses server-rendered HTML. A
+docs site that renders client-side returns one near-empty page - which is what
+`https://docs.runonflux.io` did in testing. For those, ingest the documentation
+**source repository** instead: the markdown behind the site is better input than
+the rendered page anyway, since it has clean headings and no navigation chrome.

@@ -74,10 +74,23 @@ async function embed(input) {
 const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
 const norm = a => Math.sqrt(dot(a, a));
 
+/**
+ * Prefers corpus.jsonl, which tools/ingest.js produces with a url and heading
+ * per chunk - that metadata is what turns "[1]" into a link a reader can check.
+ * Raw markdown is the fallback so the image still works without an ingest step.
+ */
+function loadChunks() {
+  const corpus = path.join(DOCS_DIR, 'corpus.jsonl');
+  if (fs.existsSync(corpus)) {
+    return fs.readFileSync(corpus, 'utf8').split('\n').filter(Boolean).map(JSON.parse);
+  }
+  return walk(DOCS_DIR).flatMap(f => chunk(fs.readFileSync(f, 'utf8'), path.relative(DOCS_DIR, f)));
+}
+
 async function buildIndex() {
-  const files = walk(DOCS_DIR);
-  const chunks = files.flatMap(f => chunk(fs.readFileSync(f, 'utf8'), path.relative(DOCS_DIR, f)));
-  status = `embedding ${chunks.length} chunks from ${files.length} files`;
+  const chunks = loadChunks();
+  const files = new Set(chunks.map(c => c.source)).size;
+  status = `embedding ${chunks.length} chunks from ${files} sources`;
   console.log(status);
   // Batched: one request per 32 chunks keeps memory flat without paying a
   // round trip per chunk.
@@ -85,9 +98,10 @@ async function buildIndex() {
     const batch = chunks.slice(i, i + 32);
     // eslint-disable-next-line no-await-in-loop
     const vecs = await embed(batch.map(c => c.text));
-    batch.forEach((c, j) => index.push({ ...c, vec: vecs[j], mag: norm(vecs[j]) }));
+    batch.forEach((c, j) => index.push({ ...c, vec: vecs[j], mag: norm(vecs[j]), terms: tokenize(c.text) }));
     status = `embedded ${index.length}/${chunks.length}`;
   }
+  buildKeywordStats();
   buildPinned();
 
   // Warm start: pull both models into RAM and lay down the KV cache for the
@@ -111,14 +125,60 @@ async function buildIndex() {
   console.log(`warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
   ready = true;
-  status = `${index.length} chunks indexed from ${files.length} files, models warm`;
+  status = `${index.length} chunks indexed from ${files} sources, models warm`;
   console.log(status);
 }
 
-function retrieve(queryVec) {
+/**
+ * Hybrid retrieval: embeddings plus BM25-style keyword scoring.
+ *
+ * Pure vector search is weak exactly where technical documentation needs to be
+ * strong. "ram must be a multiple of 100" and "hdd must be a whole number of
+ * GB" embed almost identically, and a question about port 16127 finds nothing
+ * because a number carries little semantic signal. Keyword scoring pins the
+ * literal terms; embeddings handle the paraphrases. Neither alone is enough.
+ */
+const tokenize = t => (t.toLowerCase().match(/[a-z0-9_.:-]{2,}/g) || []);
+let df = new Map();
+let avgLen = 1;
+
+function buildKeywordStats() {
+  df = new Map();
+  for (const c of index) {
+    for (const term of new Set(tokenize(c.text))) df.set(term, (df.get(term) || 0) + 1);
+  }
+  avgLen = index.reduce((a, c) => a + c.terms.length, 0) / Math.max(1, index.length);
+}
+
+function bm25(queryTerms, c) {
+  const k1 = 1.5; const b = 0.75; const N = index.length;
+  let score = 0;
+  for (const q of queryTerms) {
+    const n = df.get(q) || 0;
+    if (!n) continue;
+    const tf = c.terms.filter(t => t === q).length;
+    if (!tf) continue;
+    const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
+    score += idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * c.terms.length) / avgLen)));
+  }
+  return score;
+}
+
+function retrieve(queryVec, question) {
   const qm = norm(queryVec);
-  return index
-    .map(c => ({ ...c, score: dot(queryVec, c.vec) / (qm * c.mag || 1) }))
+  const qTerms = tokenize(question);
+  const scored = index.map(c => ({
+    c,
+    vec: dot(queryVec, c.vec) / (qm * c.mag || 1),
+    kw: bm25(qTerms, c),
+  }));
+  // Normalise each signal to its own maximum before combining: BM25 is
+  // unbounded while cosine is capped at 1, so raw addition would let keyword
+  // scores drown the embeddings entirely.
+  const maxKw = Math.max(1e-9, ...scored.map(s => s.kw));
+  const maxVec = Math.max(1e-9, ...scored.map(s => s.vec));
+  return scored
+    .map(s => ({ ...s.c, score: 0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, TOP_K);
 }
@@ -136,7 +196,10 @@ function buildPinned() {
 }
 
 function buildPrompt(question, hits) {
-  const ctx = hits.map((h, i) => `[${i + 1}] (${h.source})\n${h.text}`).join('\n\n');
+  const ctx = hits.map((h, i) => {
+    const where = [h.source, h.heading].filter(Boolean).join(' > ');
+    return `[${i + 1}] ${where}${h.url ? ` <${h.url}>` : ''}\n${h.text}`;
+  }).join('\n\n');
   // Invariant part first (instruction + pinned), variable part after: anything
   // before the first difference is a cache hit on the next request.
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
@@ -148,7 +211,7 @@ function buildPrompt(question, hits) {
 
 async function answer(question) {
   const [qvec] = await embed([question]);
-  const hits = retrieve(qvec);
+  const hits = retrieve(qvec, question);
   const res = await fetch(`${ENGINE}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -161,7 +224,10 @@ async function answer(question) {
   const body = await res.json();
   return {
     answer: (body.response || '').trim(),
-    sources: hits.map((h, i) => ({ n: i + 1, source: h.source, score: Number(h.score.toFixed(3)) })),
+    sources: hits.map((h, i) => ({
+      n: i + 1, source: h.source, heading: h.heading || undefined, url: h.url || undefined,
+      score: Number(h.score.toFixed(3)),
+    })),
   };
 }
 
