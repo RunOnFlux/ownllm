@@ -12,6 +12,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
+const crypto = require('node:crypto');
 
 const PORT = Number(process.env.PORT || 8080);
 const ENGINE = process.env.UPSTREAM || 'http://127.0.0.1:11434';
@@ -106,9 +107,49 @@ function loadChunks() {
   return walk(DOCS_DIR).flatMap(f => chunk(fs.readFileSync(f, 'utf8'), path.relative(DOCS_DIR, f)));
 }
 
+/**
+ * Loads precomputed vectors if they match this corpus.
+ *
+ * The pair is only valid together: vectors describe specific text, so serving
+ * one corpus with another's embeddings retrieves confidently wrong passages and
+ * cites them. The hash makes that mismatch loud instead of silent - a stale
+ * .vec is ignored and the bot embeds from scratch, slowly but correctly.
+ */
+function loadVectors(corpusPath, count) {
+  const meta = `${corpusPath}.vec.json`;
+  const bin = `${corpusPath}.vec`;
+  if (!fs.existsSync(meta) || !fs.existsSync(bin)) return null;
+  try {
+    const m = JSON.parse(fs.readFileSync(meta, 'utf8'));
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(corpusPath)).digest('hex').slice(0, 16);
+    if (m.corpusHash !== actual) {
+      console.log(`precomputed vectors are for corpus ${m.corpusHash}, this is ${actual} - ignoring them`);
+      return null;
+    }
+    if (m.count !== count) { console.log(`vector count ${m.count} != ${count} chunks - ignoring`); return null; }
+    if (m.model !== EMBED_MODEL) console.log(`note: vectors built with ${m.model}, serving with ${EMBED_MODEL}`);
+    const buf = fs.readFileSync(bin);
+    return { dims: m.dims, data: new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4) };
+  } catch (err) {
+    console.log(`could not read precomputed vectors: ${err.message}`);
+    return null;
+  }
+}
+
 async function buildIndex() {
   const chunks = loadChunks();
   const files = new Set(chunks.map(c => c.source)).size;
+  const corpusPath = path.join(DOCS_DIR, 'corpus.jsonl');
+  const pre = fs.existsSync(corpusPath) ? loadVectors(corpusPath, chunks.length) : null;
+  if (pre) {
+    status = `loading ${chunks.length} precomputed vectors`;
+    console.log(status);
+    for (let i = 0; i < chunks.length; i += 1) {
+      const v = pre.data.subarray(i * pre.dims, (i + 1) * pre.dims);
+      index.push({ ...chunks[i], vec: v, mag: norm(v), tf: termFreq(chunks[i].text), len: countTokens(chunks[i].text) });
+    }
+  } else {
+
   status = `embedding ${chunks.length} chunks from ${files} sources`;
   console.log(status);
   // Batched: one request per 32 chunks keeps memory flat without paying a
@@ -125,6 +166,7 @@ async function buildIndex() {
       index.push({ ...c, vec: v, mag: norm(v), tf: termFreq(c.text), len: countTokens(c.text) });
     });
     status = `embedded ${index.length}/${chunks.length}`;
+  }
   }
   buildKeywordStats();
   buildPinned();
