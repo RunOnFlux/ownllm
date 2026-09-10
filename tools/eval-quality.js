@@ -126,6 +126,20 @@ function visible(text) {
   return /<think>/i.test(closed) ? '' : closed;
 }
 
+/**
+ * Some models reason out loud in plain prose with no tag to strip -
+ * granite4.2:3b opens every answer with "We need to answer strictly from the
+ * DOCUMENTATION. The question: ..." and scored a perfect 9/9 purely because the
+ * facts appeared somewhere in that deliberation.
+ *
+ * Scoring the tail defeats both shapes: a model that reasons and then answers
+ * is still credited, a model that only reasons is not. The length is reported
+ * alongside, because reaching the answer after 900 characters of thinking is a
+ * real cost even when the answer is right.
+ */
+const ANSWER_TAIL = 300;
+const tail = t => t.slice(-ANSWER_TAIL);
+
 async function gen(model, prompt, opts) {
   const res = await fetch(`${base}/api/generate`, {
     method: 'POST',
@@ -150,9 +164,9 @@ async function gen(model, prompt, opts) {
       try {
         const raw = await gen(model, `${SYSTEM}\n\nQUESTION: ${t.q}\n\nANSWER:`, { temperature: 0.1, num_predict: 200 });
         const text = visible(raw);
-        const ok = t.pass(text);
+        const ok = t.pass(tail(text));
         if (ok) row.score += t.weight;
-        row.tests[t.name] = { pass: ok, text: text.slice(0, 200) };
+        row.tests[t.name] = { pass: ok, chars: text.length, text: text.slice(0, 200) };
       } catch (err) { row.tests[t.name] = { pass: false, text: `ERROR ${err.message}` }; }
     }
     for (const w of WRITING) {
@@ -164,7 +178,10 @@ async function gen(model, prompt, opts) {
     all.push(row);
     // Written after every model so a crash cannot lose the whole run.
     fs.writeFileSync('eval-results.json', `${JSON.stringify(all, null, 2)}\n`);
+    const verbosity = Math.round(Object.values(row.tests).reduce((a, t) => a + (t.chars || 0), 0)
+      / Math.max(1, Object.keys(row.tests).length));
     console.log(`${model.padEnd(20)} grounding ${String(row.score).padStart(2)}/${row.max}`
+      + `   avg answer ${String(verbosity).padStart(4)} chars`
       + `   tweet ${row.writing.tweet?.ok ? 'ok ' : 'BAD'} (${row.writing.tweet?.chars ?? '?'} chars)`);
     for (const [n, t] of Object.entries(row.tests)) if (!t.pass) console.log(`    fail ${n}: ${t.text.slice(0, 110)}`);
   }

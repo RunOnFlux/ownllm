@@ -4,85 +4,48 @@
     "tests": {
       "distractor-ram": {
         "pass": true,
-        "text": "According to the documentation, a NIMBUS node offers applications 7.0 cores and 28000 MB RAM. Therefore, an application can use up to 28000 MB (28 GB) of RAM on a NIMBUS node."
+        "chars": 91,
+        "text": "According to the documentation, a NIMBUS node offers applications 28,000 MB (28 GB) of RAM."
       },
       "distractor-size": {
         "pass": true,
+        "chars": 57,
         "text": "The maximum size of a container image is 5 GB or smaller."
       },
       "multi-hop": {
         "pass": false,
+        "chars": 253,
         "text": "Based on the documentation in section [C], the maximum expire value is 1056000 blocks. Since a block takes about 30 seconds, 1056000 blocks would be approximately one month. Therefore, deploying for t"
       },
       "refusal-plausible": {
         "pass": true,
+        "chars": 33,
         "text": "Not covered in the documentation."
       },
       "refusal-adjacent": {
         "pass": true,
+        "chars": 33,
         "text": "Not covered in the documentation."
       },
       "no-overreach": {
         "pass": true,
+        "chars": 52,
         "text": "An application may have between 1 and 100 instances."
       }
     },
     "writing": {
       "tweet": {
-        "ok": false,
-        "chars": 195,
-        "text": "Exciting news! Flux now operates private AI models on decentralized nodes. This ensures enhanced security and privacy. Experience the future of AI with Flux! #AI #Decentralization #FluxTechnology"
+        "ok": true,
+        "chars": 191,
+        "text": "Exciting news! Flux now enables private AI models to run on decentralized nodes. Enhance your data security while enjoying advanced AI capabilities. Discover the future of AI with Flux today!"
       },
       "intro": {
         "ok": true,
-        "chars": 202,
-        "text": "Deploying your own AI model on Flux can be a complex yet rewarding process. It involves a series of precise steps that require a solid understanding of both the Flux platform and your specific AI model."
+        "chars": 300,
+        "text": "In this blog post, we will explore the process of deploying a custom AI model using Flux, an open-source machine learning library. We'll cover the key steps involved in successfully integrating your model with Flux, enabling you to leverage the power of this robust framework in your own AI projects."
       }
     },
     "score": 7,
-    "max": 9
-  },
-  {
-    "model": "falcon3:3b",
-    "tests": {
-      "distractor-ram": {
-        "pass": false,
-        "text": "59000 MB."
-      },
-      "distractor-size": {
-        "pass": true,
-        "text": "5 GB"
-      },
-      "multi-hop": {
-        "pass": false,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-plausible": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-adjacent": {
-        "pass": true,
-        "text": "Not covered in the documentation."
-      },
-      "no-overreach": {
-        "pass": true,
-        "text": "[A] 1 to 100 instances"
-      }
-    },
-    "writing": {
-      "tweet": {
-        "ok": true,
-        "chars": 0,
-        "text": ""
-      },
-      "intro": {
-        "ok": true,
-        "chars": 233,
-        "text": "Embark on a thrilling journey as you transform raw data into actionable insights with Flux's AI capabilities. Discover the seamless process of deploying your custom AI model, empowering you to make data-driven decisions effortlessly."
-      }
-    },
-    "score": 6,
     "max": 9
   }
 ]
