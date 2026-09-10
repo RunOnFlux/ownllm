@@ -286,7 +286,11 @@ const docsbot = {
   containerData: '/tmp',
   repoauth: '',
   cpu: 0.3,
-  ram: 500,
+  // The index lives in memory: 26,879 chunks x 768 dimensions is ~83 MB of
+  // vectors alone, plus BM25 term maps, chunk text and V8 heap overhead. At
+  // 500 MB the container was OOM-killed at 86% indexed, losing two hours of
+  // embedding and starting over - forever, since it never reached the end.
+  ram: 2500,
   hdd: 1,
 };
 

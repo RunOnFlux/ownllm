@@ -113,11 +113,17 @@ async function buildIndex() {
   console.log(status);
   // Batched: one request per 32 chunks keeps memory flat without paying a
   // round trip per chunk.
-  for (let i = 0; i < chunks.length; i += 32) {
-    const batch = chunks.slice(i, i + 32);
+  const BATCH = Number(process.env.EMBED_BATCH || 96);
+  for (let i = 0; i < chunks.length; i += BATCH) {
+    const batch = chunks.slice(i, i + BATCH);
     // eslint-disable-next-line no-await-in-loop
     const vecs = await embed(batch.map(c => c.text));
-    batch.forEach((c, j) => index.push({ ...c, vec: vecs[j], mag: norm(vecs[j]), terms: tokenize(c.text) }));
+    batch.forEach((c, j) => {
+      // Float32Array rather than a JS number array: identical retrieval quality
+      // at half the memory. 26,879 chunks x 768 dims is 165 MB as doubles.
+      const v = Float32Array.from(vecs[j]);
+      index.push({ ...c, vec: v, mag: norm(v), tf: termFreq(c.text), len: countTokens(c.text) });
+    });
     status = `embedded ${index.length}/${chunks.length}`;
   }
   buildKeywordStats();
@@ -158,15 +164,29 @@ async function buildIndex() {
  * literal terms; embeddings handle the paraphrases. Neither alone is enough.
  */
 const tokenize = t => (t.toLowerCase().match(/[a-z0-9_.:-]{2,}/g) || []);
+
+/**
+ * BM25 needs term frequency and document length, not the token sequence.
+ * Keeping the full token array held every one of ~1.95M words as a separate
+ * JS string - 94 MB, and the largest single cause of the container being
+ * OOM-killed at 86% indexed. A Map of unique term to count answers both
+ * questions in a fraction of the space.
+ */
+function termFreq(text) {
+  const m = new Map();
+  for (const t of tokenize(text)) m.set(t, (m.get(t) || 0) + 1);
+  return m;
+}
+const countTokens = text => tokenize(text).length;
 let df = new Map();
 let avgLen = 1;
 
 function buildKeywordStats() {
   df = new Map();
   for (const c of index) {
-    for (const term of new Set(tokenize(c.text))) df.set(term, (df.get(term) || 0) + 1);
+    for (const term of c.tf.keys()) df.set(term, (df.get(term) || 0) + 1);
   }
-  avgLen = index.reduce((a, c) => a + c.terms.length, 0) / Math.max(1, index.length);
+  avgLen = index.reduce((a, c) => a + c.len, 0) / Math.max(1, index.length);
 }
 
 function bm25(queryTerms, c) {
@@ -175,10 +195,10 @@ function bm25(queryTerms, c) {
   for (const q of queryTerms) {
     const n = df.get(q) || 0;
     if (!n) continue;
-    const tf = c.terms.filter(t => t === q).length;
+    const tf = c.tf.get(q) || 0;
     if (!tf) continue;
     const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
-    score += idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * c.terms.length) / avgLen)));
+    score += idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * c.len) / avgLen)));
   }
   return score;
 }
