@@ -48,6 +48,28 @@ node tools/ingest.js --out "$OUT" --append --tier website \
   --site https://zelcore.io --max-pages 220
 
 echo
+echo "### tier: product (deployment guidance - the highest-value pages for user questions)"
+# cloud.runonflux.com is the fluxos-frontend deploy UI, server-rendered, and its
+# sitemap covers the register flow, every marketplace app including the game
+# servers, and the comparison pages. This is what someone asking "how do I
+# deploy X on Flux" actually needs.
+node tools/ingest.js --out "$OUT" --append --tier product \
+  --site https://cloud.runonflux.com --max-pages 120
+
+# No sitemaps on these, so only the landing page is reachable. Worth having for
+# product naming and positioning; not a substitute for docs.
+for SITE in https://fluxedge.ai https://fluxcore.ai https://fluxai.io; do
+  node tools/ingest.js --out "$OUT" --append --tier product --site "$SITE" --max-pages 1
+done
+
+echo
+echo "### tier: cms (articles served from a database, invisible to sitemap scraping)"
+# The SSP sites render their Academy and blog from a database. Needs
+# CMS_API_KEY; skipped with a message when absent rather than silently missed.
+node tools/ingest.js --out "$OUT" --append --tier cms \
+  --api https://cms.sspwallet.io/api/v1/posts
+
+echo
 echo "### tier: blog (dated announcements - useful for history, not for current fact)"
 node tools/ingest.js --out "$OUT" --append --tier blog \
   --rss https://fluxofficial.medium.com/feed

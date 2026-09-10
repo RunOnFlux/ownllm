@@ -132,7 +132,50 @@ async function sitemapUrls(site) {
   return [];
 }
 
+/**
+ * Pulls articles from a CMS that serves JSON rather than pages. The SSP sites
+ * render their Academy and blog content from a database, so the articles are
+ * invisible to sitemap scraping - and the API gives clean text with real
+ * titles and categories instead of HTML that has to be stripped.
+ *
+ * Needs a key: CMS_API_KEY in the environment.
+ */
+async function ingestApi(endpoint) {
+  const key = process.env.CMS_API_KEY;
+  if (!key) { console.log(`SKIPPED ${endpoint}: CMS_API_KEY is not set`); return; }
+  const seen = [];
+  for (let page = 0; page < 20; page += 1) {
+    const url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}limit=100&offset=${page * 100}`;
+    let body;
+    try {
+      const res = await fetch(url, { headers: { 'x-api-key': key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(30000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      body = await res.json();
+    } catch (err) { console.log(`SKIPPED ${endpoint}: ${err.message}`); return; }
+    const items = Array.isArray(body) ? body : (body.data || body.posts || body.items || []);
+    if (!items.length) break;
+    for (const it of items) {
+      const text = it.content || it.body || it.markdown || it.html || '';
+      if (!text) continue;
+      const clean = /<[a-z][\s\S]*>/i.test(text) ? htmlToText(text) : text;
+      addText(`# ${it.title || it.slug || 'untitled'}\n${clean}`, {
+        source: it.title || it.slug || 'untitled',
+        origin: endpoint,
+        url: it.url || (it.slug ? `${endpoint.replace(/\/api\/.*/, '')}/${it.slug}` : ''),
+        tier: TIER,
+        date: it.publishedAt || it.createdAt || '',
+        category: it.category || it.section || undefined,
+      });
+      seen.push(it.slug || it.title);
+    }
+    if (items.length < 100) break;
+  }
+  console.log(`${endpoint}: ${seen.length} articles`);
+}
+
 (async () => {
+  for (const endpoint of many('--api')) await ingestApi(endpoint);
+
   for (const dir of many('--dir')) {
     if (!fs.existsSync(dir)) { console.log(`skip ${dir} (missing)`); continue; }
     const files = walk(dir);
@@ -187,6 +230,20 @@ async function sitemapUrls(site) {
     }
     console.log(`${site}: ${ok}/${urls.length} pages`);
   }
+
+  // Marketing sites repeat their nav, footer and calls-to-action on every
+  // page. Those chunks are identical, retrieve well against generic questions,
+  // and crowd out real answers, so keep only the first copy of each.
+  const seenText = new Set();
+  const deduped = chunks.filter(c => {
+    const finger = c.text.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 220);
+    if (seenText.has(finger)) return false;
+    seenText.add(finger);
+    return true;
+  });
+  const dropped = chunks.length - deduped.length;
+  if (dropped) console.log(`  deduplicated: dropped ${dropped} repeated chunks`);
+  chunks.length = 0; chunks.push(...deduped);
 
   const line = `${chunks.map(c => JSON.stringify(c)).join('\n')}\n`;
   if (argv.includes('--append') && fs.existsSync(OUT)) fs.appendFileSync(OUT, line);
