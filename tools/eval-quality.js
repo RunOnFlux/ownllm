@@ -112,6 +112,20 @@ async function ensure(model) {
   }
 }
 
+/**
+ * Reasoning models emit a <think> block before the answer. Scoring the raw
+ * response counts facts that appear only inside that reasoning as though the
+ * model had answered - lfm2.5 scored PASS in the speed bench purely because
+ * "5 GB" appeared while it was thinking aloud, then ran out of budget before
+ * producing an answer. Strip it, so what is scored is what a user would see.
+ */
+function visible(text) {
+  const closed = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // An unterminated block means the model never finished thinking: nothing
+  // reached the user at all.
+  return /<think>/i.test(closed) ? '' : closed;
+}
+
 async function gen(model, prompt, opts) {
   const res = await fetch(`${base}/api/generate`, {
     method: 'POST',
@@ -134,7 +148,8 @@ async function gen(model, prompt, opts) {
     for (const t of TESTS) {
       row.max += t.weight;
       try {
-        const text = await gen(model, `${SYSTEM}\n\nQUESTION: ${t.q}\n\nANSWER:`, { temperature: 0.1, num_predict: 200 });
+        const raw = await gen(model, `${SYSTEM}\n\nQUESTION: ${t.q}\n\nANSWER:`, { temperature: 0.1, num_predict: 200 });
+        const text = visible(raw);
         const ok = t.pass(text);
         if (ok) row.score += t.weight;
         row.tests[t.name] = { pass: ok, text: text.slice(0, 200) };

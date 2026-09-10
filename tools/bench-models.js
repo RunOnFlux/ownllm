@@ -88,6 +88,12 @@ async function speed(model) {
   };
 }
 
+/** See eval-quality.js: facts inside a <think> block are not an answer. */
+function visible(text) {
+  const closed = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  return /<think>/i.test(closed) ? '' : closed;
+}
+
 async function quality(model) {
   const out = {};
   for (const t of TESTS) {
@@ -99,7 +105,7 @@ QUESTION: ${t.q}
 ANSWER:`,
       stream: false, options: { num_predict: 200, temperature: 0.1 },
     });
-    const text = (r.response || '').trim();
+    const text = visible((r.response || '').trim());
     out[t.name] = { pass: t.pass(text), text: text.slice(0, 300) };
   }
   const tweet = await ollama.generate(base, KEY, {

@@ -1,0 +1,90 @@
+[
+  {
+    "model": "lfm2.5:8b-a1b-q4_K_M",
+    "genTps": 17.107947154691768,
+    "preTps": 119.75455196195745,
+    "grounded": {
+      "pass": true,
+      "text": "<think>\nWe need to answer strictly from the documentation. The question: \"What is the maximum container image size, and how many blocks is one month?\" According to the documentation:\n\n- Maximum container image size is 5 GB.\n- Minimum expire is 1 block; maximum is 1056000 blocks. 88000 blocks is one "
+    },
+    "refusal": {
+      "pass": true,
+      "text": "<think>\nWe need to answer based strictly from the documentation. The question: \"How many GPUs can I attach to a Flux app?\" The provided documentation does not mention anything about GPUs. It lists maximum per app: CPU cores, RAM, HDD size, container image size, number of instances, expire times, app"
+    },
+    "tweet": "<think>\nThe user wants a tweet (under 280 characters) announcing that \"Flux now runs private AI models on decentralized nodes.\" No hashtags. So we need to produce a single tweet, under 280 characters, no hashtags. Possibly include emojis? It didn't forbid emojis, but typical tweets may have them. We"
+  },
+  {
+    "model": "granite4.1:8b",
+    "genTps": 3.495999178540079,
+    "preTps": 23.31646277061015,
+    "grounded": {
+      "pass": true,
+      "text": "Maximum container image size: 5 GB  \nOne month: 88000 blocks  \n\n(Both details are directly stated in the provided documentation.)"
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": "Flux now powers private AI models across decentralized nodes, delivering secure, scalable, and privacy-preserving AI solutions. 🚀🔒 #NoHashtags"
+  },
+  {
+    "model": "gemma4:e2b",
+    "genTps": 9.021378863631034,
+    "preTps": 108.63602605971276,
+    "grounded": {
+      "pass": false,
+      "text": ""
+    },
+    "refusal": {
+      "pass": false,
+      "text": ""
+    },
+    "tweet": ""
+  },
+  {
+    "model": "gemma4:e4b",
+    "genTps": 4.758502810054527,
+    "preTps": 66.27559484569574,
+    "grounded": {
+      "pass": false,
+      "text": ""
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": ""
+  },
+  {
+    "model": "ministral-3:8b",
+    "genTps": 3.601819891536597,
+    "preTps": 26.438895954275505,
+    "grounded": {
+      "pass": true,
+      "text": "The maximum container image size is **5 GB**.\n\nOne month is **88,000 blocks**."
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": "**\"Big news: Flux is now powering private AI models across decentralized nodes. Run your models securely, privately, and without relying on centralized infrastructure. The future of AI is distributed—it’s happening now.\"**"
+  },
+  {
+    "model": "falcon3:7b",
+    "genTps": 3.127736769673464,
+    "preTps": 30.829486054944987,
+    "grounded": {
+      "pass": true,
+      "text": "The maximum container image size is 5 GB, and one month is 88000 blocks."
+    },
+    "refusal": {
+      "pass": true,
+      "text": "Not covered in the documentation."
+    },
+    "tweet": "\"Exciting news! Flux is now supporting private AI model deployment on decentralized nodes. Revolutionizing privacy and security in AI applications. #techinnovation #decentralizedAI\""
+  },
+  {
+    "model": "cogito-2.1:8b",
+    "error": "pull model manifest: file does not exist"
+  }
+]
