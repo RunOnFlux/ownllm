@@ -24,6 +24,19 @@ OUT="${1:-images/docsbot/docs/corpus.jsonl}"
 R="$HOME/repos"
 rm -f "$OUT"
 
+echo "### tier: facts (generated from FluxOS source - the authoritative numbers)"
+# Regenerated every build so it cannot drift from the code it describes, and so
+# derived values are stated rather than computed. Every model tested failed to
+# work out that 1056000 blocks is about 12 months; stating it turns a
+# calculation they get wrong into a lookup they get right.
+if [ -d "$R/flux/ZelBack" ]; then
+  node tools/facts-from-source.js "$R/flux" > images/docsbot/docs/flux-facts.md
+  node tools/ingest.js --out "$OUT" --append --tier facts --dir images/docsbot/docs
+else
+  echo "  missing: $R/flux (FluxOS source) - fact sheet not regenerated"
+fi
+
+echo
 echo "### tier: docs (authoritative, current)"
 node tools/ingest.js --out "$OUT" --append --tier docs \
   --dir "$R/flux-docs/docs" \

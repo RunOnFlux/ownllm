@@ -518,3 +518,21 @@ REFUSED 24 internal documents (--allow-internal to override):
 The filter is a name-based heuristic, not a security control. **Read the refusal
 list, and skim what did get through, before publishing a bot to users.** A file
 called `NOTES.md` containing next quarter's pricing would pass it happily.
+
+### Facts generated from source
+
+`tools/facts-from-source.js` reads `ZelBack/config/default.js` and emits a
+markdown fact sheet: tier limits with the locked system resources already
+subtracted, validation rules, banned and surcharged ports, both pricing tables
+with a worked example, and lifetime figures.
+
+Two reasons this beats a written page for these particular facts.
+
+It cannot drift. The numbers live in the code; a page describing them is stale
+the moment either changes. This is regenerated on every corpus build.
+
+It states **derived** values. Every model tested failed to work out that
+1,056,000 blocks is about 12 months - small models cannot divide reliably. The
+sheet says so directly, turning a calculation they get wrong into a lookup they
+get right. Its worked pricing example was checked against the live API and
+matches to the cent.
