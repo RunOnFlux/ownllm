@@ -584,3 +584,19 @@ flagged `flux-facts.md` as "nav scrap", "repeated filler" and "mostly symbols" -
 it is the most valuable file in the corpus. A line like `ram must be a multiple
 of 100` is short, structured and number-dense, which prose metrics read as junk.
 Check extraction correctness instead; do not score documentation like an essay.
+
+### Reaching a second published port through FDM
+
+An app publishing more than one port gets a hostname per port. The bare name
+routes to the first:
+
+```
+https://<appname>.app.runonflux.io          -> first published port (the gate, 33000)
+https://<appname>_<port>.app.runonflux.io   -> any other published port
+```
+
+So the docs bot on 33001 is at `https://ownllmdocs_33001.app.runonflux.io`.
+`https://<appname>.app.runonflux.io:33001` does **not** work - FDM terminates on
+443 and routes by hostname, not by the port in the URL. That failure looks like
+a connection error rather than a 404, which makes it easy to misread as the app
+being down.
