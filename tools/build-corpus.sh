@@ -56,18 +56,44 @@ echo "### tier: product (deployment guidance - the highest-value pages for user 
 node tools/ingest.js --out "$OUT" --append --tier product \
   --site https://cloud.runonflux.com --max-pages 120
 
-# No sitemaps on these, so only the landing page is reachable. Worth having for
-# product naming and positioning; not a substitute for docs.
-for SITE in https://fluxedge.ai https://fluxcore.ai https://fluxai.io; do
+# AI products. ai.runonflux.com has 10 tutorial pages, which are the useful
+# part; beaverai.app publishes 78 blog posts.
+node tools/ingest.js --out "$OUT" --append --tier product \
+  --site https://ai.runonflux.com --exclude '/images/' --max-pages 60
+node tools/ingest.js --out "$OUT" --append --tier product \
+  --site https://beaverai.app --max-pages 120
+
+# No sitemap on these, so only the landing page is reachable. The gap is filled
+# from their repositories below.
+for SITE in https://fluxedge.ai https://fluxcore.ai https://fluxai.io https://brimley.ai; do
   node tools/ingest.js --out "$OUT" --append --tier product --site "$SITE" --max-pages 1
 done
 
 echo
-echo "### tier: cms (articles served from a database, invisible to sitemap scraping)"
-# The SSP sites render their Academy and blog from a database. Needs
-# CMS_API_KEY; skipped with a message when absent rather than silently missed.
-node tools/ingest.js --out "$OUT" --append --tier cms \
-  --api https://cms.sspwallet.io/api/v1/posts
+echo "### tier: product-repo (what the thin marketing sites do not say)"
+# fluxedge, fluxcore, brimley and beaver have little or no public
+# documentation, but their repositories do: fluxai-enterprise alone carries 390
+# markdown files. Clone whichever are missing, then re-run.
+for R in fluxai-enterprise brimley console-api fluxai-beaver fluxai-fluxedge; do
+  if [ -d "$R/docs" ]; then
+    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R/docs"
+  elif [ -d "$R" ]; then
+    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R"
+  else
+    echo "  missing: $R (gh repo clone RunOnFlux/$R)"
+  fi
+done
+
+echo
+echo "### tier: academy (long-form articles - the richest material we have)"
+# These are database-backed, but every article is listed in the sitemap and
+# rendered server-side, so no API key is needed: sampled articles came back
+# with 1,488 / 1,908 / 2,953 words of real text. Category index pages are
+# nearly empty and fall below the minimum chunk length on their own.
+node tools/ingest.js --out "$OUT" --append --tier academy \
+  --site https://sspwallet.io --include '/en/(academy|newsroom|guide|case-studies|support)' --max-pages 250
+node tools/ingest.js --out "$OUT" --append --tier academy \
+  --site https://zelcore.io --include '/(academy|newsroom|ecosystem|learn)' --max-pages 250
 
 echo
 echo "### tier: blog (dated announcements - useful for history, not for current fact)"
