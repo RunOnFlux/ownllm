@@ -100,11 +100,18 @@ echo "### tier: product-repo (what the thin marketing sites do not say)"
 # fluxedge, fluxcore, brimley and beaver have little or no public
 # documentation, but their repositories do: fluxai-enterprise alone carries 390
 # markdown files. Clone whichever are missing, then re-run.
+# ai_university is 157,000 words of generic AI education - "AI in Healthcare",
+# "Data Literacy", "AI Ethics" - and none of it is about Flux. It would be 7% of
+# the corpus, matching AI-related questions strongly and crowding out the
+# product answers those questions actually want. It belongs to a different
+# product with a different audience; if it needs a bot, it needs its own.
+# DOCKER_IMAGE_FILE_TREE and test logs are engineering exhaust, not documentation.
+SKIP='(ai_university|DOCKER_IMAGE_FILE_TREE|^tests/|/archive/)'
 for NAME in fluxai-enterprise brimley console-api fluxai-beaver fluxai-fluxedge; do
   if [ -d "$R/$NAME/docs" ]; then
-    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R/$NAME/docs"
+    node tools/ingest.js --out "$OUT" --append --tier product-repo --exclude "$SKIP" --dir "$R/$NAME/docs"
   elif [ -d "$R/$NAME" ]; then
-    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R/$NAME"
+    node tools/ingest.js --out "$OUT" --append --tier product-repo --exclude "$SKIP" --dir "$R/$NAME"
   else
     echo "  missing: $NAME (gh repo clone RunOnFlux/$NAME)"
   fi

@@ -11,3 +11,10 @@ specs/*.plaintext.json
 
 # Holds API_KEY in cleartext for Flux Home import - the UI encrypts it on submit.
 specs/*.ui.json
+
+# The corpus is NOT committed. tools/build-corpus.sh reads private repositories
+# (fluxai-enterprise, brimley, console-api, ssp-enterprise, ssp-enterprise-app,
+# fluxai-beaver, fluxai-fluxedge) and this repository is public. Committing the
+# corpus would republish their contents, and baking it into a public GHCR image
+# would do the same. See README, "Private sources".
+images/docsbot/docs/corpus.jsonl

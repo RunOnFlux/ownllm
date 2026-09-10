@@ -62,6 +62,7 @@ const INTERNAL = /(^|\/|_)(plan|roadmap|deck|narrative|prep|playbook|audit|inter
 const IN_WORKTREE = /(^|\/)(\.claude|\.git|worktrees|node_modules)(\/|$)/;
 const ALLOW_INTERNAL = argv.includes('--allow-internal');
 const refused = [];
+const skipped = [];
 
 function isInternal(relPath) {
   if (IN_WORKTREE.test(relPath)) return true;
@@ -207,6 +208,9 @@ async function ingestApi(endpoint) {
     for (const f of files) {
       const rel = path.relative(dir, f);
       if (!ALLOW_INTERNAL && isInternal(rel)) { refused.push(`${path.basename(dir)}/${rel}`); continue; }
+      // --exclude applies to local paths as well as sitemap URLs, so a whole
+      // subtree can be left out by topic rather than by name.
+      if (EXCLUDE && EXCLUDE.test(rel)) { skipped.push(`${path.basename(dir)}/${rel}`); continue; }
       addText(fs.readFileSync(f, 'utf8'), { source: rel, origin: dir, url: '', tier: TIER });
       used += 1;
     }
@@ -280,6 +284,11 @@ async function ingestApi(endpoint) {
   const byTier = chunks.reduce((a, c) => ({ ...a, [c.tier || 'docs']: (a[c.tier || 'docs'] || 0) + 1 }), {});
   console.log(`\nwrote ${OUT}: ${chunks.length} chunks, ~${words.toLocaleString()} words`);
   console.log(`  by tier: ${Object.entries(byTier).map(([t, n]) => `${t}=${n}`).join(', ')}`);
+  if (skipped.length) {
+    console.log(`\n  excluded ${skipped.length} files by --exclude:`);
+    for (const r of skipped.slice(0, 6)) console.log(`    ${r}`);
+    if (skipped.length > 6) console.log(`    ... and ${skipped.length - 6} more`);
+  }
   if (refused.length) {
     console.log(`\n  REFUSED ${refused.length} internal documents (--allow-internal to override):`);
     for (const r of refused.slice(0, 12)) console.log(`    ${r}`);
