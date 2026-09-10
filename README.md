@@ -536,3 +536,28 @@ It states **derived** values. Every model tested failed to work out that
 sheet says so directly, turning a calculation they get wrong into a lookup they
 get right. Its worked pricing example was checked against the live API and
 matches to the cent.
+
+### Retrieval is weighted by tier
+
+The whitepaper is 227,000 words against 232,000 for all documentation combined -
+roughly half the corpus. On volume alone it wins retrieval contests it should
+lose: it is authoritative about architecture and intent, and close to useless
+for *"how do I deploy an app"*, which the docs answer directly.
+
+Each tier therefore multiplies the hybrid score:
+
+| tier | weight | |
+|---|---|---|
+| `facts` | 1.35 | generated from source, cannot drift |
+| `docs` | 1.20 | current documentation |
+| `academy` | 1.10 | long-form articles |
+| `product` | 1.05 | deploy UI, product pages |
+| `product-repo` | 1.00 | repo docs for thin-website products |
+| `enterprise` | 0.95 | public enterprise material |
+| `website` | 0.85 | marketing copy |
+| `whitepaper` | 0.80 | architecture and intent, not how-to |
+| `blog` | 0.70 | dated announcements |
+
+A whitepaper passage still wins when nothing more specific matches - the weights
+reorder near-ties, they do not exclude anything. Citations now carry the tier,
+so where an answer came from is visible rather than inferred.

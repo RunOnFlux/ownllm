@@ -25,6 +25,25 @@ const TOP_K = Number(process.env.TOP_K || 5);
 // what llama.cpp's KV cache can actually reuse - retrieved chunks differ per
 // question and can never be cached, but the instruction plus core facts can.
 const PINNED = (process.env.PINNED_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+/**
+ * Retrieval weight per corpus tier.
+ *
+ * The whitepaper is 227,000 words against 232,000 for all documentation
+ * combined - roughly half the corpus - so on volume alone it wins retrieval
+ * contests it should lose. It is authoritative about architecture and
+ * intent, and close to useless for "how do I deploy an app", which the docs
+ * answer directly.
+ *
+ * These multiply the final hybrid score, so a whitepaper passage still wins
+ * when nothing more specific matches, but a documentation page beats it on
+ * anything close. Facts generated from source rank highest: they cannot drift.
+ */
+const TIER_WEIGHTS = {
+  facts: 1.35, docs: 1.2, academy: 1.1, product: 1.05,
+  'product-repo': 1.0, enterprise: 0.95, website: 0.85, whitepaper: 0.8, blog: 0.7,
+};
+const weightOf = tier => TIER_WEIGHTS[tier] ?? 1.0;
 const CHUNK_CHARS = Number(process.env.CHUNK_CHARS || 1200);
 const CHUNK_OVERLAP = Number(process.env.CHUNK_OVERLAP || 200);
 
@@ -178,7 +197,10 @@ function retrieve(queryVec, question) {
   const maxKw = Math.max(1e-9, ...scored.map(s => s.kw));
   const maxVec = Math.max(1e-9, ...scored.map(s => s.vec));
   return scored
-    .map(s => ({ ...s.c, score: 0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw) }))
+    .map(s => ({
+      ...s.c,
+      score: (0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw)) * weightOf(s.c.tier),
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, TOP_K);
 }
@@ -226,7 +248,7 @@ async function answer(question) {
     answer: (body.response || '').trim(),
     sources: hits.map((h, i) => ({
       n: i + 1, source: h.source, heading: h.heading || undefined, url: h.url || undefined,
-      score: Number(h.score.toFixed(3)),
+      tier: h.tier || undefined, score: Number(h.score.toFixed(3)),
     })),
   };
 }
