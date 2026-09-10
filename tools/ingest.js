@@ -105,6 +105,30 @@ function addText(text, meta) {
   flush();
 }
 
+/**
+ * Repairs what pdftotext leaves behind.
+ *
+ * The worst of it is line-break hyphenation: a 424-page whitepaper splits words
+ * across lines, so "Cumulus" is stored as "Cu-\nmulus". Embeddings shrug that
+ * off, but BM25 does not - a search for "Cumulus" simply misses the passage
+ * that defines it, which is exactly the technical term a user would ask about.
+ * 17% of whitepaper chunks contained at least one.
+ *
+ * Table-of-contents dot leaders are pure noise: they retrieve well against
+ * anything (they contain every heading in the document) and answer nothing.
+ */
+function cleanPdfText(raw) {
+  return raw
+    // "Cu-\nmulus" -> "Cumulus", but leave real hyphenated compounds alone
+    .replace(/([a-z])-\n([a-z])/g, '$1$2')
+    // "...... 139" table-of-contents rows
+    .replace(/^.*\.{5,}\s*\d+\s*$/gm, '')
+    // page numbers alone on a line, and "Page 4 of 424"
+    .replace(/^\s*\d{1,4}\s*$/gm, '')
+    .replace(/^\s*page \d+ of \d+\s*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
     const p = path.join(dir, e.name);
@@ -219,7 +243,8 @@ async function ingestApi(endpoint) {
 
   for (const pdf of many('--pdf')) {
     try {
-      const text = execFileSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8', maxBuffer: 64e6 });
+      const raw = execFileSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8', maxBuffer: 64e6 });
+      const text = cleanPdfText(raw);
       addText(text, { source: path.basename(pdf), origin: 'pdf', url: '', tier: TIER });
       console.log(`${pdf}: ${text.length} chars`);
     } catch (err) {

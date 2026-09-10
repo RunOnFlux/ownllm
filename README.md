@@ -561,3 +561,26 @@ Each tier therefore multiplies the hybrid score:
 A whitepaper passage still wins when nothing more specific matches - the weights
 reorder near-ties, they do not exclude anything. Citations now carry the tier,
 so where an answer came from is visible rather than inferred.
+
+### PDF extraction is repaired, not trusted
+
+`pdftotext` output needs fixing before it is usable as a corpus.
+
+The damaging one is line-break hyphenation. A 424-page whitepaper splits words
+across lines, so "Cumulus" is stored as `Cu-\nmulus`. Embeddings tolerate that;
+BM25 does not - a search for "Cumulus" misses the passage that defines it,
+which is precisely the technical term someone would ask about. 17% of
+whitepaper chunks contained at least one split.
+
+Table-of-contents dot leaders are the other: they contain every heading in the
+document, so they retrieve well against almost any query and answer nothing.
+
+After repair: hyphenation splits 17% -> 0%, dot-leader rows 6% -> 0%, and 110
+chunks now contain an intact "Cumulus".
+
+A note on measuring corpus quality: generic text-quality heuristics are actively
+misleading here. Scoring chunks by length, alphabetic ratio and repetition
+flagged `flux-facts.md` as "nav scrap", "repeated filler" and "mostly symbols" -
+it is the most valuable file in the corpus. A line like `ram must be a multiple
+of 100` is short, structured and number-dense, which prose metrics read as junk.
+Check extraction correctness instead; do not score documentation like an essay.
