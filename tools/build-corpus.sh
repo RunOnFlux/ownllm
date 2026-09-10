@@ -89,8 +89,8 @@ echo "### tier: enterprise (SSP Enterprise - public material only)"
 # ingester refuses those by default and prints what it refused; only the
 # genuinely descriptive files come through. Read that refusal list before
 # publishing - it is the difference between a product bot and a leak.
-for R in "$R/ssp-enterprise" "$R/ssp-enterprise-app"; do
-  [ -d "$R" ] && node tools/ingest.js --out "$OUT" --append --tier enterprise --dir "$R"
+for REPO in "$R/ssp-enterprise" "$R/ssp-enterprise-app"; do
+  [ -d "$REPO" ] && node tools/ingest.js --out "$OUT" --append --tier enterprise --dir "$REPO"
 done
 # The customer-facing enterprise story lives on the website, and that is already
 # covered by the sspwallet.io academy scrape above.
@@ -100,13 +100,13 @@ echo "### tier: product-repo (what the thin marketing sites do not say)"
 # fluxedge, fluxcore, brimley and beaver have little or no public
 # documentation, but their repositories do: fluxai-enterprise alone carries 390
 # markdown files. Clone whichever are missing, then re-run.
-for R in fluxai-enterprise brimley console-api fluxai-beaver fluxai-fluxedge; do
-  if [ -d "$R/docs" ]; then
-    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R/docs"
-  elif [ -d "$R" ]; then
-    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R"
+for NAME in fluxai-enterprise brimley console-api fluxai-beaver fluxai-fluxedge; do
+  if [ -d "$R/$NAME/docs" ]; then
+    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R/$NAME/docs"
+  elif [ -d "$R/$NAME" ]; then
+    node tools/ingest.js --out "$OUT" --append --tier product-repo --dir "$R/$NAME"
   else
-    echo "  missing: $R (gh repo clone RunOnFlux/$R)"
+    echo "  missing: $NAME (gh repo clone RunOnFlux/$NAME)"
   fi
 done
 
