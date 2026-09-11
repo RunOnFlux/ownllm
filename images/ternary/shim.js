@@ -66,7 +66,9 @@ async function generate(body, res) {
   const o = body.options || {};
   const upstream = await fetch(`${CHAT}/completion`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // llama-server closes idle keep-alive sockets after 5 s; a reused one
+    // resets mid-POST. One connection per request costs nothing on localhost.
+    headers: { 'Content-Type': 'application/json', Connection: 'close' },
     body: JSON.stringify({
       prompt: bitnetPrompt(body.system, body.prompt || ''),
       stream: true,
@@ -122,7 +124,7 @@ async function embed(body, res) {
   const input = Array.isArray(body.input) ? body.input : [body.input ?? body.prompt ?? ''];
   const t0 = process.hrtime.bigint();
   const upstream = await fetch(`${EMBED}/v1/embeddings`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
     body: JSON.stringify({ input }),
   });
   if (!upstream.ok) return json(res, 502, { error: `embedding server ${upstream.status}: ${(await upstream.text()).slice(0, 200)}` });
@@ -135,7 +137,7 @@ async function embed(body, res) {
   });
 }
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/api/version')) return json(res, 200, { version: 'ternary-shim' });
@@ -155,4 +157,11 @@ http.createServer(async (req, res) => {
     if (!res.headersSent) json(res, 500, { error: String(err.message || err).slice(0, 200) });
     else res.end();
   }
-}).listen(PORT, '0.0.0.0', () => console.log(`ternary shim on :${PORT} -> chat ${CHAT}, embed ${EMBED}`));
+});
+// The docs bot embeds in batches that take longer than Node's default 5 s idle
+// keep-alive; it then reuses a socket this server had already closed and gets
+// "fetch failed", and (before 1.4.2) restarted its whole index. Keep idle
+// sockets for 10 minutes so a slow caller never finds the door shut.
+server.keepAliveTimeout = 600000;
+server.headersTimeout = 610000;
+server.listen(PORT, '0.0.0.0', () => console.log(`ternary shim on :${PORT} -> chat ${CHAT}, embed ${EMBED}`));

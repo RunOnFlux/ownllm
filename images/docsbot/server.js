@@ -126,6 +126,16 @@ async function embed(input) {
   return body.embeddings;
 }
 
+async function retry(fn, times, what) {
+  for (let attempt = 1; ; attempt += 1) {
+    try { return await fn(); } catch (err) {
+      if (attempt >= times) throw err;
+      console.log(`${what} failed (${err.message}), retry ${attempt}/${times - 1} in ${attempt * 10}s`);
+      await new Promise(r => { setTimeout(r, attempt * 10000); });
+    }
+  }
+}
+
 const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
 const norm = a => Math.sqrt(dot(a, a));
 
@@ -200,8 +210,12 @@ async function buildIndex() {
   const BATCH = Number(process.env.EMBED_BATCH || 96);
   for (let i = 0; i < chunks.length; i += BATCH) {
     const batch = chunks.slice(i, i + BATCH);
+    // A transient engine failure mid-index used to throw out of buildIndex,
+    // which started over from chunk 0 - on the ternary rig that discarded
+    // 4,000 embedded chunks per "fetch failed". Retry the batch in place;
+    // only a persistent failure (5 in a row) gives up and restarts.
     // eslint-disable-next-line no-await-in-loop
-    const vecs = await embed(batch.map(c => c.text));
+    const vecs = await retry(() => embed(batch.map(c => c.text)), 5, `embed batch at ${i}`);
     batch.forEach((c, j) => {
       // Float32Array rather than a JS number array: identical retrieval quality
       // at half the memory. 26,879 chunks x 768 dims is 165 MB as doubles.
