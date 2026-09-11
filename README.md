@@ -611,3 +611,17 @@ to load with `llama_init_from_model: K cache type q8_0`, and the failure is a
 container that will not start rather than a warning. If you swap the chat model,
 test it before deploying, or drop the variable - the memory it saves is small
 next to what the weights use.
+
+### The corpus and vectors live in Git LFS
+
+`corpus.jsonl` (21 MB) and `corpus.jsonl.vec` (79 MB) are tracked by LFS.
+Committing them directly added ~104 MB to history on every corpus refresh, and
+git never forgets - GitHub warns past 50 MB and refuses past 100 MB.
+
+**CI must check out with `lfs: true`.** Without it, `actions/checkout` writes
+130-byte pointer files, the Docker build copies those into the image, and the
+bot comes up with a corpus that parses to nothing. It serves an empty index
+rather than failing, so the symptom is a bot that answers "Not covered in the
+documentation" to everything - which reads as bad retrieval, not a missing file.
+
+Cloning needs `git lfs install` first, or the same pointer files appear locally.

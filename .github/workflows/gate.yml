@@ -16,7 +16,14 @@ jobs:
       contents: read
       packages: write
     steps:
+      # lfs: true is mandatory once the corpus is in LFS. Without it checkout
+      # writes 130-byte pointer files, the Docker build copies those into the
+      # image, and the bot starts, finds a "corpus" that parses as nothing, and
+      # serves an empty index - a failure that looks like bad retrieval rather
+      # than a missing file.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
