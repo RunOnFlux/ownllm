@@ -219,7 +219,11 @@ function htmlToText(html) {
     .trim();
 }
 
-const titleOf = html => (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim();
+// Titles carry entities too: a citation read "Get Help &amp; Technical Support".
+const decodeEntities = t => t
+  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+const titleOf = html => decodeEntities((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim());
 
 async function fetchText(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'ownllm-ingest' }, signal: AbortSignal.timeout(30000) });

@@ -178,17 +178,25 @@ async function buildIndex() {
   status = 'warming models';
   console.log(status);
   const t0 = Date.now();
-  await fetch(`${ENGINE}/api/generate`, {
+  // Generating must be proven, not assumed. An instance passed readiness on
+  // having models and an index, then returned empty answers: the check only
+  // ever exercised the embedding path. A warm-up that is allowed to fail
+  // quietly is not a check at all, so a failure here keeps the instance out of
+  // rotation rather than being logged and ignored.
+  const warm = await fetch(`${ENGINE}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: CHAT_MODEL,
-      prompt: buildPrompt('warmup', []),
+      prompt: 'Reply with the single word: ready',
       stream: false,
-      options: { num_predict: 1, temperature: 0 },
+      options: { num_predict: 8, temperature: 0 },
     }),
     signal: AbortSignal.timeout(900000),
-  }).catch(err => console.log(`warmup generate failed (continuing): ${err.message}`));
+  }).then(r => r.json()).catch(err => ({ error: err.message }));
+  if (warm.error || !warm.response) {
+    throw new Error(`chat model cannot generate: ${warm.error || 'empty response'}`);
+  }
   console.log(`warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
   ready = true;
@@ -274,7 +282,11 @@ function retrieve(queryVec, question) {
  */
 let pinnedBlock = '';
 function buildPinned() {
-  const chunks = index.filter(c => PINNED.some(p => c.source === p || c.source.startsWith(p)));
+  // Sources became full paths like RunOnFlux/ownllm/images/docsbot/docs/
+  // flux-facts.md when citations moved to GitHub URLs, so matching the whole
+  // string against a bare filename silently stopped pinning anything.
+  const base = p => p.split('/').pop();
+  const chunks = index.filter(c => PINNED.some(want => base(c.source) === base(want)));
   pinnedBlock = chunks.map(c => `(${c.source})\n${c.text}`).join('\n\n');
   if (pinnedBlock) console.log(`pinned prefix: ${chunks.length} chunks, ~${Math.round(pinnedBlock.length / 4)} tokens`);
 }
@@ -306,6 +318,13 @@ async function answer(question) {
     signal: AbortSignal.timeout(900000),
   });
   const body = await res.json();
+  // An engine error used to become an empty string with a 200 status, so a
+  // failure was indistinguishable from a model that had nothing to say. That
+  // hid an intermittent fault for an entire deployment.
+  if (body.error) throw new Error(`engine: ${String(body.error).slice(0, 200)}`);
+  if (!body.response || !body.response.trim()) {
+    throw new Error(`engine returned no text (done_reason=${body.done_reason || 'unknown'}, eval_count=${body.eval_count ?? 0})`);
+  }
   return {
     answer: (body.response || '').trim(),
     sources: hits.map((h, i) => ({
