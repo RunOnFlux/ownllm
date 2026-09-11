@@ -49,7 +49,11 @@ const PADDINGS = [
 
 function buildBlob(publicKey, plaintextJson, padding) {
   const aesKey = crypto.randomBytes(32);
-  const encryptedKey = crypto.publicEncrypt({ key: publicKey, ...padding.opts }, aesKey);
+  // The RSA block wraps the BASE64 TEXT of the AES key, not its raw bytes:
+  // enterpriseCrypto.js encryptAesKeyWithRsaKey encrypts Buffer.from(base64)
+  // and enterpriseHelper.js base64-decodes what it unwraps. Raw bytes decrypt
+  // fine and then fail as "Invalid key length" one step later.
+  const encryptedKey = crypto.publicEncrypt({ key: publicKey, ...padding.opts }, Buffer.from(aesKey.toString('base64')));
   if (encryptedKey.length !== 256) {
     throw new Error(`expected a 256-byte RSA block (RSA-2048), got ${encryptedKey.length}`);
   }

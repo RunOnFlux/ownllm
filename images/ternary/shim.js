@@ -10,7 +10,8 @@
  *   /api/tags      -> the two baked-in models, so MODELS readiness passes
  *   /api/pull      -> immediate success (nothing to pull, weights are in the image)
  *   /api/delete    -> immediate success
- *   /api/generate  -> /v1/chat/completions on the chat server, SSE -> NDJSON,
+ *   /api/generate  -> /completion on the chat server with BitNet's own chat
+ *                     template applied here, SSE -> NDJSON,
  *                     with ollama's nanosecond timing fields filled from
  *                     llama-server's timings so tools/ollama.js rate() works
  *   /api/embed     -> /v1/embeddings on the embedding server
@@ -43,21 +44,39 @@ async function ready() {
   return true;
 }
 
+/**
+ * BitNet's chat template is `Role: text<|eot_id|>` per turn, then `Assistant: `
+ * (tokenizer_config.json). llama-server's built-in template matcher does not
+ * recognise it and falls back to something else, which showed up as the model
+ * echoing the prompt and never emitting <|eot_id|> - "Paris. The capital of
+ * France is Paris. The capital of..." forever. So the shim formats the prompt
+ * itself and calls the raw /completion endpoint with explicit stop strings.
+ * Sampling defaults follow the model's generation_config (temp 0.6, top_p 0.9)
+ * plus a mild repeat penalty, which a 2B model needs.
+ */
+const EOT = '<|eot_id|>';
+function bitnetPrompt(system, user) {
+  let p = '';
+  if (system) p += `System: ${String(system).trim()}${EOT}`;
+  p += `User: ${String(user).trim()}${EOT}Assistant: `;
+  return p;
+}
+
 async function generate(body, res) {
-  const messages = [];
-  if (body.system) messages.push({ role: 'system', content: body.system });
-  messages.push({ role: 'user', content: body.prompt || '' });
   const o = body.options || {};
-  const upstream = await fetch(`${CHAT}/v1/chat/completions`, {
+  const upstream = await fetch(`${CHAT}/completion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messages, stream: true,
-      max_tokens: o.num_predict ?? -1,
-      temperature: o.temperature ?? 0.7,
-      top_p: o.top_p, top_k: o.top_k, stop: o.stop,
-      // Ask for timings on the final chunk; ollama's callers read eval_count etc.
-      timings_per_token: false,
+      prompt: bitnetPrompt(body.system, body.prompt || ''),
+      stream: true,
+      n_predict: o.num_predict ?? -1,
+      temperature: o.temperature ?? 0.6,
+      top_p: o.top_p ?? 0.9,
+      top_k: o.top_k ?? 40,
+      repeat_penalty: o.repeat_penalty ?? 1.1,
+      stop: [EOT, '\nUser:', '\nSystem:', ...(o.stop || [])],
+      cache_prompt: true,
     }),
   });
   if (!upstream.ok) return json(res, 502, { error: `chat server ${upstream.status}: ${(await upstream.text()).slice(0, 200)}` });
@@ -76,11 +95,9 @@ async function generate(body, res) {
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
       if (!line.startsWith('data:')) continue;
-      const data = line.slice(5).trim();
-      if (data === '[DONE]') continue;
-      let ev; try { ev = JSON.parse(data); } catch { continue; }
+      let ev; try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
       if (ev.timings) timings = ev.timings;
-      const delta = ev.choices?.[0]?.delta?.content || '';
+      const delta = ev.content || '';
       if (!delta) continue;
       text += delta;
       if (stream) res.write(JSON.stringify({ model, response: delta, done: false }) + '\n');

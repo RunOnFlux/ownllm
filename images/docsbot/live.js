@@ -31,8 +31,22 @@ async function get(path) {
   return body.data;
 }
 
-const appName = q => (q.match(/\b(?:app|application)\s+(?:called\s+|named\s+)?["']?([a-zA-Z0-9-]{3,63})["']?/i)
-  || q.match(/["']([a-zA-Z0-9-]{3,63})["']/) || [])[1];
+// An app name is taken from "app called X", "application named X", a quoted
+// token, or a bare "app X" - but the bare form only for a token that cannot be
+// ordinary English. "how much RAM can an application use" used to yield "use",
+// which then produced a confident "No application named \"use\"" line in the
+// prompt. Bare names must be 6+ characters and not a common word.
+const COMMON = new Set(['should', 'would', 'could', 'running', 'deployed', 'deploy', 'instances', 'instance',
+  'specification', 'specifications', 'registered', 'expire', 'expires', 'require', 'requires', 'update', 'updated',
+  'called', 'consists', 'consist', 'contain', 'contains', 'support', 'supports', 'without', 'network', 'storage']);
+const appName = (q) => {
+  const explicit = q.match(/\b(?:app|application)\s+(?:called|named)\s+["']?([a-zA-Z0-9-]{3,63})["']?/i)
+    || q.match(/["']([a-zA-Z0-9-]{3,63})["']/);
+  if (explicit) return explicit[1];
+  const bare = q.match(/\b(?:app|application)\s+([a-zA-Z0-9-]{6,63})\b/i);
+  if (bare && !COMMON.has(bare[1].toLowerCase())) return bare[1];
+  return undefined;
+};
 
 /**
  * Tools. `describe` is what gets embedded, so it should read like the questions
@@ -66,8 +80,12 @@ const TOOLS = [
     async run(q) {
       const name = appName(q);
       if (!name) return null;
+      // Not registered at all is most likely a mis-extracted name; say nothing
+      // rather than assert an absence the model would then repeat.
+      const spec = await get(`apps/appspecifications/${name}`).catch(() => null);
+      if (!spec || !spec.name) return null;
       const loc = await get(`apps/location/${name}`).catch(() => []);
-      if (!loc.length) return `The application "${name}" has no running instances right now.`;
+      if (!loc.length) return `The application "${name}" is registered but has no running instances right now.`;
       return `"${name}" is running on ${loc.length} instance(s): ${loc.map(l => l.ip.split(':')[0]).join(', ')}.`;
     },
   },
@@ -79,7 +97,7 @@ const TOOLS = [
       const name = appName(q);
       if (!name) return null;
       const a = await get(`apps/appspecifications/${name}`).catch(() => null);
-      if (!a || !a.name) return `No application named "${name}" is registered on the network.`;
+      if (!a || !a.name) return null;
       const totals = (a.compose || []).reduce((t, c) => ({
         cpu: Math.round((t.cpu + c.cpu) * 10) / 10, ram: t.ram + c.ram, hdd: t.hdd + c.hdd,
       }), { cpu: 0, ram: 0, hdd: 0 });

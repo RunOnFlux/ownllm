@@ -1,5 +1,9 @@
 node_modules/
 
+# Deploy keys (FLUXID_PRIVATEKEY, FLUX_PRIVATEKEY). Never committed - this
+# repository is public.
+.env
+
 # These carry the real API key in cleartext - they are the input to the
 # encrypter, never something that should reach a public repository.
 specs/*.plaintext.json

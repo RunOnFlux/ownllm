@@ -140,6 +140,31 @@ H3 alone means nothing changed. H5 holding on top is what changes the price.
   will confirm.
 - **Falcon-E licence** is not MIT; not in a public image until read.
 
+## 6a. Round-one log
+
+**2026-09-11, first deploy.** `ownllmternary` registered via `tools/deploy.js`
+(1 instance, 8 cores / 6,000 MB, node 104.157.37.8). Image built in CI first
+try, 1.38 GB compressed; both llama-servers loaded, gate ready in minutes.
+
+- **Embedder (E5, partial):** bitnet-embedding-270m indexed the corpus at
+  ~7.7 chunks/s (llama-server log: 4 slots, ~1,000 tokens/s) while sharing
+  the 8 cores with chat requests. Full corpus ≈ 1 h. granite-embedding:278m on
+  ollama took 4.5 h, under a 500 MB OOM constraint - not the same conditions,
+  but the gap is not noise. Hit rate (H4) still to measure.
+- **Chat (E1, confounded):** with the embedder running concurrently, prefill
+  92-98 tok/s at 21 / 772 / 2,003 prompt tokens and generation 8.7-11.1 tok/s.
+  Not a clean number; re-measure once indexing finishes.
+- **Bug found:** llama-server did not apply BitNet's `Role: text<|eot_id|>`
+  chat template, so the model echoed the prompt and never stopped ("Paris. The
+  capital of France is Paris. The capital of..."). Fixed in 1.4.1: the shim
+  formats the prompt itself, calls `/completion` with explicit stop strings,
+  and applies the model card's sampling (temp 0.6, top_p 0.9) plus
+  repeat_penalty 1.1. Quality numbers (E3) wait for that image.
+- The bench's 4k-context probe must use `FILLER_WORDS=500`: random words
+  tokenize at ~5 tokens each.
+- Engine stayed up (RestartCount 0, no OOM) through the failed bench; the
+  "upstream failed" was a gate timeout under load, not a crash.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:
