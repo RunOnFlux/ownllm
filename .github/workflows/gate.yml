@@ -11,7 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: [gate, docsbot, router]
+        image: [gate, docsbot, router, ternary]
+        include:
+          # bitnet.cpp's I2_S kernel is a separate code path per ISA and the
+          # research rig only targets x86 Flux nodes. Not an enterprise
+          # component's constraint either: amd64 is the mandatory one.
+          - image: ternary
+            platforms: linux/amd64
     permissions:
       contents: read
       packages: write
@@ -55,7 +61,7 @@ jobs:
           # component supports it (appConstants.js enterpriseRequiredArchitectures).
           # Building locally on an Apple Silicon Mac produces arm64 only and the
           # registration will fail validation.
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms || 'linux/amd64,linux/arm64' }}
           tags: |
             ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-${{ matrix.image }}:${{ steps.version.outputs.v }}
             ghcr.io/${{ steps.owner.outputs.lc }}/ownllm-${{ matrix.image }}:sha-${{ github.sha }}

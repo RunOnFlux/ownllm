@@ -137,6 +137,16 @@ const PROFILES = {
     cpu: 12.0, ram: 24000, hdd: 60, threads: 8, parallel: 3,
     models: 'granite4:tiny-h granite-embedding:278m', loaded: 2, ctx: 16384,
   },
+  // Research rig for research/cpu-native-models.md: the ternary engine image
+  // (bitnet.cpp, BitNet-b1.58-2B-4T + bitnet-embedding-270m, weights baked in)
+  // in place of ollama. ram is sized from the model card's 0.4 GB non-embedding
+  // memory plus a 4k context and the embedder, with the same headroom rule as
+  // docsbot; hdd is small because nothing is pulled. ctx is 4096 because that
+  // is the model's trained maximum - the docs bot's TOP_K/PINNED_DOCS must fit.
+  ternary: {
+    engine: 'ternary', cpu: 8, ram: 6000, hdd: 5, threads: 8, parallel: 1, loaded: 2, ctx: 4096,
+    models: 'bitnet-2b-4t bitnet-embedding-270m',
+  },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },
   big: { cpu: 12, ram: 40000, hdd: 80, threads: 8, models: 'gpt-oss:20b qwen3-coder:30b qwen3:4b', loaded: 2, ctx: 32768 },
 };
@@ -223,6 +233,23 @@ const engine = {
   ram: P.ram,
   hdd: P.hdd,
 };
+
+// The ternary research engine is a different image with a different process
+// model: llama-server behind an ollama-compatible shim, weights baked in. Same
+// component name and port, so the gate and the docs bot need no change.
+const TERNARY = P.engine === 'ternary';
+if (TERNARY) {
+  engine.description = 'Ternary (1.58-bit) engine: bitnet.cpp llama-server, ollama-compatible (internal only)';
+  engine.repotag = `${REGISTRY}/ownllm-ternary:${GATE_VERSION}`;
+  engine.environmentParameters = [
+    'PORT=11434',
+    `THREADS=${P.threads}`,
+    `CTX=${P.ctx}`,
+  ];
+  engine.commands = [];
+  // Nothing is written here; a mount is required by the spec, so the smallest.
+  engine.containerData = '/data';
+}
 
 const boot = {
   name: 'boot',
@@ -312,8 +339,8 @@ const docsbot = {
   environmentParameters: [
     `UPSTREAM=${ENGINE_URL}`,
     `API_KEY=${API_KEY}`,
-    'CHAT_MODEL=granite4:tiny-h',
-    'EMBED_MODEL=granite-embedding:278m',
+    `CHAT_MODEL=${TERNARY ? 'bitnet-2b-4t' : 'granite4:tiny-h'}`,
+    `EMBED_MODEL=${TERNARY ? 'bitnet-embedding-270m' : 'granite-embedding:278m'}`,
     // Always in front of the retrieved chunks, so the prompt prefix is
     // identical between requests and the KV cache covers it.
     // flux-facts.md first: it is generated from config/default.js, so unlike a
@@ -389,8 +416,8 @@ const spec = {
   compose: ROUTER_ONLY
     ? [router]
     : API_ONLY
-    ? (DOCSBOT ? [engine, boot, gate, docsbot] : [engine, boot, gate])
-    : (ENTERPRISE ? [engine, boot, gate, webui] : [engine, boot, webui]),
+    ? (DOCSBOT ? [engine, boot, gate, docsbot] : [engine, boot, gate]).filter(c => !(TERNARY && c === boot))
+    : (ENTERPRISE ? [engine, boot, gate, webui] : [engine, boot, webui]).filter(c => !(TERNARY && c === boot)),
   instances: INSTANCES,
   contacts: [],
   geolocation: [],

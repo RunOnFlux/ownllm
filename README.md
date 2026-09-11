@@ -446,6 +446,13 @@ Verified live via `/apps/deploymentinformation`:
 `Content-Type: application/json` hangs until the gateway 504s — FluxOS reads the
 raw body itself. Use `text/plain`. `tools/verify.sh` already does.
 
+## Research: CPU-native (ternary) models
+
+`research/cpu-native-models.md` is the measured case for and against replacing
+the 4-bit transformer with a 1.58-bit model. `images/ternary/` is the engine
+it is tested on (bitnet.cpp behind an ollama-compatible shim), deployed with
+`--profile ternary` so every tool in `tools/` runs against it unchanged.
+
 ## Building the knowledge corpus
 
 `tools/ingest.js` collects local markdown, websites and PDFs into a single

@@ -162,7 +162,15 @@ function loadVectors(corpusPath, count) {
       return null;
     }
     if (m.count !== count) { console.log(`vector count ${m.count} != ${count} chunks - ignoring`); return null; }
-    if (m.model !== EMBED_MODEL) console.log(`note: vectors built with ${m.model}, serving with ${EMBED_MODEL}`);
+    // Vectors from a different embedder are not comparable to the query
+    // vectors this instance will produce: cosine over two unrelated spaces is
+    // noise, and it would look like bad retrieval rather than a config error.
+    // Re-embed instead - slow, but it is what makes a swapped embedder (the
+    // ternary research rig) measurable at all.
+    if (m.model !== EMBED_MODEL) {
+      console.log(`precomputed vectors were built with ${m.model}, serving with ${EMBED_MODEL} - ignoring them`);
+      return null;
+    }
     const buf = fs.readFileSync(bin);
     return { dims: m.dims, data: new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4) };
   } catch (err) {

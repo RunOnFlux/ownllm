@@ -61,6 +61,8 @@ async function remove(base, key, model) {
 const rate = (count, ns) => (count && ns ? count / (ns / 1e9) : 0);
 
 /** Random words, so a repeat measurement can never hit the prefix cache. */
-const filler = (n = 2500) => Array.from({ length: n }, () => Math.random().toString(36).slice(2, 9)).join(' ');
+// FILLER_WORDS caps the prefill probe for engines with a small context (the
+// ternary rig is 4096 tokens; 2500 random words is ~5,000).
+const filler = (n = Number(process.env.FILLER_WORDS) || 2500) => Array.from({ length: n }, () => Math.random().toString(36).slice(2, 9)).join(' ');
 
 module.exports = { generate, pull, remove, rate, filler };
