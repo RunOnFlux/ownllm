@@ -136,6 +136,32 @@ async function retry(fn, times, what) {
   }
 }
 
+/**
+ * A batch that keeps failing is usually one oversized chunk the engine refuses
+ * ("input (823 tokens) is too large to process" from llama-server, which
+ * errors rather than truncates). Retrying the batch cannot fix that, and
+ * giving up used to restart the whole index. So after the retries, embed the
+ * batch one chunk at a time, and a chunk that still fails is embedded from
+ * its first 2,000 characters - a slightly worse vector beats no index.
+ */
+async function embedBatch(batch, at) {
+  try {
+    return await retry(() => embed(batch.map(c => c.text)), 3, `embed batch at ${at}`);
+  } catch (err) {
+    console.log(`embed batch at ${at} keeps failing (${err.message}); embedding its ${batch.length} chunks one by one`);
+  }
+  const out = [];
+  for (const c of batch) {
+    let v;
+    try { v = (await embed([c.text]))[0]; } catch (err) {
+      console.log(`chunk from ${c.source} rejected (${err.message.slice(0, 80)}); embedding the first 2000 chars`);
+      v = (await retry(() => embed([c.text.slice(0, 2000)]), 3, `truncated chunk from ${c.source}`))[0];
+    }
+    out.push(v);
+  }
+  return out;
+}
+
 const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
 const norm = a => Math.sqrt(dot(a, a));
 
@@ -215,7 +241,7 @@ async function buildIndex() {
     // 4,000 embedded chunks per "fetch failed". Retry the batch in place;
     // only a persistent failure (5 in a row) gives up and restarts.
     // eslint-disable-next-line no-await-in-loop
-    const vecs = await retry(() => embed(batch.map(c => c.text)), 5, `embed batch at ${i}`);
+    const vecs = await embedBatch(batch, i);
     batch.forEach((c, j) => {
       // Float32Array rather than a JS number array: identical retrieval quality
       // at half the memory. 26,879 chunks x 768 dims is 165 MB as doubles.

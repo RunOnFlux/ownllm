@@ -173,6 +173,23 @@ try, 1.38 GB compressed; both llama-servers loaded, gate ready in minutes.
   (httplib, 5 s) produced "fetch failed" on the next request, and the docs
   bot answered any indexing error by starting over from chunk 0.
 
+**2026-09-11, granite4:tiny-h baseline (same day, same harness,
+`FILLER_WORDS=500`)** on the three production `ownllmdocs` instances:
+
+| instance | gen tok/s | prefill tok/s | 3k-token TTFT | grounded (E3) |
+|---|---|---|---|---|
+| 80.208.17.22 | 1.3 | 62 | 64 s | 7/9 |
+| 86.210.144.251 | 11.2 | 107 | 37 s | - |
+| 91.192.45.97 | 14.8 | 137 | 29 s | - |
+
+Same image, same spec, an 11x spread in generation speed between nodes. Any
+ternary-vs-granite number has to name the node it was taken on, and the only
+comparison that means anything is on the same node - which one app per node
+prevents. Until a paired run exists, the rule is: compare against the
+*median* node (86.210.144.251) and flag it. The router's latency-aware
+selection is what turns this spread into a product advantage rather than a
+liability: it measured the slow node and routes around it.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:

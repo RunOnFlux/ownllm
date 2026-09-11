@@ -13,12 +13,16 @@ T=${THREADS:-8}
 # each carried a 2048-token micro-batch. Together with the docs bot's 96-text
 # embed batches that OOM-killed a 6 GB engine at 5 min. One chat slot with a
 # 512 micro-batch (a 3k prompt takes six passes, which costs a little prefill
-# speed and saves the gigabyte); the embedder keeps 4 slots at 512 - chunks
-# are ~300 tokens - with a 2048-token context per slot.
+# speed and saves the gigabyte).
 $BIN/llama-server -m "$CHAT_GGUF" -c "${CTX:-4096}" -t "$T" -ngl 0 -cb -np 1 -b 512 -ub 512 \
   --host 127.0.0.1 --port 8081 --no-webui --metrics &
 CHAT=$!
-$BIN/llama-server -m "$EMBED_GGUF" -t "$T" -ngl 0 --embeddings --pooling mean -np 4 -c 2048 -b 2048 -ub 512 \
+# The embedder's micro-batch must hold the longest chunk whole: llama-server
+# refuses an input larger than -ub ("input is too large to process") rather
+# than truncating it, and the corpus has chunks of 800+ tokens (tables, code).
+# 2048 covers them; the OOM this was cut for is handled by the chat server's
+# smaller batch and the 12 GB engine.
+$BIN/llama-server -m "$EMBED_GGUF" -t "$T" -ngl 0 --embeddings --pooling mean -np 4 -c 2048 -b 2048 -ub 2048 \
   --host 127.0.0.1 --port 8082 --no-webui &
 EMB=$!
 node /opt/bitnet/shim.js &
