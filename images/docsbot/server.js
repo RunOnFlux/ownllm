@@ -152,10 +152,18 @@ async function embedBatch(batch, at) {
   }
   const out = [];
   for (const c of batch) {
-    let v;
-    try { v = (await embed([c.text]))[0]; } catch (err) {
-      console.log(`chunk from ${c.source} rejected (${err.message.slice(0, 80)}); embedding the first 2000 chars`);
-      v = (await retry(() => embed([c.text.slice(0, 2000)]), 3, `truncated chunk from ${c.source}`))[0];
+    // Embedders have a hard input limit (512 tokens for granite-embedding and
+    // bitnet-embedding alike). ollama truncates silently; llama-server refuses.
+    // Dense text - tables of hashes, numbers - tokenizes at ~2.4 chars/token,
+    // so a fixed character cut is not safe either: halve until it fits.
+    let v = null;
+    let text = c.text;
+    for (;;) {
+      try { v = (await embed([text]))[0]; break; } catch (err) {
+        if (text.length <= 250) throw err;
+        console.log(`chunk from ${c.source} rejected at ${text.length} chars (${err.message.slice(0, 70)}); halving`);
+        text = text.slice(0, Math.floor(text.length / 2));
+      }
     }
     out.push(v);
   }
@@ -216,6 +224,10 @@ function loadVectors(corpusPath, count) {
 }
 
 async function buildIndex() {
+  // A restarted build must start from an empty index. It used to append to
+  // the previous attempt's entries: forty-eight restarts at the same failing
+  // batch produced "embedded 32256/26879" - 48 copies of the first 672 chunks.
+  index = [];
   const chunks = loadChunks();
   const files = new Set(chunks.map(c => c.source)).size;
   const corpusPath = path.join(DOCS_DIR, 'corpus.jsonl');

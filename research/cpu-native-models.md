@@ -190,6 +190,54 @@ prevents. Until a paired run exists, the rule is: compare against the
 selection is what turns this spread into a product advantage rather than a
 liability: it measured the slow node and routes around it.
 
+**2026-09-11 23:10, E3 grounded quality, BitNet-b1.58-2B-4T (1.4.4 image, temp 0.1):
+2/9** against granite4:tiny-h's 7/9 on the same harness the same evening.
+Average answer 804 chars vs 86 - it does not stop, and it does not read:
+
+| probe | context | answer |
+|---|---|---|
+| eval prompt, docs in user turn | 271 tok | "1 block. Maximum RAM is 100 blocks..." |
+| eval prompt, docs in system turn | 271 tok | same |
+| one paragraph stating "NIMBUS ... 7 cores, 28000 MB RAM" | 114 tok | **"70000 MB RAM and 400 GB."** |
+| no context | 20 tok | "1. The amount of RAM ... is 1. The amount ..." |
+| repeat_penalty 1.0 vs 1.1 | - | no difference in kind |
+
+Confounds checked: not the chat template (fixed in 1.4.1; free-form answers
+are coherent - "Docker is a software that allows users to create containers
+of applications, manage them, and deploy them."), not the repeat penalty, not
+context placement, not context length. With the fact one sentence away the
+model merges "7 cores" and "28000 MB" into 70000. **H3 fails**, and not
+narrowly: this is below the bar for a bot whose whole job is to copy figures
+from documentation.
+
+One confound is *not* closed: the I2_S kernel was built with `GGML_NATIVE=OFF`
+and `GGML_OPENMP=OFF`, a build Microsoft does not publish numbers for. A
+subtly wrong kernel would look exactly like a weak model. Round two's
+stock-llama.cpp TQ2_0 run of the same weights is now a correctness check
+first and a speed comparison second: if TQ2_0 reads "28000" and I2_S reads
+"70000", the kernel is the story. If both fail, the architecture at 2.4B is.
+
+Either way the conclusion for the *program* holds and sharpens: a 2B ternary
+generalist is not the CPU-native model for grounded QA. The extract-first
+pipeline (a 100M reader copies the span; the generator only rephrases what
+it is handed) is precisely the design that removes this failure mode, because
+the model never has to read a number correctly - it is given the sentence.
+
+**2026-09-12 01:10, indexing post-mortem.** The rig never indexed past chunk
+672 on 1.4.3 or 1.4.4. The embedding model's context is **512 tokens** (the
+same as granite-embedding's), and one chunk - a marketplace README table -
+is 823 tokens even cut to 2,000 characters, because table text tokenizes at
+~2.4 chars/token. llama-server refuses an over-long input; **ollama truncates
+it silently**, which is why the granite index never showed the problem. The
+docs bot's restart also appended to the previous attempt's index instead of
+clearing it: "embedded 32256/26879" was 48 passes over the first 672 chunks.
+1.4.5 clears the index on restart and halves a rejected chunk until the
+embedder accepts it. The ternary E1/E5 numbers wait for that image.
+
+The measured indexing rate stands at ~3 chunks/s across all the attempts,
+with the embedder sharing 8 cores with a chat server; the earlier 7.7/s
+figure was a short window on the 1.4.0 engine and is not to be quoted.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:
