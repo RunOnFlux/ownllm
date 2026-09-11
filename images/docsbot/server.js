@@ -305,6 +305,65 @@ function buildPrompt(question, hits) {
     + `RETRIEVED DOCUMENTATION:\n${ctx}\n\nQUESTION: ${question}\n\nANSWER:`;
 }
 
+/**
+ * Streams the answer.
+ *
+ * Two reasons, and the first is not cosmetic. FDM gives an app 25 seconds of
+ * silence before it cuts the connection (haproxyTemplate.js, `timeout server
+ * 25s`), and a non-streamed answer sends nothing until it is complete - on the
+ * slowest node measured that is 78 seconds, so every substantial question
+ * failed through the load balancer while working fine directly. Streaming
+ * resets that timer with every token.
+ *
+ * The second is that a reader seeing words appear is waiting; a reader seeing
+ * a blank page assumes it is broken.
+ *
+ * Sources go first, so a client can render citations before the prose arrives.
+ */
+async function answerStream(question, res) {
+  const [qvec] = await embed([question]);
+  const hits = retrieve(qvec, question);
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.write(`${JSON.stringify({
+    sources: hits.map((h, i) => ({
+      n: i + 1, source: h.source, heading: h.heading || undefined,
+      url: h.url || undefined, tier: h.tier || undefined,
+    })),
+  })}\n`);
+
+  const upstream = await fetch(`${ENGINE}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: CHAT_MODEL, prompt: buildPrompt(question, hits),
+      stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:'] },
+    }),
+    signal: AbortSignal.timeout(900000),
+  });
+
+  const decoder = new TextDecoder();
+  let buf = '';
+  let text = '';
+  for await (const piece of upstream.body) {
+    buf += decoder.decode(piece, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let obj;
+      try { obj = JSON.parse(line); } catch { continue; }
+      if (obj.error) { res.write(`${JSON.stringify({ error: String(obj.error).slice(0, 200) })}\n`); res.end(); return; }
+      if (obj.response) { text += obj.response; res.write(`${JSON.stringify({ delta: obj.response })}\n`); }
+      if (obj.done) res.write(`${JSON.stringify({ done: true, answer: text.trim() })}\n`);
+    }
+  }
+  res.end();
+}
+
 async function answer(question) {
   const [qvec] = await embed([question]);
   const hits = retrieve(qvec, question);
@@ -313,7 +372,10 @@ async function answer(question) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: CHAT_MODEL, prompt: buildPrompt(question, hits),
-      stream: false, options: { temperature: 0.1, num_predict: 500 },
+      // 500 was generous; measured answers are 40-120 tokens and the tail was
+      // the model copying the fact sheet's footer. At 5 tok/s on a slow node
+      // each unnecessary token is a fifth of a second of user waiting.
+      stream: false, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:'] },
     }),
     signal: AbortSignal.timeout(900000),
   });
@@ -370,6 +432,13 @@ http.createServer(async (req, res) => {
       ? (body.messages || []).filter(m => m.role === 'user').pop()?.content
       : body.question;
     if (!question) return send(400, { error: 'no question' });
+
+    // Streaming is the default: a non-streamed answer is silent long enough
+    // for FDM to drop it. Pass {"stream": false} for a single JSON body when
+    // the caller is going direct to an instance and can wait.
+    if (body.stream !== false && req.url !== '/v1/chat/completions') {
+      return answerStream(question, res);
+    }
 
     const result = await answer(question);
     if (req.url === '/v1/chat/completions') {

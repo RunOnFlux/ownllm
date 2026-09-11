@@ -197,7 +197,10 @@ const engine = {
     // Cores beyond the 8-thread peak do not speed up one request - measured,
     // 12 threads was 19% slower than 8 - but they do let separate requests run
     // at the same time instead of queueing. That is what the extra cores buy.
-    `OLLAMA_NUM_PARALLEL=${P.parallel || 1}`,
+    // One slot, not three. Parallel slots divide the context window between
+    // them, and this bot sends 3,000+ token prompts - concurrency it does not
+    // need was costing context it does.
+    'OLLAMA_NUM_PARALLEL=1',
     // -1 never unloads. A reload costs a multi-GB read from the volume, which
     // on a cold node is minutes; there is nothing else competing for this RAM.
     'OLLAMA_KEEP_ALIVE=-1',
@@ -289,8 +292,13 @@ const docsbot = {
     // hand-written page it cannot drift from the code it describes, and it
     // states derived values (1,056,000 blocks is 12 months) that the model
     // cannot reliably compute for itself.
-    'PINNED_DOCS=flux-facts.md,app-spec-v8.md',
-    'TOP_K=6',
+    // Only the generated sheet. app-spec-v8.md is hand-written and covers the
+    // same ground, so pinning both put ~470 redundant tokens in front of every
+    // prompt - on a slow node that is seven seconds of prefill for nothing.
+    'PINNED_DOCS=flux-facts.md',
+    // Fewer, because prefill dominates. Six chunks is ~1,800 tokens; on the
+    // slowest node measured that is 25 seconds before a word is generated.
+    'TOP_K=4',
   ],
   commands: [],
   // The index lives in memory, rebuilt at boot from documents baked into the
