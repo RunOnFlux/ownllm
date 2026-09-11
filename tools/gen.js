@@ -69,6 +69,8 @@ function existingApiKey(specsDir, basename) {
 const API_ONLY = argv.includes('--api-only');
 // Adds the grounded docs bot alongside the raw model API, on the next port.
 const DOCSBOT = argv.includes('--docsbot');
+// The router is a standalone app in front of the bot, not a component of it.
+const ROUTER_ONLY = argv.includes('--router');
 
 // Flux rules enforced in appValidator.js: app name is alphanumeric + inner
 // hyphens, max 63, and must not start with "flux" or "zel".
@@ -94,6 +96,10 @@ const THREAD_PEAK = 8;
 const threadsFor = cpu => Math.max(1, Math.min(THREAD_PEAK, Math.round(cpu)));
 
 const PROFILES = {
+  // The router is a proxy that holds no model and no index; it needs enough to
+  // hold open a few streaming connections and nothing more. Deployed as its own
+  // app so it can scale and be replaced independently of the bot.
+  router: { cpu: 0.5, ram: 500, hdd: 1, threads: 1, loaded: 1, ctx: 2048, models: '' },
   small: { cpu: 4, ram: 8000, hdd: 20, threads: 4, models: 'qwen3:4b', loaded: 1, ctx: 16384 },
   // Sized to fit a NIMBUS node too: nimbus offers 7.0 cores / 28000 MB to apps,
   // so the whole app must stay under that. Triples the pool of eligible hosts.
@@ -274,6 +280,28 @@ const gate = {
   hdd: 2,
 };
 
+const router = {
+  name: 'router',
+  description: 'Load-aware router: sends each request to the least busy instance',
+  repotag: `${REGISTRY}/ownllm-router:${GATE_VERSION}`,
+  ports: [PORT],
+  containerPorts: [8080],
+  domains: [''],
+  environmentParameters: [
+    `TARGET_APP=${arg('target', 'ownllmdocs')}`,
+    `TARGET_PORT=${arg('target-port', '33001')}`,
+    'FLUX_API=https://api.runonflux.io',
+    'DISCOVER_MS=60000',
+    'PROBE_MS=20000',
+  ],
+  commands: [],
+  containerData: '/tmp',
+  repoauth: '',
+  cpu: 0.5,
+  ram: 500,
+  hdd: 1,
+};
+
 const docsbot = {
   name: 'docsbot',
   description: 'Grounded documentation bot: retrieval over baked-in docs, with citations',
@@ -358,7 +386,9 @@ const spec = {
   name: APP,
   description: 'Self-hosted CPU LLM endpoint (Ollama + Open WebUI) on Flux',
   owner: OWNER,
-  compose: API_ONLY
+  compose: ROUTER_ONLY
+    ? [router]
+    : API_ONLY
     ? (DOCSBOT ? [engine, boot, gate, docsbot] : [engine, boot, gate])
     : (ENTERPRISE ? [engine, boot, gate, webui] : [engine, boot, webui]),
   instances: INSTANCES,
@@ -370,7 +400,9 @@ const spec = {
   datacenter: false,
   // A truthy value here means the compose is encrypted. The blob is produced by
   // Flux Home (see README); this generator emits the plaintext to feed it.
-  enterprise: ENTERPRISE || API_ONLY || DOCSBOT ? '<PASTE_ENCRYPTED_BLOB>' : false,
+  // The router holds no secret - it proxies a public endpoint - so it needs no
+  // encrypted specification and can be a plain application.
+  enterprise: ROUTER_ONLY ? false : (ENTERPRISE || API_ONLY || DOCSBOT ? '<PASTE_ENCRYPTED_BLOB>' : false),
 };
 
 // --- sanity checks against the rules in appValidator.js -------------------

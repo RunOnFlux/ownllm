@@ -1,0 +1,43 @@
+{
+  "version": 8,
+  "name": "ownllmrouter",
+  "description": "Self-hosted CPU LLM endpoint (Ollama + Open WebUI) on Flux",
+  "owner": "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH",
+  "compose": [
+    {
+      "name": "router",
+      "description": "Load-aware router: sends each request to the least busy instance",
+      "repotag": "ghcr.io/runonflux/ownllm-router:1.4.0",
+      "ports": [
+        33000
+      ],
+      "containerPorts": [
+        8080
+      ],
+      "domains": [
+        ""
+      ],
+      "environmentParameters": [
+        "TARGET_APP=ownllmdocs",
+        "TARGET_PORT=33001",
+        "FLUX_API=https://api.runonflux.io",
+        "DISCOVER_MS=60000",
+        "PROBE_MS=20000"
+      ],
+      "commands": [],
+      "containerData": "/tmp",
+      "repoauth": "",
+      "cpu": 0.5,
+      "ram": 500,
+      "hdd": 1
+    }
+  ],
+  "instances": 5,
+  "contacts": [],
+  "geolocation": [],
+  "expire": 88000,
+  "nodes": [],
+  "staticip": false,
+  "datacenter": false,
+  "enterprise": false
+}

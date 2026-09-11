@@ -13,7 +13,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { liveContext } = require('./live.js');
+const { liveContext, initTools } = require('./live.js');
 
 const PORT = Number(process.env.PORT || 8080);
 const ENGINE = process.env.UPSTREAM || 'http://127.0.0.1:11434';
@@ -205,6 +205,7 @@ async function buildIndex() {
   }
   buildKeywordStats();
   buildPinned();
+  await initTools(embed).catch(err => console.log(`live lookups unavailable: ${err.message}`));
 
   // Warm start: pull both models into RAM and lay down the KV cache for the
   // invariant prefix now, so the first real user does not pay for a 4 GB load
@@ -359,7 +360,11 @@ function buildPrompt(question, hits, live) {
 async function answerStream(question, res) {
   // Both at once: the API call is network-bound and the embedding is
   // CPU-bound, so serialising them would add a round trip to every question.
-  const [[qvec], live] = await Promise.all([embed([question]), liveContext(question)]);
+  const [qvec] = await embed([question]);
+  // The question vector is already computed for retrieval, so routing to a live
+  // lookup reuses it - the decision costs a few thousand multiplications, not a
+  // second pass through the language model.
+  const live = await liveContext(question, qvec);
   const hits = retrieve(qvec, question);
   res.writeHead(200, {
     'Content-Type': 'application/x-ndjson',
@@ -413,7 +418,8 @@ async function answerStream(question, res) {
 }
 
 async function answer(question) {
-  const [[qvec], live] = await Promise.all([embed([question]), liveContext(question)]);
+  const [qvec] = await embed([question]);
+  const live = await liveContext(question, qvec);
   const hits = retrieve(qvec, question);
   const res = await fetch(`${ENGINE}/api/generate`, {
     method: 'POST',
