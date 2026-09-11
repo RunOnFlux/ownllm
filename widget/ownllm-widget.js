@@ -33,6 +33,9 @@
     '.ol-log{flex:1;overflow-y:auto;padding:14px 16px}',
     '.ol-msg{margin-bottom:14px}.ol-q{font-weight:600}',
     '.ol-a{white-space:pre-wrap}',
+    '.ol-status{font-size:13px;color:#718096;font-style:italic}',
+    '.ol-dots::after{content:"";animation:ol-dots 1.4s steps(4,end) infinite}',
+    '@keyframes ol-dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}',
     '.ol-src{margin-top:7px;font-size:12px;color:#4a5568}',
     '.ol-src a{color:' + ACCENT + ';text-decoration:none}.ol-src a:hover{text-decoration:underline}',
     '.ol-form{display:flex;border-top:1px solid #e2e8f0}',
@@ -74,10 +77,13 @@
 
     var msg = document.createElement('div');
     msg.className = 'ol-msg';
-    msg.innerHTML = '<div class="ol-q">' + escape(q) + '</div><div class="ol-a">…</div><div class="ol-src"></div>';
+    msg.innerHTML = '<div class="ol-q">' + escape(q) + '</div>'
+      + '<div class="ol-a"></div><div class="ol-status">Searching the documentation<span class="ol-dots"></span></div>'
+      + '<div class="ol-src"></div>';
     log.appendChild(msg);
     log.scrollTop = log.scrollHeight;
     var answerEl = msg.querySelector('.ol-a');
+    var statusEl = msg.querySelector('.ol-status');
     var srcEl = msg.querySelector('.ol-src');
 
     try {
@@ -107,12 +113,23 @@
           if (!line.trim()) return;
           var obj;
           try { obj = JSON.parse(line); } catch (err) { return; }
+          // Sources arrive before any token, so the wait stops being blank
+          // the moment retrieval finishes - which on a slow node is 20 seconds
+          // before the first word.
+          if (obj.live) { statusEl.textContent = 'Checking live network status…'; }
           if (obj.sources) {
+            statusEl.textContent = obj.cached
+              ? 'Answering from a previous reply…'
+              : 'Reading ' + obj.sources.length + ' sources, writing an answer…';
             srcEl.innerHTML = obj.sources.filter(function (s) { return s.url; })
               .map(function (s) { return '<a href="' + s.url + '" target="_blank" rel="noopener">[' + s.n + ']</a>'; })
               .join(' ');
           }
-          if (obj.delta) { text += obj.delta; answerEl.textContent = text; log.scrollTop = log.scrollHeight; }
+          if (obj.delta) {
+            if (statusEl.parentNode) statusEl.remove();
+            text += obj.delta; answerEl.textContent = text; log.scrollTop = log.scrollHeight;
+          }
+          if (obj.done && statusEl.parentNode) statusEl.remove();
           if (obj.error) { answerEl.textContent = 'Something went wrong answering that.'; }
         });
       }

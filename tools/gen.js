@@ -305,6 +305,10 @@ const docsbot = {
     'PUBLIC_ASK=true',
     'RATE_PER_MIN=6',
     'ALLOWED_ORIGINS=*',
+    // Live network lookups. The corpus is a snapshot, so node counts and app
+    // status come from the API instead of from build-time text.
+    'FLUX_API=https://api.runonflux.io',
+    'LIVE_TTL_MS=120000',
   ],
   commands: [],
   // The index lives in memory, rebuilt at boot from documents baked into the

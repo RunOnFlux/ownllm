@@ -13,6 +13,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
+const { liveContext } = require('./live.js');
 
 const PORT = Number(process.env.PORT || 8080);
 const ENGINE = process.env.UPSTREAM || 'http://127.0.0.1:11434';
@@ -325,7 +326,7 @@ function buildPinned() {
   if (pinnedBlock) console.log(`pinned prefix: ${chunks.length} chunks, ~${Math.round(pinnedBlock.length / 4)} tokens`);
 }
 
-function buildPrompt(question, hits) {
+function buildPrompt(question, hits, live) {
   const ctx = hits.map((h, i) => {
     const where = [h.source, h.heading].filter(Boolean).join(' > ');
     return `[${i + 1}] ${where}${h.url ? ` <${h.url}>` : ''}\n${h.text}`;
@@ -335,6 +336,7 @@ function buildPrompt(question, hits) {
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
     + `If the documentation does not contain the answer, reply exactly: "Not covered in the documentation." `
     + `Never guess and never use outside knowledge.\n\n`
+    + (live ? `LIVE NETWORK STATUS (accurate as of now, prefer this over the documentation for current figures):\n${live}\n\n` : '')
     + (pinnedBlock ? `CORE DOCUMENTATION:\n${pinnedBlock}\n\n` : '')
     + `RETRIEVED DOCUMENTATION:\n${ctx}\n\nQUESTION: ${question}\n\nANSWER:`;
 }
@@ -355,7 +357,9 @@ function buildPrompt(question, hits) {
  * Sources go first, so a client can render citations before the prose arrives.
  */
 async function answerStream(question, res) {
-  const [qvec] = await embed([question]);
+  // Both at once: the API call is network-bound and the embedding is
+  // CPU-bound, so serialising them would add a round trip to every question.
+  const [[qvec], live] = await Promise.all([embed([question]), liveContext(question)]);
   const hits = retrieve(qvec, question);
   res.writeHead(200, {
     'Content-Type': 'application/x-ndjson',
@@ -363,6 +367,7 @@ async function answerStream(question, res) {
     Connection: 'keep-alive',
   });
   res.write(`${JSON.stringify({
+    live: live || undefined,
     sources: hits.map((h, i) => ({
       n: i + 1, source: h.source, heading: h.heading || undefined,
       url: h.url || undefined, tier: h.tier || undefined,
@@ -373,7 +378,7 @@ async function answerStream(question, res) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: CHAT_MODEL, prompt: buildPrompt(question, hits),
+      model: CHAT_MODEL, prompt: buildPrompt(question, hits, live),
       stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:'] },
     }),
     signal: AbortSignal.timeout(900000),
@@ -394,7 +399,9 @@ async function answerStream(question, res) {
       if (obj.response) { text += obj.response; res.write(`${JSON.stringify({ delta: obj.response })}\n`); }
       if (obj.done) {
         const finished = text.trim();
-        if (finished) {
+        // Live answers are deliberately not cached: a node count cached for an
+        // hour is exactly the stale number this feature exists to avoid.
+        if (finished && !live) {
           if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
           cache.set(cacheKey(question), { answer: finished, sources: hits.map((h, i) => ({ n: i + 1, source: h.source, url: h.url || undefined, tier: h.tier || undefined })) });
         }
@@ -406,7 +413,7 @@ async function answerStream(question, res) {
 }
 
 async function answer(question) {
-  const [qvec] = await embed([question]);
+  const [[qvec], live] = await Promise.all([embed([question]), liveContext(question)]);
   const hits = retrieve(qvec, question);
   const res = await fetch(`${ENGINE}/api/generate`, {
     method: 'POST',
