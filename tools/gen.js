@@ -299,6 +299,12 @@ const docsbot = {
     // Fewer, because prefill dominates. Six chunks is ~1,800 tokens; on the
     // slowest node measured that is 25 seconds before a word is generated.
     'TOP_K=4',
+    // Public mode: the widget runs on your website, where any key would be
+    // readable in page source. /ask is open and rate limited per IP; the model
+    // API on the gate still requires the key.
+    'PUBLIC_ASK=true',
+    'RATE_PER_MIN=6',
+    'ALLOWED_ORIGINS=*',
   ],
   commands: [],
   // The index lives in memory, rebuilt at boot from documents baked into the

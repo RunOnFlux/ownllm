@@ -21,6 +21,40 @@ const CHAT_MODEL = process.env.CHAT_MODEL || 'granite4:tiny-h';
 const EMBED_MODEL = process.env.EMBED_MODEL || 'granite-embedding:278m';
 const DOCS_DIR = process.env.DOCS_DIR || '/app/docs';
 const TOP_K = Number(process.env.TOP_K || 5);
+/**
+ * Public mode serves /ask without a key, because a website widget puts its key
+ * in page source where anyone can read it. The bot only ever answers from
+ * published documentation, so there is nothing to protect but the compute -
+ * which per-IP rate limiting covers. Everything else still needs the key.
+ */
+const PUBLIC_ASK = process.env.PUBLIC_ASK === 'true';
+const RATE_PER_MIN = Number(process.env.RATE_PER_MIN || 6);
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(o => o.trim());
+
+const hits = new Map();
+function rateLimited(ip) {
+  const now = Date.now();
+  const window = hits.get(ip) || [];
+  const recent = window.filter(t => now - t < 60000);
+  if (recent.length >= RATE_PER_MIN) { hits.set(ip, recent); return true; }
+  recent.push(now);
+  hits.set(ip, recent);
+  // Unbounded growth would be a slow leak on a public endpoint.
+  if (hits.size > 10000) for (const [k, v] of hits) if (!v.some(t => now - t < 60000)) hits.delete(k);
+  return false;
+}
+
+/**
+ * Answers are cached by question.
+ *
+ * A documentation widget is asked the same few dozen things endlessly, and on
+ * the slowest node measured a fresh answer costs 35 seconds against a cache
+ * hit's milliseconds. The corpus only changes when the image is rebuilt, so a
+ * cached answer cannot go stale within the life of a container.
+ */
+const CACHE_MAX = Number(process.env.CACHE_MAX || 500);
+const cache = new Map();
+const cacheKey = q => q.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ');
 // Files listed here are prepended to every prompt, in a fixed order, ahead of
 // the retrieved chunks. That gives every request an identical prefix, which is
 // what llama.cpp's KV cache can actually reuse - retrieved chunks differ per
@@ -358,7 +392,14 @@ async function answerStream(question, res) {
       try { obj = JSON.parse(line); } catch { continue; }
       if (obj.error) { res.write(`${JSON.stringify({ error: String(obj.error).slice(0, 200) })}\n`); res.end(); return; }
       if (obj.response) { text += obj.response; res.write(`${JSON.stringify({ delta: obj.response })}\n`); }
-      if (obj.done) res.write(`${JSON.stringify({ done: true, answer: text.trim() })}\n`);
+      if (obj.done) {
+        const finished = text.trim();
+        if (finished) {
+          if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
+          cache.set(cacheKey(question), { answer: finished, sources: hits.map((h, i) => ({ n: i + 1, source: h.source, url: h.url || undefined, tier: h.tier || undefined })) });
+        }
+        res.write(`${JSON.stringify({ done: true, answer: finished })}\n`);
+      }
     }
   }
   res.end();
@@ -421,7 +462,20 @@ http.createServer(async (req, res) => {
     res.end(ready ? 'ok' : status);
     return;
   }
-  if (!authorized(req)) return send(401, { error: 'unauthorized' });
+  const origin = req.headers.origin || '';
+  if (PUBLIC_ASK && (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin))) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  // /ask is open in public mode; the model API and everything else is not.
+  const isPublicAsk = PUBLIC_ASK && req.url.startsWith('/ask');
+  if (!isPublicAsk && !authorized(req)) return send(401, { error: 'unauthorized' });
+  if (isPublicAsk && !authorized(req)) {
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    if (rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
+  }
   if (!ready) return send(503, { error: 'index not ready', detail: status });
 
   try {
@@ -436,6 +490,18 @@ http.createServer(async (req, res) => {
     // Streaming is the default: a non-streamed answer is silent long enough
     // for FDM to drop it. Pass {"stream": false} for a single JSON body when
     // the caller is going direct to an instance and can wait.
+    const cached = cache.get(cacheKey(question));
+    if (cached) {
+      if (body.stream !== false && req.url !== '/v1/chat/completions') {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+        res.write(`${JSON.stringify({ sources: cached.sources, cached: true })}\n`);
+        res.write(`${JSON.stringify({ delta: cached.answer })}\n`);
+        res.write(`${JSON.stringify({ done: true, answer: cached.answer, cached: true })}\n`);
+        return res.end();
+      }
+      return send(200, { ...cached, cached: true });
+    }
+
     if (body.stream !== false && req.url !== '/v1/chat/completions') {
       return answerStream(question, res);
     }
