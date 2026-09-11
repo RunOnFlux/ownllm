@@ -162,8 +162,16 @@ try, 1.38 GB compressed; both llama-servers loaded, gate ready in minutes.
   repeat_penalty 1.1. Quality numbers (E3) wait for that image.
 - The bench's 4k-context probe must use `FILLER_WORDS=500`: random words
   tokenize at ~5 tokens each.
-- Engine stayed up (RestartCount 0, no OOM) through the failed bench; the
-  "upstream failed" was a gate timeout under load, not a crash.
+- **OOM at 6,000 MB**, five minutes into indexing on 1.4.0: the chat
+  llama-server's default batch 2048 means a ~1 GB logits buffer (128k
+  vocab), and the embedder ran 4 slots at a 2,048-token micro-batch. 1.4.3
+  pins `-np 1 -b 512 -ub 512` on chat, `-np 4 -c 2048 -ub 512` on the
+  embedder, and the profile moves to 12,000 MB. Note for H5: a 2B ternary
+  model's *weights* are 1.2 GB; the *process* is not.
+- Two more infrastructure bugs surfaced by the rig, both fixed in 1.4.2: idle
+  keep-alive sockets closed by the shim (Node, 5 s) and by llama-server
+  (httplib, 5 s) produced "fetch failed" on the next request, and the docs
+  bot answered any indexing error by starting over from chunk 0.
 
 ## 7. After round one
 

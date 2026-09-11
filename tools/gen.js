@@ -143,8 +143,11 @@ const PROFILES = {
   // memory plus a 4k context and the embedder, with the same headroom rule as
   // docsbot; hdd is small because nothing is pulled. ctx is 4096 because that
   // is the model's trained maximum - the docs bot's TOP_K/PINNED_DOCS must fit.
+  // ram: 6,000 was OOM-killed five minutes into indexing (two llama-servers'
+  // compute buffers on top of 1.6 GB of weights); 12,000 leaves the headroom
+  // the docsbot profile has, and under enterprise pricing it costs nothing.
   ternary: {
-    engine: 'ternary', cpu: 8, ram: 6000, hdd: 5, threads: 8, parallel: 1, loaded: 2, ctx: 4096,
+    engine: 'ternary', cpu: 8, ram: 12000, hdd: 5, threads: 8, parallel: 1, loaded: 2, ctx: 4096,
     models: 'bitnet-2b-4t bitnet-embedding-270m',
   },
   standard: { cpu: 8, ram: 26000, hdd: 60, threads: 8, models: 'gpt-oss:20b qwen3:4b', loaded: 2, ctx: 16384 },

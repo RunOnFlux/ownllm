@@ -164,19 +164,24 @@ function requiredPrice({ formatted, previous, priceTable, height }) {
 
   log(`owner ${owner.zelid}   payer ${payer.fluxAddress}`);
   log('selecting a healthy node...');
-  const healthy = await findHealthyNodes(isEnterprise ? 6 : 1, { log: (m) => log(`  ${m}`) });
+  // A node can pass the peer check and still refuse a session ("verifylogin:
+  // Unavailable" while it is busy), so the login is part of the selection.
+  const healthy = await findHealthyNodes(isEnterprise ? 6 : 3, { log: (m) => log(`  ${m}`) });
   let node = null;
   for (const h of healthy) {
-    if (!isEnterprise) { node = h.node; break; }
-    // Only ArcaneOS nodes hold the enterprise decryption key.
-    const info = await h.node.call('get', '/flux/info', { timeout: 15000, auth: false }).catch(() => null);
-    if (info?.data?.flux?.arcaneVersion) { node = h.node; log(`  ${h.endpoint} runs Arcane ${info.data.flux.arcaneVersion}`); break; }
+    if (isEnterprise) {
+      // Only ArcaneOS nodes hold the enterprise decryption key.
+      const info = await h.node.call('get', '/flux/info', { timeout: 15000, auth: false }).catch(() => null);
+      if (!info?.data?.flux?.arcaneVersion) continue;
+      log(`  ${h.endpoint} runs Arcane ${info.data.flux.arcaneVersion}`);
+    }
+    try {
+      await h.node.login(owner.zelid, (m) => keys.signMessage(m, env.FLUXID_PRIVATEKEY));
+      node = h.node; break;
+    } catch (err) { log(`  ${h.endpoint} refused the session (${err.message}), trying another`); }
   }
-  if (!node) throw new Error('no healthy ArcaneOS node found among the probed nodes; run again');
-  log(`using ${node.endpoint}`);
-
-  await node.login(owner.zelid, (m) => keys.signMessage(m, env.FLUXID_PRIVATEKEY));
-  log('session opened');
+  if (!node) throw new Error(`no usable ${isEnterprise ? 'ArcaneOS ' : ''}node among the probed ones; run again`);
+  log(`using ${node.endpoint}, session opened`);
 
   const previous = await node.appSpecification(spec.name);
   const isUpdate = !!previous;
