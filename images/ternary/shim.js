@@ -62,10 +62,15 @@ function bitnetPrompt(system, user) {
   return p;
 }
 
-async function generate(body, res) {
+async function generate(body, res, req) {
   const o = body.options || {};
+  // If the caller disconnects mid-stream, stop llama-server generating into a
+  // dead pipe rather than let it run the request out (or worse).
+  const ac = new AbortController();
+  if (req) req.on('close', () => ac.abort());
   const upstream = await fetch(`${CHAT}/completion`, {
     method: 'POST',
+    signal: ac.signal,
     // llama-server closes idle keep-alive sockets after 5 s; a reused one
     // resets mid-POST. One connection per request costs nothing on localhost.
     headers: { 'Content-Type': 'application/json', Connection: 'close' },
@@ -150,7 +155,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/ps') return json(res, 200, { models: MODELS });
     if (req.method !== 'POST') return json(res, 404, { error: 'not found' });
     const body = await readBody(req);
-    if (url.pathname === '/api/generate') return await generate(body, res);
+    if (url.pathname === '/api/generate') return await generate(body, res, req);
     if (url.pathname === '/api/embed' || url.pathname === '/api/embeddings') return await embed(body, res);
     return json(res, 404, { error: 'not found' });
   } catch (err) {

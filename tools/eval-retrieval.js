@@ -38,17 +38,16 @@ async function sources(q) {
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 120)}`);
   const decoder = new TextDecoder();
   let buf = '';
-  // The sources line comes first; we do not need the answer, so close early.
+  // The sources line comes first. The rest of the stream is drained rather
+  // than cancelled: a burst of cancelled streams coincided with the rig's
+  // chat server exiting, and draining costs a few seconds per question.
+  let first = null;
   for await (const piece of res.body) {
     buf += decoder.decode(piece, { stream: true });
     const nl = buf.indexOf('\n');
-    if (nl >= 0) {
-      const first = JSON.parse(buf.slice(0, nl));
-      try { await res.body.cancel(); } catch { /* fine */ }
-      return first.sources || [];
-    }
+    if (!first && nl >= 0) first = JSON.parse(buf.slice(0, nl));
   }
-  return [];
+  return (first && first.sources) || [];
 }
 
 (async () => {

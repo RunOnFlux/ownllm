@@ -1,7 +1,7 @@
 #!/bin/sh
 # Two llama-server processes (one model each - llama-server serves a single
-# GGUF) and the ollama-compatible shim in front. If any of the three exits the
-# container exits, so FluxOS restarts it rather than serving half an engine.
+# GGUF), each supervised, and the ollama-compatible shim in front. Only the
+# shim exiting ends the container.
 set -e
 BIN=/opt/bitnet/bin
 export LD_LIBRARY_PATH=$BIN
@@ -14,24 +14,25 @@ T=${THREADS:-8}
 # embed batches that OOM-killed a 6 GB engine at 5 min. One chat slot with a
 # 512 micro-batch (a 3k prompt takes six passes, which costs a little prefill
 # speed and saves the gigabyte).
-$BIN/llama-server -m "$CHAT_GGUF" -c "${CTX:-4096}" -t "$T" -ngl 0 -cb -np 1 -b 512 -ub 512 \
-  --host 127.0.0.1 --port 8081 --no-webui --metrics &
+# Each llama-server runs under its own restart loop. The chat server has
+# exited at least once under a burst of cancelled streams; letting that take
+# the container down also took the docs bot's two-hour index with it. A
+# process that dies now comes back in two seconds and the index survives.
+supervise() { while :; do "$@"; echo "$(date +%T) $2 exited ($?), restarting in 2s"; sleep 2; done; }
+supervise $BIN/llama-server -m "$CHAT_GGUF" -c "${CTX:-4096}" -t "$T" -ngl 0 -cb -np 1 -b 512 -ub 512 --host 127.0.0.1 --port 8081 --no-webui --metrics &
 CHAT=$!
+supervise $BIN/llama-server -m "$EMBED_GGUF" -t "$T" -ngl 0 --embeddings --pooling mean -np 4 -c 2048 -b 2048 -ub 2048 --host 127.0.0.1 --port 8082 --no-webui &
+EMB=$!
 # The embedder's micro-batch must hold the longest chunk whole: llama-server
 # refuses an input larger than -ub ("input is too large to process") rather
 # than truncating it, and the corpus has chunks of 800+ tokens (tables, code).
 # 2048 covers them; the OOM this was cut for is handled by the chat server's
 # smaller batch and the 12 GB engine.
-$BIN/llama-server -m "$EMBED_GGUF" -t "$T" -ngl 0 --embeddings --pooling mean -np 4 -c 2048 -b 2048 -ub 2048 \
-  --host 127.0.0.1 --port 8082 --no-webui &
-EMB=$!
 node /opt/bitnet/shim.js &
 SHIM=$!
 
 # POSIX sh has no `wait -n`; poll instead.
 while :; do
-  for p in $CHAT $EMB $SHIM; do
-    if ! kill -0 "$p" 2>/dev/null; then echo "process $p exited, stopping engine"; kill $CHAT $EMB $SHIM 2>/dev/null; exit 1; fi
-  done
+  if ! kill -0 "$SHIM" 2>/dev/null; then echo "shim exited, stopping engine"; kill $CHAT $EMB 2>/dev/null; exit 1; fi
   sleep 2
 done

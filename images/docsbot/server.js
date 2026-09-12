@@ -439,15 +439,23 @@ async function answerStream(question, res) {
     })),
   })}\n`);
 
-  const upstream = await fetch(`${ENGINE}/api/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: CHAT_MODEL, prompt: buildPrompt(question, hits, live),
-      stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:'] },
-    }),
-    signal: AbortSignal.timeout(900000),
-  });
+  let upstream;
+  try {
+    upstream = await fetch(`${ENGINE}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: CHAT_MODEL, prompt: buildPrompt(question, hits, live),
+        stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:'] },
+      }),
+      signal: AbortSignal.timeout(900000),
+    });
+  } catch (err) {
+    // Headers are out, so say so in-band and end the stream cleanly.
+    console.log(`engine unreachable mid-answer: ${err.message}`);
+    res.write(`${JSON.stringify({ error: 'engine unreachable', detail: err.message })}\n`);
+    return res.end();
+  }
 
   const decoder = new TextDecoder();
   let buf = '';
@@ -576,7 +584,10 @@ http.createServer(async (req, res) => {
     }
 
     if (body.stream !== false && req.url !== '/v1/chat/completions') {
-      return answerStream(question, res);
+      // `return await`, not `return`: a returned promise's rejection escapes
+      // the surrounding try/catch, and one "fetch failed" from the engine
+      // then took the whole process down - and with it a two-hour index.
+      return await answerStream(question, res);
     }
 
     const result = await answer(question);
@@ -608,6 +619,9 @@ http.createServer(async (req, res) => {
  * indexed. Exiting hands the problem to Docker and FluxOS, which can restart the
  * container or replace the instance; staying up cannot fix it.
  */
+// Belt and braces: log a stray rejection instead of dying with the index.
+process.on('unhandledRejection', (err) => console.error(`unhandled rejection: ${err?.message || err}`));
+
 const FATAL = /^(EIO|ENOENT|EACCES|EISDIR)\b/;
 
 (async function start() {

@@ -238,6 +238,37 @@ The measured indexing rate stands at ~3 chunks/s across all the attempts,
 with the embedder sharing 8 cores with a chat server; the earlier 7.7/s
 figure was a short window on the 1.4.0 engine and is not to be quoted.
 
+**2026-09-12 09:24, E1 on the idle rig (1.4.5, index built, node
+104.157.37.8), two runs:**
+
+| | run 1 | run 2 | granite median node | granite best node |
+|---|---|---|---|---|
+| generation tok/s | 23.0 | 23.5 | 11.2 | 14.8 |
+| prefill tok/s | 204 | 220 | 107 | 137 |
+| 3k-token TTFT | 20 s | 18 s | 37 s | 29 s |
+
+Different node from the granite runs (see the variance table), so: **H1
+(prefill ≥2x) holds against the median node (1.9-2.1x) and not against the
+best (1.5-1.6x); H2 (generation ≥1.5x) holds against both (1.6-2.1x).** The
+ternary model is the fastest thing measured on this network by a clear
+margin - and it answers wrong. Speed without H3 is not a product.
+
+**E5 retrieval (ternary embedder), partial:** 5 hits of the 6 questions it
+answered before the rig went down (instances question missed - generic
+deploy pages instead of the limits page); granite scored 8/10 on the same
+list. The remaining four questions need the rebuilt index.
+
+**Second crash post-mortem.** During E5 the chat llama-server exited
+("process 8 exited"), the entrypoint took the container down with it, the
+docs bot's in-flight `fetch` rejected, and because the handler did `return
+answerStream()` instead of `return await`, the rejection escaped the
+try/catch and killed the docs bot too - index gone again. 1.4.6: `return
+await` plus an in-band error line; each llama-server under its own restart
+loop so a process crash no longer costs the index; the shim aborts upstream
+generation when the caller disconnects; the retrieval tool drains streams
+instead of cancelling them (the burst of cancels is the only correlate of
+the chat server's exit - cause unproven).
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:
