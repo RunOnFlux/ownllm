@@ -44,7 +44,13 @@ An application may have between 1 and 100 instances.
 Enterprise applications encrypt the compose section and run only on ArcaneOS
 nodes. Every component must support the amd64 architecture.
 `;
-const SYSTEM = `Answer strictly from the DOCUMENTATION. If it does not contain the answer, reply exactly: "Not covered in the documentation." Never guess.\n\nDOCUMENTATION:${DOCS}`;
+// EVAL_PROMPT=soft swaps the strict instruction for a gentler one. Small models
+// read "Never guess" as "refuse when in doubt" and refuse covered questions;
+// the same model with the soft prompt answers them. Score both when comparing
+// models of very different size, or the prompt is what gets measured.
+const STRICT = `Answer strictly from the DOCUMENTATION. If it does not contain the answer, reply exactly: "Not covered in the documentation." Never guess.\n\nDOCUMENTATION:${DOCS}`;
+const SOFT = `You answer questions about Flux using only the DOCUMENTATION below. Quote the relevant figure. If the documentation really says nothing about the question, say "Not covered in the documentation."\n\nDOCUMENTATION:${DOCS}`;
+const SYSTEM = process.env.EVAL_PROMPT === 'soft' ? SOFT : STRICT;
 
 const TESTS = [
   { name: 'distractor-ram', weight: 1,

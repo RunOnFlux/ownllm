@@ -297,6 +297,7 @@ supervisor did not restart it; 1.4.7 makes the shim the supervisor (spawn,
 respawn on exit, kill-and-respawn after 60 s of failed /health).
 
 E5 stands at 6/7 answered, 3 questions outstanding, vs granite 8/10.
+(Superseded by the 10/10 run on corrected pooling, §6c.)
 
 **2026-09-12 18:55, two corrections before round two.** (1) The BitNet
 embedding model uses *last-token* pooling (model card); the rig ran
@@ -333,7 +334,95 @@ has 640; the extra 128 floats per row were NaN - repacked, no re-embedding),
 and it had no fallback for chunks past the 512-token limit (added, same
 halving as the docs bot). From here the rig boots in about a minute.
 
-## 7. After round one
+## 6b. Round two: the kernel was the story
+
+**2026-09-12 23:18, `ownllmtq2` (BitNet-b1.58-2B-4T as TQ2_0 on upstream
+llama.cpp with the relu2 fix, granite embedder, node 213.166.195.190), five
+minutes after registration:**
+
+| probe | I2_S (bitnet.cpp fork, our build) | TQ2_0 (upstream llama.cpp) |
+|---|---|---|
+| "capital of France?" | "Paris. The capital of France is Paris. The capital..." | **"Paris"** |
+| one paragraph: "NIMBUS ... 7 cores, 28000 MB RAM" → RAM? | **"70000 MB RAM and 400 GB."** | **"An application on a NIMBUS node may use up to 28000 MB RAM."** |
+| "Explain Docker in two sentences" | "a container that allows you to create a container for your data that allows..." | "a platform that allows users to package and distribute software applications along with their dependencies, ensuring consistency..." |
+| generation / prefill tok/s | 23 / 210 | **43 / 267** |
+| 3k-token TTFT | 18-20 s | **15 s** |
+| E3 grounded | 2/9 (fabricates) | 3/9 (**over-refuses**: "Not covered in the documentation." on three covered questions, one over-answer; avg answer 38 chars) |
+
+Same weights, same prompts, same shim. The I2_S build - bitnet.cpp's kernel
+compiled with `GGML_NATIVE=OFF`/`GGML_OPENMP=OFF` on a CI runner - was
+producing degraded output all along, and every quality conclusion drawn from
+it in §6a is withdrawn. TQ2_0 reads the number, stops, and is faster.
+(Different node again; the speed ratio is indicative, not paired.)
+
+What remains true: the model is small. Its 3/9 is a different failure than
+the fork's 2/9 - it refuses when the strict eval prompt tells it never to
+guess, rather than inventing. Same five questions with a softer instruction
+("quote the relevant figure; say not-covered only if the documentation really
+says nothing"): NIMBUS RAM -> "up to 28000 MB", image size -> "5 GB ...
+document [A]", STRATUS cost -> correctly not covered; the multi-hop expire
+question still refused, the GPU trick question still over-answered ("7.0
+cores"). `eval-quality.js` now takes `EVAL_PROMPT=soft`; paired scores (same
+evening, granite on its median node, weighted /9):
+
+| | strict prompt | soft prompt | avg answer |
+|---|---|---|---|
+| granite4:tiny-h | 7/9 | 7/9 | 85-123 chars |
+| BitNet-2B-4T TQ2_0 | 3/9 | 4/9 | 38-48 chars |
+
+granite is robust to the prompt; the 2B ternary is not, and even with the
+soft prompt it loses the multi-hop question (as granite does), over-answers
+the GPU trick question, and refused the NIMBUS RAM question in the scored run
+that it had answered in the probe (temperature 0.1 is not deterministic).
+Speed repeated: 43.4 / 266. **H3 is not met: 4/9 against 7/9.** But it is
+now a capacity gap of the ordinary kind - a 2.4B dense model against a
+7B-total MoE - not a broken one, and it comes with 2x the speed and a
+runtime that has not crashed.
+
+Two things to file upstream: (1) microsoft/BitNet - the x86 I2_S path
+compiled non-natively produces wrong-but-plausible output (or: document that
+it must be built with native flags); (2) ggml-org/llama.cpp - the `bitnet`
+arch needs three one-line changes to load Microsoft's own release (tensor
+names, relu2, BPE vocab).
+
+## 6c. Round-one and round-two verdict
+
+- The ternary *substrate* works on Flux CPUs and is the fastest thing we
+  have measured: 43 tok/s generation, 267 tok/s prefill, 15 s to first
+  token on a 3k prompt (vs granite's 11 / 107 / 37 s on its median node).
+- The 2.4B ternary *model* is behind granite4:tiny-h on grounded QA (4/9 vs
+  7/9) and brittle to instruction wording. Not shippable as the answerer.
+- The bitnet.cpp fork is not the way to run it: our I2_S build produced
+  wrong output, and its embedding server leaks. Upstream llama.cpp with
+  TQ2_0 is, once three one-line fixes land.
+- **The ternary embedder wins retrieval (H4 holds).** bitnet-embedding-270m
+  with last-token pooling: **10/10** on the E5 set, mean rank 1.40 - it
+  finds the ArcaneOS guide (rank 3) that granite-embedding misses, and the
+  instances limits page (rank 2). granite-embedding: 8/10 on the production
+  bot, 9/10 on the tq2 app's identical vectors (the live BM25 mix adds a
+  little variance). Ten consecutive answers on the supervised 1.4.8 engine
+  with no process death.
+
+## 7. After round two
+
+Ordered by return per effort, given the above:
+
+1. **Prompt shape for small models.** The 3/9 -> 4/9 swing came from one
+   sentence. The docs bot's prompt was tuned on granite; tune a variant on
+   the TQ2 rig and rescore. Cheap, and it bounds how much of the gap is
+   instruction-following rather than knowledge.
+2. **Fine-tune on our own traffic** (§3 of the original plan, now viable
+   because inference is correct): SFT the bf16 master weights on logged
+   (question, retrieved chunks, granite's accepted answer) triples, convert
+   to TQ2_0, measure on the same harness. This is the distillation that
+   turns a 2x-faster substrate into a 2x-faster *product*.
+3. **Extract-first pipeline** (§ research notes): the reader-then-rephraser
+   design removes the "read a number out of a paragraph" requirement
+   entirely and suits a small ternary rephraser best of all.
+4. **Falcon-E-3B on TQ2_0** as the size midpoint, after the licence read.
+5. **Upstream the fixes** so nobody else runs this model broken.
+
+## 7a. Original follow-up list (kept for the record)
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:
 
