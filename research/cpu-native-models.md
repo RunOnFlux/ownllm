@@ -315,6 +315,16 @@ apply). Deployed as a separate app with `--engine tq2`, it isolates the
 chat-kernel question - same weights, independent kernel - and removes the
 fork's embedding server from the picture altogether.
 
+**Round-two build findings (2026-09-12 19:10).** Upstream llama.cpp is not
+quite "stock" for this model: its converter's bitnet tensor map lacks the
+2B-4T names (`attn_sub_norm`, `ffn_sub_norm`), and its bitnet graph hardcodes
+SiLU where 2B-4T uses squared ReLU (`hidden_act: relu2`). Both are one-line
+patches applied in the image build; without the second, TQ2_0 would have
+produced nonsense and looked like a kernel failure. Worth an upstream PR if
+round two shows the model works - the `bitnet` arch in llama.cpp was built
+for the 2024 reproductions and nobody has pointed it at Microsoft's own
+release.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:

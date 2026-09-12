@@ -1,5 +1,6 @@
 # Round two of research/cpu-native-models.md: the same BitNet-b1.58-2B-4T
-# weights converted to TQ2_0 and served by STOCK llama.cpp, plus the production
+# weights converted to TQ2_0 and served by upstream llama.cpp (one activation
+# fix, see stage 2), plus the production
 # granite embedder (ollama's exact blob). Two questions, one image:
 #   1. Does the 2/9 grounding score belong to the model or to our I2_S kernel
 #      build? Same weights, an independent ternary implementation.
@@ -20,6 +21,15 @@ RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git .
 # CPU torch only - the converter needs it to read safetensors, nothing more.
 RUN pip install --no-cache-dir -r requirements/requirements-convert_hf_to_gguf.txt "huggingface_hub[cli]"
 RUN hf download microsoft/bitnet-b1.58-2B-4T-bf16 --local-dir /hf/bitnet
+# The stock converter's bitnet tensor map was written for the 1bitLLM
+# reproductions, which name the two sub-layer norms inner_attn_ln and
+# ffn_layernorm; Microsoft's checkpoint calls them attn_sub_norm and
+# ffn_sub_norm. Same tensors, so the map is extended rather than the weights
+# renamed - the build fails loudly if upstream changes the lines.
+RUN grep -q 'self_attn.inner_attn_ln' gguf-py/gguf/tensor_mapping.py \
+  && sed -i 's|"model.layers.{bid}.self_attn.inner_attn_ln",  # bitnet|"model.layers.{bid}.self_attn.inner_attn_ln",  # bitnet\n            "model.layers.{bid}.self_attn.attn_sub_norm",  # bitnet-b1.58-2B-4T|' gguf-py/gguf/tensor_mapping.py \
+  && sed -i 's|"model.layers.{bid}.mlp.ffn_layernorm",  # bitnet|"model.layers.{bid}.mlp.ffn_layernorm",  # bitnet\n            "model.layers.{bid}.mlp.ffn_sub_norm",  # bitnet-b1.58-2B-4T|' gguf-py/gguf/tensor_mapping.py \
+  && grep -c "sub_norm" gguf-py/gguf/tensor_mapping.py
 RUN mkdir -p /models/chat && python convert_hf_to_gguf.py /hf/bitnet --outtype tq2_0 \
       --outfile /models/chat/bitnet-2b-4t-tq2_0.gguf && rm -rf /hf && ls -la /models/chat
 # The exact GGUF ollama serves as granite-embedding:278m (a blob is the GGUF).
@@ -27,12 +37,32 @@ RUN mkdir -p /models/embed && curl -fsSL -o /models/embed/granite-embedding-278m
       https://registry.ollama.ai/v2/library/granite-embedding/blobs/sha256:a658c903bf83a9d84fe1b9869874229ddfdfc1c88b04f958f17dd24e243d262c \
   && ls -la /models/embed
 
-# --- stage 2: stock llama-server + the shim
+# --- stage 2: upstream llama-server with a one-line graph fix
+# Upstream's bitnet graph (src/models/bitnet.cpp) hardcodes SiLU in the FFN,
+# which is what the 2024 1bitLLM reproductions used. Microsoft's 2B-4T uses
+# squared ReLU (config.json: hidden_act = relu2). Served unpatched, TQ2_0
+# would produce garbage for a reason that has nothing to do with the ternary
+# kernel - exactly the confound this image exists to remove - so the
+# activation is switched to LLM_FFN_RELU_SQR and llama-server built from
+# source. GGML_NATIVE=OFF pins AVX2 so a CI build cannot SIGILL on a node.
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends git cmake build-essential libcurl4-openssl-dev ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git .
+RUN grep -q 'LLM_FFN_SILU, LLM_FFN_PAR' src/models/bitnet.cpp \
+  && sed -i 's/LLM_FFN_SILU, LLM_FFN_PAR/LLM_FFN_RELU_SQR, LLM_FFN_PAR/' src/models/bitnet.cpp \
+  && grep -n 'LLM_FFN_RELU_SQR' src/models/bitnet.cpp
+RUN cmake -B build -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON \
+      -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_CURL=ON \
+  && cmake --build build --config Release --target llama-server -j "$(nproc)" \
+  && mkdir -p /opt/llama && cp build/bin/llama-server /opt/llama/ && find build -name '*.so*' -exec cp -P {} /opt/llama/ \; \
+  && ls -la /opt/llama
+
 FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl libgomp1 libcurl4 \
   && rm -rf /var/lib/apt/lists/*
-# /app in the upstream image holds llama-server and its shared libraries.
-COPY --from=ghcr.io/ggml-org/llama.cpp:server /app /opt/llama
+COPY --from=build /opt/llama /opt/llama
 COPY --from=convert /models /models
 COPY images/ternary/shim.js /opt/llama/shim.js
 ENV PORT=11434 THREADS=8 CTX=4096 BIN=/opt/llama LD_LIBRARY_PATH=/opt/llama \

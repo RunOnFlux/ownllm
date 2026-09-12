@@ -10,6 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      # One image's failure must not cancel the others' builds: the research
+      # image is expected to break more often than the production ones.
+      fail-fast: false
       matrix:
         image: [gate, docsbot, router, ternary, ternary-tq2]
         include:
