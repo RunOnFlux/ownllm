@@ -25,7 +25,12 @@ const KEY = process.env.FLUX_LLM_KEY || '';
 const MODEL = flag('--model', 'granite-embedding:278m');
 const BATCH = Number(flag('--batch', 96));
 const CONC = Number(flag('--concurrency', 3));
-const DIMS = Number(flag('--dims', 768));
+// Dimensions come from the embedder, not from an assumption: granite is 768,
+// bitnet-embedding-270m is 640. Writing a 640-wide vector into a 768-wide row
+// left 128 NaNs per row (v[k] past the end is undefined -> NaN), which is
+// what the docs bot then indexed. --dims still overrides; otherwise the first
+// batch decides and every later batch is checked against it.
+let DIMS = Number(flag('--dims', 0));
 
 // One vector file per embedder. The granite file keeps its historical name so
 // nothing already deployed changes; any other model writes
@@ -42,31 +47,43 @@ const count = lines.length;
 const corpusHash = crypto.createHash('sha256').update(fs.readFileSync(CORPUS)).digest('hex').slice(0, 16);
 console.log(`${CORPUS}: ${count.toLocaleString()} chunks, hash ${corpusHash}`);
 
-// Preallocate so every batch can be written at its own offset, in any order.
-const bytes = count * DIMS * 4;
-if (!fs.existsSync(VEC) || fs.statSync(VEC).size !== bytes) {
-  fs.writeFileSync(VEC, Buffer.alloc(0));
-  fs.truncateSync(VEC, bytes);
-  fs.writeFileSync(PROG, JSON.stringify({ corpusHash, done: [] }));
-  console.log(`  allocated ${(bytes / 1e6).toFixed(0)} MB`);
+// State shared with the workers; filled in by main() once the embedder has
+// been probed for its dimension (top-level await is unavailable in CommonJS).
+let bytes; let done = new Set(); let offsets = []; let todo = []; let fd; let next = 0; let completed = 0; let started = 0;
+
+async function probeDims() {
+  const res = await fetch(`${HOST}/api/embed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(KEY ? { Authorization: `Bearer ${KEY}` } : {}) },
+    body: JSON.stringify({ model: MODEL, input: ['dimension probe'] }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const body = await res.json();
+  if (!body.embeddings || !body.embeddings[0]) throw new Error(`cannot probe dimensions: ${body.error || 'no embeddings'}`);
+  return body.embeddings[0].length;
 }
 
-let done = new Set();
-try {
-  const p = JSON.parse(fs.readFileSync(PROG, 'utf8'));
-  if (p.corpusHash === corpusHash) done = new Set(p.done);
-  else console.log('  progress file is for a different corpus, starting over');
-} catch { /* no progress yet */ }
-
-const offsets = [];
-for (let i = 0; i < count; i += BATCH) offsets.push(i);
-const todo = offsets.filter(o => !done.has(o));
-if (done.size) console.log(`  resuming: ${done.size}/${offsets.length} batches already done`);
-
-const fd = fs.openSync(VEC, 'r+');
-let next = 0;
-let completed = done.size;
-const started = Date.now();
+function setup() {
+  // Preallocate so every batch can be written at its own offset, in any order.
+  bytes = count * DIMS * 4;
+  if (!fs.existsSync(VEC) || fs.statSync(VEC).size !== bytes) {
+    fs.writeFileSync(VEC, Buffer.alloc(0));
+    fs.truncateSync(VEC, bytes);
+    fs.writeFileSync(PROG, JSON.stringify({ corpusHash, done: [] }));
+    console.log(`  allocated ${(bytes / 1e6).toFixed(0)} MB`);
+  }
+  try {
+    const p = JSON.parse(fs.readFileSync(PROG, 'utf8'));
+    if (p.corpusHash === corpusHash) done = new Set(p.done);
+    else console.log('  progress file is for a different corpus, starting over');
+  } catch { /* no progress yet */ }
+  for (let i = 0; i < count; i += BATCH) offsets.push(i);
+  todo = offsets.filter(o => !done.has(o));
+  if (done.size) console.log(`  resuming: ${done.size}/${offsets.length} batches already done`);
+  fd = fs.openSync(VEC, 'r+');
+  completed = done.size;
+  started = Date.now();
+}
 
 async function embed(texts) {
   const res = await fetch(`${HOST}/api/embed`, {
@@ -95,9 +112,28 @@ async function worker() {
       // eslint-disable-next-line no-await-in-loop
       vecs = await embed(batch);
     } catch (err) {
-      console.error(`\n  batch at ${start} failed: ${err.message} - will retry on the next run`);
-      continue;
+      // A batch that fails on its own is usually one chunk the embedder
+      // refuses (llama-server errors on inputs past its 512-token context;
+      // ollama truncates silently). Same remedy as the docs bot's indexer:
+      // one chunk at a time, halving a rejected chunk until it fits.
+      console.error(`\n  batch at ${start} failed (${String(err.message).slice(0, 80)}); embedding chunk by chunk`);
+      try {
+        vecs = [];
+        for (const text of batch) {
+          let t = text;
+          for (;;) {
+            try { vecs.push((await embed([t]))[0]); break; } catch (e) {
+              if (t.length <= 250) throw e;
+              t = t.slice(0, Math.floor(t.length / 2));
+            }
+          }
+        }
+      } catch (err2) {
+        console.error(`\n  batch at ${start} still failing: ${err2.message} - will retry on the next run`);
+        continue;
+      }
     }
+    if (vecs.some(v => v.length !== DIMS)) throw new Error(`embedder returned ${vecs.find(v => v.length !== DIMS).length} dims, expected ${DIMS}`);
     const buf = Buffer.allocUnsafe(vecs.length * DIMS * 4);
     vecs.forEach((v, j) => { for (let k = 0; k < DIMS; k += 1) buf.writeFloatLE(v[k], (j * DIMS + k) * 4); });
     fs.writeSync(fd, buf, 0, buf.length, start * DIMS * 4);
@@ -113,6 +149,11 @@ async function worker() {
 }
 
 (async () => {
+  if (!DIMS) {
+    DIMS = await probeDims();
+    console.log(`  embedder reports ${DIMS} dimensions`);
+  }
+  setup();
   await Promise.all(Array.from({ length: CONC }, worker));
   saveProgress();
   fs.closeSync(fd);

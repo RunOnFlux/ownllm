@@ -325,6 +325,14 @@ round two shows the model works - the `bitnet` arch in llama.cpp was built
 for the 2024 reproductions and nobody has pointed it at Microsoft's own
 release.
 
+**2026-09-12 23:05, ternary vectors precomputed** on the 1.4.8 engine
+(last-token pooling): 26,879 x 640 dims, 69 MB, shipped in docsbot 1.4.9 as
+`corpus.jsonl.bitnet-embedding-270m.vec`. Two more tool bugs on the way:
+the precompute tool assumed granite's 768 dimensions (the ternary embedder
+has 640; the extra 128 floats per row were NaN - repacked, no re-embedding),
+and it had no fallback for chunks past the 512-token limit (added, same
+halving as the docs bot). From here the rig boots in about a minute.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:

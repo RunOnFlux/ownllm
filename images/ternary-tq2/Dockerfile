@@ -30,6 +30,14 @@ RUN grep -q 'self_attn.inner_attn_ln' gguf-py/gguf/tensor_mapping.py \
   && sed -i 's|"model.layers.{bid}.self_attn.inner_attn_ln",  # bitnet|"model.layers.{bid}.self_attn.inner_attn_ln",  # bitnet\n            "model.layers.{bid}.self_attn.attn_sub_norm",  # bitnet-b1.58-2B-4T|' gguf-py/gguf/tensor_mapping.py \
   && sed -i 's|"model.layers.{bid}.mlp.ffn_layernorm",  # bitnet|"model.layers.{bid}.mlp.ffn_layernorm",  # bitnet\n            "model.layers.{bid}.mlp.ffn_sub_norm",  # bitnet-b1.58-2B-4T|' gguf-py/gguf/tensor_mapping.py \
   && grep -c "sub_norm" gguf-py/gguf/tensor_mapping.py
+# Same vintage problem in the converter's vocab step: it assumes a
+# sentencepiece tokenizer.model (the reproductions'); 2B-4T ships a Llama-3
+# style BPE tokenizer.json, which the gpt2-style loader reads. The
+# pre-tokenizer is Llama-3's, whose hash the converter knows as "llama-bpe";
+# should upstream not recognise it, the fallback pins that name.
+RUN grep -q '_set_vocab_sentencepiece()' conversion/bitnet.py \
+  && sed -i 's/self._set_vocab_sentencepiece()/self._set_vocab_gpt2()/' conversion/bitnet.py \
+  && grep -n '_set_vocab_gpt2' conversion/bitnet.py
 RUN mkdir -p /models/chat && python convert_hf_to_gguf.py /hf/bitnet --outtype tq2_0 \
       --outfile /models/chat/bitnet-2b-4t-tq2_0.gguf && rm -rf /hf && ls -la /models/chat
 # The exact GGUF ollama serves as granite-embedding:278m (a blob is the GGUF).
