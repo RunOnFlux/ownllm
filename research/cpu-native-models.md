@@ -269,6 +269,35 @@ generation when the caller disconnects; the retrieval tool drains streams
 instead of cancelling them (the burst of cancels is the only correlate of
 the chat server's exit - cause unproven).
 
+**2026-09-12 11:00, E5 second attempt, identical outcome:** six questions
+answered (5 hits, the instances question missed again), then on the seventh
+the chat llama-server exited, the engine container with it, and the docs bot
+started re-indexing. Streams were drained this time, so cancellation is
+ruled out. Six 3k-token prompts, then death, twice: this smells like the
+bitnet.cpp fork's llama-server (2026-07-15) and its prompt cache with `-np 1
+-c 4096` - the seventh prompt finds no room and something asserts. 1.4.6
+keeps the process under a supervisor and the docs bot alive, so the next
+occurrence leaves a log to read instead of an empty container.
+
+E5 stands at **5/6 on the questions the ternary embedder was able to answer**
+against granite's 8/10 on all ten; the four unanswered ones are the
+long-tail ones (deploy, FluxEdge, ArcaneOS, Zelcore), so the number is not
+comparable yet.
+
+**2026-09-12 12:40, third E5 run and the crash diagnosed.** Seven questions
+answered this time (6 hits; the deploy question now a hit, the instances
+question the standing miss), then the eighth failed - but the docs bot and
+its index survived, as 1.4.6 intended, which left a log: a bare `Killed`
+line, after which chat tasks continue and embedding tasks never reappear.
+The cgroup OOM killer took the embedding server. Container memory afterwards:
+0.74 GB of 12. Every engine death so far - 6 GB five minutes into indexing,
+twice after a full index, now after 47k embedding tasks - fits **memory
+growth in the fork's embedding server over many requests**. The shell
+supervisor did not restart it; 1.4.7 makes the shim the supervisor (spawn,
+respawn on exit, kill-and-respawn after 60 s of failed /health).
+
+E5 stands at 6/7 answered, 3 questions outstanding, vs granite 8/10.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:

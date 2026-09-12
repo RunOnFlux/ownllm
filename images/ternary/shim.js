@@ -17,6 +17,7 @@
  *   /api/embed     -> /v1/embeddings on the embedding server
  */
 const http = require('node:http');
+const { spawn } = require('node:child_process');
 
 const PORT = Number(process.env.PORT || 11434);
 const CHAT = 'http://127.0.0.1:8081';
@@ -34,14 +35,76 @@ const readBody = (req) => new Promise((resolve, reject) => {
 });
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
+/**
+ * Process supervisor. The shim owns the two llama-servers: it spawns them,
+ * respawns one that exits, and restarts one whose /health stays down. This
+ * replaced shell `while` loops after the cgroup OOM killer took the embedding
+ * server ("Killed" in the log, chat tasks continuing, embed tasks never
+ * again) and the shell loop did not bring it back - the container sat there
+ * half an engine for an hour. Everything that matters about liveness is now
+ * observable in one process's log.
+ *
+ * Why it dies at all: memory use climbs over tens of thousands of embedding
+ * requests (every crash so far came after a full corpus pass), which looks
+ * like a leak in the fork's embedding path. A respawn is the mitigation; the
+ * cause belongs to round two, where the runtime changes anyway.
+ */
+const BIN = process.env.BIN || '/opt/bitnet/bin';
+const T = process.env.THREADS || '8';
+const SERVERS = {
+  chat: {
+    port: 8081,
+    args: ['-m', process.env.CHAT_GGUF, '-c', process.env.CTX || '4096', '-t', T, '-ngl', '0', '-cb', '-np', '1',
+      '-b', '512', '-ub', '512', '--host', '127.0.0.1', '--port', '8081', '--no-webui', '--metrics'],
+  },
+  embed: {
+    port: 8082,
+    args: ['-m', process.env.EMBED_GGUF, '-t', T, '-ngl', '0', '--embeddings', '--pooling', 'mean', '-np', '4',
+      '-c', '2048', '-b', '2048', '-ub', '2048', '--host', '127.0.0.1', '--port', '8082', '--no-webui'],
+  },
+};
+const procs = {};
+const log = (m) => console.log(`${new Date().toISOString().slice(11, 19)} supervisor: ${m}`);
+
+function start(name) {
+  const s = SERVERS[name];
+  const child = spawn(`${BIN}/llama-server`, s.args, { stdio: 'inherit', env: { ...process.env, LD_LIBRARY_PATH: BIN } });
+  procs[name] = { child, since: Date.now(), unhealthySince: null };
+  log(`${name} started (pid ${child.pid})`);
+  child.on('exit', (code, signal) => {
+    log(`${name} exited (code ${code}, signal ${signal}); restarting in 2s`);
+    setTimeout(() => start(name), 2000);
+  });
+}
+
+async function healthy(port) {
+  const r = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+  return !!(r && r.ok);
+}
+
+// Watchdog: a server that has been up for 2 minutes and unhealthy for 60 s
+// is hung (loading takes seconds), so it is killed and respawned.
+setInterval(async () => {
+  for (const [name, s] of Object.entries(SERVERS)) {
+    const p = procs[name];
+    if (!p || Date.now() - p.since < 120000) continue;
+    if (await healthy(s.port)) { p.unhealthySince = null; continue; }
+    p.unhealthySince = p.unhealthySince || Date.now();
+    if (Date.now() - p.unhealthySince > 60000) {
+      log(`${name} unhealthy for 60s, killing pid ${p.child.pid}`);
+      p.unhealthySince = null;
+      p.child.kill('SIGKILL');
+    }
+  }
+}, 15000);
+
+start('chat');
+start('embed');
+
 // Both servers answer /health with 200 only once the model is loaded, which is
 // exactly what the gate wants /api/tags to mean.
 async function ready() {
-  for (const base of [CHAT, EMBED]) {
-    const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
-    if (!r || !r.ok) return false;
-  }
-  return true;
+  return (await healthy(SERVERS.chat.port)) && (await healthy(SERVERS.embed.port));
 }
 
 /**

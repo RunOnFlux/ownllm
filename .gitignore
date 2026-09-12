@@ -22,3 +22,6 @@ specs/*.ui.json
 # corpus would republish their contents, and baking it into a public GHCR image
 # would do the same. See README, "Private sources".
 # images/docsbot/docs/corpus.jsonl
+
+# Checkpoint of tools/embed-corpus.js; the finished .vec is what ships.
+images/docsbot/docs/*.vec.progress

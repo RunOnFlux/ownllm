@@ -15,6 +15,9 @@
 const HOST = process.argv[2];
 if (!HOST) { console.error('usage: node tools/eval-retrieval.js http://host:port'); process.exit(1); }
 const base = HOST.startsWith('http') ? HOST : `http://${HOST}`;
+// --only <regex>: run the subset of questions whose text matches.
+const onlyArg = process.argv.indexOf('--only');
+const ONLY = onlyArg >= 0 ? new RegExp(process.argv[onlyArg + 1], 'i') : null;
 
 // expect: regex over "<tier> <source path> <heading>" of a hit.
 const CASES = [
@@ -54,7 +57,7 @@ async function sources(q) {
   let hits = 0;
   let rankSum = 0;
   console.log(`retrieval hit rate against ${base}\n`);
-  for (const c of CASES) {
+  for (const c of CASES.filter(c => !ONLY || ONLY.test(c.q))) {
     const t = Date.now();
     let srcs;
     // Public mode rate-limits to 6 questions per minute per IP; wait it out
@@ -71,5 +74,5 @@ async function sources(q) {
     console.log(`  ${rank ? `HIT@${rank}` : 'MISS '}  ${c.q}  (${((Date.now() - t) / 1000).toFixed(1)}s)`);
     if (!rank) srcs.slice(0, 4).forEach(s => console.log(`          got ${s.tier.padEnd(10)} ${s.source.slice(0, 90)}`));
   }
-  console.log(`\n${hits}/${CASES.length} hit${hits ? `, mean rank of hits ${(rankSum / hits).toFixed(2)}` : ''}`);
+  console.log(`\n${hits}/${CASES.filter(c => !ONLY || ONLY.test(c.q)).length} hit${hits ? `, mean rank of hits ${(rankSum / hits).toFixed(2)}` : ''}`);
 })();

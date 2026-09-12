@@ -194,10 +194,17 @@ function loadChunks() {
  * cites them. The hash makes that mismatch loud instead of silent - a stale
  * .vec is ignored and the bot embeds from scratch, slowly but correctly.
  */
+// Vectors are per embedder: corpus.jsonl.<model slug>.vec is tried first,
+// then the historical corpus.jsonl.vec. Shipping one file per embedder is
+// what lets a research rig with a different embedder boot in a minute
+// instead of re-embedding 26,879 chunks (two hours) on every restart.
+const modelSlug = (m) => String(m).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
 function loadVectors(corpusPath, count) {
-  const meta = `${corpusPath}.vec.json`;
-  const bin = `${corpusPath}.vec`;
-  if (!fs.existsSync(meta) || !fs.existsSync(bin)) return null;
+  const candidates = [`${corpusPath}.${modelSlug(EMBED_MODEL)}.vec`, `${corpusPath}.vec`];
+  const bin = candidates.find(c => fs.existsSync(c) && fs.existsSync(`${c}.json`));
+  if (!bin) return null;
+  const meta = `${bin}.json`;
   try {
     const m = JSON.parse(fs.readFileSync(meta, 'utf8'));
     const actual = crypto.createHash('sha256').update(fs.readFileSync(corpusPath)).digest('hex').slice(0, 16);

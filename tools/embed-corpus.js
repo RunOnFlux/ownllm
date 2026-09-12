@@ -27,9 +27,13 @@ const BATCH = Number(flag('--batch', 96));
 const CONC = Number(flag('--concurrency', 3));
 const DIMS = Number(flag('--dims', 768));
 
-const VEC = `${CORPUS}.vec`;
-const META = `${CORPUS}.vec.json`;
-const PROG = `${CORPUS}.vec.progress`;
+// One vector file per embedder. The granite file keeps its historical name so
+// nothing already deployed changes; any other model writes
+// corpus.jsonl.<model slug>.vec, which the docs bot looks for first.
+const slug = MODEL.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const VEC = MODEL === 'granite-embedding:278m' ? `${CORPUS}.vec` : `${CORPUS}.${slug}.vec`;
+const META = `${VEC}.json`;
+const PROG = `${VEC}.progress`;
 
 // Raw lines only. Parsing all 26,879 into objects up front was a large part of
 // what got the previous version killed; each batch is parsed as it is needed.
