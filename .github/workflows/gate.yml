@@ -11,13 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: [gate, docsbot, router, ternary]
+        image: [gate, docsbot, router, ternary, ternary-tq2]
         include:
           # bitnet.cpp's I2_S kernel is a separate code path per ISA and the
           # research rig only targets x86 Flux nodes. Not an enterprise
           # component's constraint either: amd64 is the mandatory one.
           - image: ternary
             platforms: linux/amd64
+          # Shares images/ternary/shim.js, so its build context is the repo root.
+          - image: ternary-tq2
+            platforms: linux/amd64
+            context: .
+            file: images/ternary-tq2/Dockerfile
     permissions:
       contents: read
       packages: write
@@ -55,7 +60,8 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: images/${{ matrix.image }}
+          context: ${{ matrix.context || format('images/{0}', matrix.image) }}
+          file: ${{ matrix.file || format('images/{0}/Dockerfile', matrix.image) }}
           push: true
           # amd64 is MANDATORY: enterprise apps are rejected unless every
           # component supports it (appConstants.js enterpriseRequiredArchitectures).

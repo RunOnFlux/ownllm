@@ -161,6 +161,7 @@ if (!P) throw new Error(`Unknown profile ${PROFILE}. Use: ${Object.keys(PROFILES
 // --models overrides the profile default; sizes are only used for the disk
 // warning below.
 if (arg('models', null)) P.models = arg('models', null).trim();
+if (P.engine === 'ternary' && arg('engine', '') === 'tq2' && !arg('models', null)) P.models = 'bitnet-2b-4t-tq2 granite-embedding:278m';
 
 // --cpu overrides the engine's core count. It also moves OLLAMA_NUM_THREAD and
 // OMP_NUM_THREADS with it: NanoCPUs is a cgroup quota, so the container still
@@ -241,9 +242,15 @@ const engine = {
 // model: llama-server behind an ollama-compatible shim, weights baked in. Same
 // component name and port, so the gate and the docs bot need no change.
 const TERNARY = P.engine === 'ternary';
+// --engine tq2 swaps the research engine for round two's image: the same
+// BitNet weights as TQ2_0 on stock llama.cpp, with the production granite
+// embedder so the docs bot's precomputed vectors apply (no re-index).
+const TQ2 = TERNARY && arg('engine', '') === 'tq2';
 if (TERNARY) {
-  engine.description = 'Ternary (1.58-bit) engine: bitnet.cpp llama-server, ollama-compatible (internal only)';
-  engine.repotag = `${REGISTRY}/ownllm-ternary:${GATE_VERSION}`;
+  engine.description = TQ2
+    ? 'Ternary engine, round two: BitNet TQ2_0 on stock llama.cpp + granite embedder, ollama-compatible (internal only)'
+    : 'Ternary (1.58-bit) engine: bitnet.cpp llama-server, ollama-compatible (internal only)';
+  engine.repotag = `${REGISTRY}/ownllm-ternary${TQ2 ? '-tq2' : ''}:${GATE_VERSION}`;
   engine.environmentParameters = [
     'PORT=11434',
     `THREADS=${P.threads}`,
@@ -342,8 +349,8 @@ const docsbot = {
   environmentParameters: [
     `UPSTREAM=${ENGINE_URL}`,
     `API_KEY=${API_KEY}`,
-    `CHAT_MODEL=${TERNARY ? 'bitnet-2b-4t' : 'granite4:tiny-h'}`,
-    `EMBED_MODEL=${TERNARY ? 'bitnet-embedding-270m' : 'granite-embedding:278m'}`,
+    `CHAT_MODEL=${TERNARY ? (TQ2 ? 'bitnet-2b-4t-tq2' : 'bitnet-2b-4t') : 'granite4:tiny-h'}`,
+    `EMBED_MODEL=${TERNARY && !TQ2 ? 'bitnet-embedding-270m' : 'granite-embedding:278m'}`,
     // Always in front of the retrieved chunks, so the prompt prefix is
     // identical between requests and the KV cache covers it.
     // flux-facts.md first: it is generated from config/default.js, so unlike a

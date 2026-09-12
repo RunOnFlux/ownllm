@@ -22,9 +22,15 @@ const { spawn } = require('node:child_process');
 const PORT = Number(process.env.PORT || 11434);
 const CHAT = 'http://127.0.0.1:8081';
 const EMBED = 'http://127.0.0.1:8082';
+// Model names as the gate, the docs bot and the tools see them. The tq2
+// image serves the same BitNet weights as TQ2_0 under stock llama.cpp and the
+// production granite embedder (ollama's exact blob), reported under its
+// production name so the docs bot's precomputed vectors apply unchanged.
+const CHAT_NAME = process.env.CHAT_NAME || 'bitnet-2b-4t';
+const EMBED_NAME = process.env.EMBED_NAME || 'bitnet-embedding-270m';
 const MODELS = [
-  { name: 'bitnet-2b-4t', model: 'bitnet-2b-4t', size: 1188 * 1024 * 1024, details: { family: 'bitnet', quantization_level: 'I2_S', parameter_size: '2.4B' } },
-  { name: 'bitnet-embedding-270m', model: 'bitnet-embedding-270m', size: 367 * 1024 * 1024, details: { family: 'bitnet', quantization_level: 'I2_S', parameter_size: '270M' } },
+  { name: CHAT_NAME, model: CHAT_NAME, size: Number(process.env.CHAT_SIZE || 1188 * 1024 * 1024), details: { family: 'bitnet', quantization_level: process.env.CHAT_QUANT || 'I2_S', parameter_size: '2.4B' } },
+  { name: EMBED_NAME, model: EMBED_NAME, size: Number(process.env.EMBED_SIZE || 367 * 1024 * 1024), details: { family: process.env.EMBED_FAMILY || 'bitnet', quantization_level: process.env.EMBED_QUANT || 'I2_S', parameter_size: process.env.EMBED_PARAMS || '270M' } },
 ];
 
 const readBody = (req) => new Promise((resolve, reject) => {
@@ -59,8 +65,14 @@ const SERVERS = {
   },
   embed: {
     port: 8082,
-    args: ['-m', process.env.EMBED_GGUF, '-t', T, '-ngl', '0', '--embeddings', '--pooling', 'mean', '-np', '4',
-      '-c', '2048', '-b', '2048', '-ub', '2048', '--host', '127.0.0.1', '--port', '8082', '--no-webui'],
+    // Last-token pooling: the model card says so (decoder-only, last-token
+    // pooling, L2-normalised). 1.4.0-1.4.7 used mean pooling - consistent
+    // between index and query, so retrieval worked, but not what the model
+    // was trained for; E5 numbers before 1.4.8 carry that caveat.
+    // EMBED_POOLING=none leaves it to the GGUF's own metadata (granite).
+    args: ['-m', process.env.EMBED_GGUF, '-t', T, '-ngl', '0', '--embeddings',
+      ...((process.env.EMBED_POOLING || 'last') === 'none' ? [] : ['--pooling', process.env.EMBED_POOLING || 'last']),
+      '-np', '4', '-c', '2048', '-b', '2048', '-ub', '2048', '--host', '127.0.0.1', '--port', '8082', '--no-webui'],
   },
 };
 const procs = {};

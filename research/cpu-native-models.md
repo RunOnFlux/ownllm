@@ -298,6 +298,23 @@ respawn on exit, kill-and-respawn after 60 s of failed /health).
 
 E5 stands at 6/7 answered, 3 questions outstanding, vs granite 8/10.
 
+**2026-09-12 18:55, two corrections before round two.** (1) The BitNet
+embedding model uses *last-token* pooling (model card); the rig ran
+`--pooling mean` from 1.4.0 to 1.4.7. Index and query were pooled the same
+way, so retrieval functioned, but the E5 numbers above are for a model used
+off-spec; 1.4.8 fixes it and the ternary vectors are precomputed on it. (2)
+Indexing is now a one-off: `tools/embed-corpus.js` writes a per-embedder
+`.vec` the docs bot loads at boot, so a rig restart costs a minute, not two
+hours.
+
+**Round two is built, not yet deployed:** `images/ternary-tq2` converts the
+bf16 master weights to TQ2_0 with the stock llama.cpp converter and serves
+them with stock llama-server, alongside ollama's exact granite-embedding
+blob reported under its production name (so the precomputed granite vectors
+apply). Deployed as a separate app with `--engine tq2`, it isolates the
+chat-kernel question - same weights, independent kernel - and removes the
+fork's embedding server from the picture altogether.
+
 ## 7. After round one
 
 If ternary wins on H1/H3, the follow-ups, in order of return per effort:
