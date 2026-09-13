@@ -246,12 +246,19 @@ function loadChunks() {
     // on disk is current, the corpus chunks may carry wording since removed
     // (the facts sheet's old "consensus price" section was still being
     // retrieved and quoted after the file dropped it).
+    // Marked, not removed: the precomputed vector file is aligned to the full
+    // corpus, so the chunk list must keep its length and order until the
+    // vectors are loaded. buildIndex skips superseded chunks afterwards.
+    // (Filtering here changed the count 26,879 -> 26,871, failed the vector
+    // file's count check, and sent twenty fresh instances into a two-hour
+    // re-embed.)
     const pinnedNames = new Set([...PINNED, ...INDEX_DOCS].map(p => p.split('/').pop()));
     return fs.readFileSync(corpus, 'utf8').split('\n').filter(Boolean).map((l) => {
       const c = JSON.parse(l);
       c.url = siteUrl(c.url);
+      if (pinnedNames.has(String(c.source).split('/').pop())) c.superseded = true;
       return c;
-    }).filter(c => !pinnedNames.has(String(c.source).split('/').pop()));
+    });
   }
   return walk(DOCS_DIR).flatMap(f => chunk(fs.readFileSync(f, 'utf8'), path.relative(DOCS_DIR, f)));
 }
@@ -371,6 +378,7 @@ async function buildIndex() {
     status = `loading ${chunks.length} precomputed vectors`;
     console.log(status);
     for (let i = 0; i < chunks.length; i += 1) {
+      if (chunks[i].superseded) continue;
       const v = pre.data.subarray(i * pre.dims, (i + 1) * pre.dims);
       index.push({ ...chunks[i], vec: v, mag: norm(v), tf: termFreq(chunks[i].text), len: countTokens(chunks[i].text) });
     }
@@ -390,6 +398,7 @@ async function buildIndex() {
     // eslint-disable-next-line no-await-in-loop
     const vecs = await embedBatch(batch, i);
     batch.forEach((c, j) => {
+      if (c.superseded) return;
       // Float32Array rather than a JS number array: identical retrieval quality
       // at half the memory. 26,879 chunks x 768 dims is 165 MB as doubles.
       const v = Float32Array.from(vecs[j]);
