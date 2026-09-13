@@ -7,7 +7,7 @@
     {
       "name": "router",
       "description": "Load-aware router: sends each request to the least busy instance",
-      "repotag": "ghcr.io/runonflux/ownllm-router:1.4.13",
+      "repotag": "ghcr.io/runonflux/ownllm-router:1.4.14",
       "ports": [
         33000
       ],

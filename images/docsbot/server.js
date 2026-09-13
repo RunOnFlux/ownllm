@@ -192,10 +192,40 @@ const norm = a => Math.sqrt(dot(a, a));
  * per chunk - that metadata is what turns "[1]" into a link a reader can check.
  * Raw markdown is the fallback so the image still works without an ingest step.
  */
+/**
+ * Citations should open the published page, not the markdown on GitHub. The
+ * corpus keeps GitHub URLs (that is what was ingested, and rewriting the
+ * file would invalidate the precomputed vectors), so known documentation
+ * repositories are mapped here at load time:
+ *   flux-docs   docs/<path>.md  -> https://docs.runonflux.com/<path>   (Docusaurus, routeBasePath '/')
+ *   ssp-docs    <path>.md       -> https://docs.sspwallet.io/<path>    (GitBook)
+ * README.md and index.md are the directory page. Anything else is left alone.
+ */
+const SITE_MAPS = [
+  { re: /^https:\/\/github\.com\/RunOnFlux\/flux-docs\/blob\/[^/]+\/docs\/(.+?)\.mdx?$/i, base: 'https://docs.runonflux.com/' },
+  // GitBook slugs for nested pages do not follow file paths reliably (a nested
+  // path 404ed when checked), so only top-level pages map; the rest keep GitHub.
+  { re: /^https:\/\/github\.com\/RunOnFlux\/ssp-docs\/blob\/[^/]+\/([^/]+?)\.mdx?$/i, base: 'https://docs.sspwallet.io/' },
+];
+function siteUrl(url) {
+  if (!url) return url;
+  for (const m of SITE_MAPS) {
+    const hit = m.re.exec(url);
+    if (!hit) continue;
+    let p = hit[1].replace(/(^|\/)(README|index)$/i, '$1').replace(/\/$/, '');
+    return m.base + p;
+  }
+  return url;
+}
+
 function loadChunks() {
   const corpus = path.join(DOCS_DIR, 'corpus.jsonl');
   if (fs.existsSync(corpus)) {
-    return fs.readFileSync(corpus, 'utf8').split('\n').filter(Boolean).map(JSON.parse);
+    return fs.readFileSync(corpus, 'utf8').split('\n').filter(Boolean).map((l) => {
+      const c = JSON.parse(l);
+      c.url = siteUrl(c.url);
+      return c;
+    });
   }
   return walk(DOCS_DIR).flatMap(f => chunk(fs.readFileSync(f, 'utf8'), path.relative(DOCS_DIR, f)));
 }
@@ -402,10 +432,22 @@ function buildPinned() {
   // Sources became full paths like RunOnFlux/ownllm/images/docsbot/docs/
   // flux-facts.md when citations moved to GitHub URLs, so matching the whole
   // string against a bare filename silently stopped pinning anything.
+  // A pinned document that ships as a file in DOCS_DIR (the generated facts
+  // sheet, the hand-written how-to sheet) is read whole from disk; it need not
+  // be in the corpus at all. Anything else is looked up among the corpus
+  // chunks by filename.
   const base = p => p.split('/').pop();
-  const chunks = index.filter(c => PINNED.some(want => base(c.source) === base(want)));
-  pinnedBlock = chunks.map(c => `(${c.source})\n${c.text}`).join('\n\n');
-  if (pinnedBlock) console.log(`pinned prefix: ${chunks.length} chunks, ~${Math.round(pinnedBlock.length / 4)} tokens`);
+  const parts = [];
+  let n = 0;
+  for (const want of PINNED) {
+    const file = path.join(DOCS_DIR, base(want));
+    if (fs.existsSync(file)) { parts.push(`(${base(want)})\n${fs.readFileSync(file, 'utf8').trim()}`); n += 1; continue; }
+    const chunks = index.filter(c => base(c.source) === base(want));
+    chunks.forEach(c => parts.push(`(${c.source})\n${c.text}`));
+    n += chunks.length;
+  }
+  pinnedBlock = parts.join('\n\n');
+  if (pinnedBlock) console.log(`pinned prefix: ${n} document(s)/chunk(s), ~${Math.round(pinnedBlock.length / 4)} tokens`);
 }
 
 /**
@@ -429,13 +471,14 @@ function cleanHistory(raw) {
 const retrievalQuery = (question, history) => (history.length ? `${history[history.length - 1].q}\n${question}` : question);
 
 function buildPrompt(question, hits, live, history = []) {
-  const ctx = hits.map((h, i) => {
-    const where = [h.source, h.heading].filter(Boolean).join(' > ');
-    return `[${i + 1}] ${where}${h.url ? ` <${h.url}>` : ''}\n${h.text}`;
-  }).join('\n\n');
+  // No URLs or paths in the context: the model only needs the number to cite,
+  // and given a "[1] path <url>" line it copied it into answers verbatim.
+  const ctx = hits.map((h, i) => `[${i + 1}] ${h.heading || h.source}\n${h.text}`).join('\n\n');
   // Invariant part first (instruction + pinned), variable part after: anything
   // before the first difference is a cache hit on the next request.
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
+    + `Answer the question that was asked, in plain prose or short steps; do not list the source headings, `
+    + `do not mention "the documentation" or section names, and do not include links. `
     + `If the documentation does not contain the answer, reply exactly: "Not covered in the documentation." `
     + `Never guess and never use outside knowledge.\n\n`
     + (live ? `LIVE NETWORK STATUS (accurate as of now, prefer this over the documentation for current figures):\n${live}\n\n` : '')

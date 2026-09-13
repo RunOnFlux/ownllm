@@ -363,7 +363,10 @@ const docsbot = {
     // Only the generated sheet. app-spec-v8.md is hand-written and covers the
     // same ground, so pinning both put ~470 redundant tokens in front of every
     // prompt - on a slow node that is seven seconds of prefill for nothing.
-    'PINNED_DOCS=flux-facts.md',
+    // Plus a short, hand-written how-to sheet for the questions everyone asks
+    // (deploy an app, run a node, what it costs): the vetted summary answers
+    // those, not whichever chunk scored highest. ~350 tokens of prefill.
+    'PINNED_DOCS=flux-facts.md,flux-howto.md',
     // Fewer, because prefill dominates. Six chunks is ~1,800 tokens; on the
     // slowest node measured that is 25 seconds before a word is generated.
     'TOP_K=4',
