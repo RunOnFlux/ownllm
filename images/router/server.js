@@ -46,7 +46,7 @@ function originAllowed(origin) {
 const fs = require('node:fs');
 const WIDGET = (() => { try { return fs.readFileSync(`${__dirname}/widget.js`); } catch { return null; } })();
 
-/** ip -> { healthy, inflight, latencyMs, detail } */
+/** ip -> { healthy, inflight, latencyMs, genTps, detail } */
 const peers = new Map();
 
 async function discover() {
@@ -80,6 +80,14 @@ async function probe() {
       p.latencyMs = p.latencyMs ? p.latencyMs * (1 - EWMA) + rtt * EWMA : rtt;
       p.healthy = res.status === 200;
       p.detail = text.slice(0, 60);
+      // The instance's self-measured generation speed (tok/s). Nodes differ
+      // by 10x with identical health and network latency; this is the only
+      // signal that tells the 1.3 tok/s node from the 15 tok/s one before a
+      // user has waited on it.
+      if (p.healthy) {
+        const sp = await fetch(`http://${ip}:${TARGET_PORT}/speed`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()).catch(() => null);
+        if (sp && sp.genTps) p.genTps = sp.genTps;
+      }
     } catch (err) {
       p.healthy = false;
       p.detail = err.message.slice(0, 60);
@@ -93,9 +101,16 @@ async function probe() {
  * than "who was fastest last time".
  */
 function pick() {
-  const healthy = [...peers.entries()].filter(([, p]) => p.healthy);
+  let healthy = [...peers.entries()].filter(([, p]) => p.healthy);
   if (!healthy.length) return null;
-  healthy.sort(([, a], [, b]) => (a.inflight - b.inflight) || (a.latencyMs - b.latencyMs));
+  // A node generating under a quarter of the best one's speed is a last
+  // resort: it only gets a request when every faster node is busy.
+  const best = Math.max(0, ...healthy.map(([, p]) => p.genTps || 0));
+  const fast = healthy.filter(([, p]) => !best || (p.genTps || 0) >= best * 0.25);
+  const idleFast = fast.filter(([, p]) => p.inflight === 0);
+  if (idleFast.length) healthy = idleFast;
+  else if (fast.length) healthy = fast;
+  healthy.sort(([, a], [, b]) => (a.inflight - b.inflight) || ((b.genTps || 0) - (a.genTps || 0)) || (a.latencyMs - b.latencyMs));
   return healthy[0][0];
 }
 

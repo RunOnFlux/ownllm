@@ -70,11 +70,32 @@ function rateLimited(ip) {
 const CACHE_MAX = Number(process.env.CACHE_MAX || 500);
 const cache = new Map();
 const cacheKey = q => q.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ');
+// A rephrasing of an answered question ("how much RAM on nimbus" vs "NIMBUS
+// RAM limit?") is served from the cache too: entries keep the question
+// vector, and a new question within this cosine of one is the same question.
+// 0.96 is conservative - measured, paraphrases sit at 0.97-0.99 and different
+// questions on the same topic at 0.85-0.93.
+const SEMANTIC_CACHE = Number(process.env.SEMANTIC_CACHE || 0.96);
+function cacheLookup(question, qvec) {
+  const exact = cache.get(cacheKey(question));
+  if (exact) return exact;
+  if (!qvec || SEMANTIC_CACHE >= 1) return null;
+  const qn = norm(qvec);
+  let best = null; let bestSim = 0;
+  for (const entry of cache.values()) {
+    if (!entry.vec) continue;
+    const sim = dot(qvec, entry.vec) / (qn * entry.mag || 1);
+    if (sim > bestSim) { bestSim = sim; best = entry; }
+  }
+  return bestSim >= SEMANTIC_CACHE ? best : null;
+}
 // Files listed here are prepended to every prompt, in a fixed order, ahead of
 // the retrieved chunks. That gives every request an identical prefix, which is
 // what llama.cpp's KV cache can actually reuse - retrieved chunks differ per
 // question and can never be cached, but the instruction plus core facts can.
 const PINNED = (process.env.PINNED_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
+// Documents shipped with the image and embedded at boot (see indexExtraDocs).
+const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 /**
  * Retrieval weight per corpus tier.
@@ -221,11 +242,16 @@ function siteUrl(url) {
 function loadChunks() {
   const corpus = path.join(DOCS_DIR, 'corpus.jsonl');
   if (fs.existsSync(corpus)) {
+    // A document that is pinned from disk supersedes its corpus copy: the file
+    // on disk is current, the corpus chunks may carry wording since removed
+    // (the facts sheet's old "consensus price" section was still being
+    // retrieved and quoted after the file dropped it).
+    const pinnedNames = new Set([...PINNED, ...INDEX_DOCS].map(p => p.split('/').pop()));
     return fs.readFileSync(corpus, 'utf8').split('\n').filter(Boolean).map((l) => {
       const c = JSON.parse(l);
       c.url = siteUrl(c.url);
       return c;
-    });
+    }).filter(c => !pinnedNames.has(String(c.source).split('/').pop()));
   }
   return walk(DOCS_DIR).flatMap(f => chunk(fs.readFileSync(f, 'utf8'), path.relative(DOCS_DIR, f)));
 }
@@ -282,7 +308,6 @@ function loadVectors(corpusPath, count) {
  * with whatever chunk scored highest. A heading may carry the page to cite
  * in angle brackets: "## Deploy an app <https://docs.runonflux.com/...>".
  */
-const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
 async function indexExtraDocs() {
   for (const name of INDEX_DOCS) {
     const file = path.join(DOCS_DIR, name);
@@ -301,6 +326,36 @@ async function indexExtraDocs() {
     });
     console.log(`indexed ${chunks.length} sections of ${name} at the facts tier`);
   }
+}
+
+/**
+ * This node's own generation speed, measured by generating ~40 tokens, and
+ * published on GET /speed for the router. Nodes on this network differ by
+ * 10x in generation speed with identical health and network latency; a
+ * router that cannot see this sends users to the 1.3 tok/s node as happily
+ * as to the 15 tok/s one.
+ */
+let speed = { genTps: 0, prefillTps: 0, measuredAt: 0 };
+async function measureSpeed(timeoutMs) {
+  const r = await fetch(`${ENGINE}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      prompt: 'Count from one to forty in words, separated by commas.',
+      stream: false,
+      options: { num_predict: 40, temperature: 0 },
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  }).then(x => x.json()).catch(err => ({ error: err.message }));
+  if (!r.error && r.eval_count && r.eval_duration) {
+    speed = {
+      genTps: Math.round((r.eval_count / (r.eval_duration / 1e9)) * 10) / 10,
+      prefillTps: r.prompt_eval_count && r.prompt_eval_duration ? Math.round(r.prompt_eval_count / (r.prompt_eval_duration / 1e9)) : 0,
+      measuredAt: Date.now(),
+    };
+  }
+  return r;
 }
 
 async function buildIndex() {
@@ -360,21 +415,13 @@ async function buildIndex() {
   // ever exercised the embedding path. A warm-up that is allowed to fail
   // quietly is not a check at all, so a failure here keeps the instance out of
   // rotation rather than being logged and ignored.
-  const warm = await fetch(`${ENGINE}/api/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: CHAT_MODEL,
-      prompt: 'Reply with the single word: ready',
-      stream: false,
-      options: { num_predict: 8, temperature: 0 },
-    }),
-    signal: AbortSignal.timeout(900000),
-  }).then(r => r.json()).catch(err => ({ error: err.message }));
+  const warm = await measureSpeed(900000);
   if (warm.error || !warm.response) {
     throw new Error(`chat model cannot generate: ${warm.error || 'empty response'}`);
   }
-  console.log(`warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`warm in ${((Date.now() - t0) / 1000).toFixed(1)}s; this node generates ${speed.genTps} tok/s, prefills ${speed.prefillTps} tok/s`);
+  // Re-measured hourly: node speed is stable, but a noisy neighbour is not.
+  setInterval(() => measureSpeed(120000).catch(() => {}), 3600000).unref();
 
   ready = true;
   status = `${index.length} chunks indexed from ${files} sources, models warm`;
@@ -488,6 +535,27 @@ function buildPinned() {
  * small on purpose: history is prompt, prompt is prefill, prefill is what a
  * CPU pays for in seconds.
  */
+const SMALLTALK = [
+  [/^(hi|hello|hey|hiya|yo|good (morning|afternoon|evening)|greetings)\b/i, 'Hi! I answer questions about the Flux, SSP Wallet and Zelcore documentation and show my sources. Try "How do I deploy an application on Flux?" or "What does an app cost per month?"'],
+  [/^(how are you|how('s| is) it going|what'?s up|sup)\b/i, 'Doing well, thanks! I\'m here for documentation questions - deployment, FluxNodes, pricing, SSP Wallet, Zelcore. What would you like to know?'],
+  [/^(thanks?|thank you|thx|ty|cheers|great|awesome|perfect|cool|nice|ok(ay)?|got it|understood)\b/i, 'You\'re welcome! Ask another question whenever you like.'],
+  [/^(who are you|what are you|what can you do|help)\??$/i, 'I\'m the Flux documentation assistant: I answer from the official Flux, SSP Wallet and Zelcore documentation, cite the pages I used, and can check live network figures like the node count. Ask me anything about deploying apps, running nodes, pricing or the wallets.'],
+  [/^(bye|goodbye|see you|later)\b/i, 'Bye! Come back any time.'],
+  // Replies may be functions, for answers that depend on the moment.
+  [/\b(what|which) (is the |is |'s )?(date|day|time)\b|what day is (it|today)|what time is it|today'?s date|current (date|time)\b/i,
+    () => { const d = new Date(); return `It is ${d.toUTCString().replace(' GMT', ' UTC')}. (Server time; I don't know your time zone.)`; }],
+];
+const DOMAIN_WORD = /\b(flux|node|app|application|deploy|docker|git|price|cost|ram|cpu|core|ssd|hdd|wallet|ssp|zelcore|fluxos|arcane|cumulus|nimbus|stratus|token|stake|collateral|api|port|domain|instance|enterprise|marketplace|fluxedge|fluxdrive|orbit)\b/i;
+function smallTalk(q) {
+  const t = String(q || '').trim();
+  if (!t) return null;
+  for (const [re, reply] of SMALLTALK) if (re.test(t) && (!DOMAIN_WORD.test(t) || /date|time|day/i.test(t) && re.source.includes('date'))) return typeof reply === 'function' ? reply() : reply;
+  if (DOMAIN_WORD.test(t)) return null;
+  // Very short, no question mark, no domain word: a reaction, not a question.
+  if (t.split(/\s+/).length <= 2 && !/\?/.test(t)) return 'Ask me a question about the Flux, SSP Wallet or Zelcore documentation - for example "How do I run a FluxNode?"';
+  return null;
+}
+
 const HISTORY_TURNS = Number(process.env.HISTORY_TURNS || 2);
 const HISTORY_Q_CHARS = Number(process.env.HISTORY_Q_CHARS || 200);
 const HISTORY_A_CHARS = Number(process.env.HISTORY_A_CHARS || 400);
@@ -503,12 +571,15 @@ const retrievalQuery = (question, history) => (history.length ? `${history[histo
 function buildPrompt(question, hits, live, history = []) {
   // No URLs or paths in the context: the model only needs the number to cite,
   // and given a "[1] path <url>" line it copied it into answers verbatim.
-  const ctx = hits.map((h, i) => `[${i + 1}] ${h.heading || h.source}\n${h.text}`).join('\n\n');
+  // Number only - no heading either. Given headings, the model appended
+  // "[1] Deploy an application [2] Build the Docker image ..." after answers.
+  const ctx = hits.map((h, i) => `[${i + 1}]\n${h.text}`).join('\n\n');
   // Invariant part first (instruction + pinned), variable part after: anything
   // before the first difference is a cache hit on the next request.
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
-    + `Answer the question that was asked, in plain prose or at most eight short steps; do not list the source headings, `
-    + `do not mention "the documentation" or section names, and do not include links. `
+    + `Answer the question that was asked, concisely, in plain prose or as a numbered list of at most eight short steps (1., 2., ...). `
+    + `Put citations like [1] at the end of a sentence; never use [1] as a step number. `
+    + `Stop after the last sentence of the answer - no list of sources, no headings, no links, and do not mention "the documentation". `
     + `If the documentation does not contain the answer, reply exactly: "Not covered in the documentation." `
     + `Never guess and never use outside knowledge.\n\n`
     + (live ? `LIVE NETWORK STATUS (accurate as of now, prefer this over the documentation for current figures):\n${live}\n\n` : '')
@@ -533,10 +604,8 @@ function buildPrompt(question, hits, live, history = []) {
  *
  * Sources go first, so a client can render citations before the prose arrives.
  */
-async function answerStream(question, res, history = []) {
-  // Both at once: the API call is network-bound and the embedding is
-  // CPU-bound, so serialising them would add a round trip to every question.
-  const [qvec] = await embed([retrievalQuery(question, history)]);
+async function answerStream(question, res, history = [], qvecIn = null) {
+  const qvec = qvecIn || (await embed([retrievalQuery(question, history)]))[0];
   // The question vector is already computed for retrieval, so routing to a live
   // lookup reuses it - the decision costs a few thousand multiplications, not a
   // second pass through the language model.
@@ -555,6 +624,12 @@ async function answerStream(question, res, history = []) {
     })),
   })}\n`);
 
+  // FDM cuts a connection after 25 s of silence (haproxy `timeout server
+  // 25s`). Streaming covers generation, but prefill on a slow node is 30-40 s
+  // of nothing between the sources line and the first token - and the widget
+  // reported "lost the connection" on exactly those. A heartbeat line every
+  // 10 s until the first token keeps the connection open; clients ignore it.
+  const heartbeat = setInterval(() => { if (!res.writableEnded) res.write('{"ping":1}\n'); }, 10000);
   let upstream;
   try {
     upstream = await fetch(`${ENGINE}/api/generate`, {
@@ -562,12 +637,13 @@ async function answerStream(question, res, history = []) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: CHAT_MODEL, prompt: buildPrompt(question, hits, live, history),
-        stream: true, options: { temperature: 0.1, num_predict: 400, stop: ['\n_', '\nQUESTION:', '\nUser:'] },
+        stream: true, options: { temperature: 0.1, num_predict: 300, stop: ['\n_', '\nQUESTION:', '\nUser:'] },
       }),
       signal: AbortSignal.timeout(900000),
     });
   } catch (err) {
     // Headers are out, so say so in-band and end the stream cleanly.
+    clearInterval(heartbeat);
     console.log(`engine unreachable mid-answer: ${err.message}`);
     res.write(`${JSON.stringify({ error: 'engine unreachable', detail: err.message })}\n`);
     return res.end();
@@ -592,8 +668,9 @@ async function answerStream(question, res, history = []) {
         // hour is exactly the stale number this feature exists to avoid.
         if (finished && !live) {
           if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
-          if (!history.length) cache.set(cacheKey(question), { answer: finished, sources: hits.map((h, i) => ({ n: i + 1, source: h.source, url: h.url || undefined, tier: h.tier || undefined })) });
+          if (!history.length) cache.set(cacheKey(question), { answer: finished, vec: Float32Array.from(qvec), mag: norm(qvec), sources: hits.map((h, i) => ({ n: i + 1, source: h.source, url: h.url || undefined, tier: h.tier || undefined })) });
         }
+        clearInterval(heartbeat);
         res.write(`${JSON.stringify({ done: true, answer: finished })}\n`);
       }
     }
@@ -654,6 +731,7 @@ http.createServer(async (req, res) => {
 
   // Unauthenticated and answering on '/', because that is the path FDM's
   // default HAProxy check uses.
+  if (req.url === '/speed') return send(200, { ...speed, ready });
   if (['/', '/health', '/healthz'].includes(req.url)) {
     res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain' });
     res.end(ready ? 'ok' : status);
@@ -691,12 +769,34 @@ http.createServer(async (req, res) => {
     // Streaming is the default: a non-streamed answer is silent long enough
     // for FDM to drop it. Pass {"stream": false} for a single JSON body when
     // the caller is going direct to an instance and can wait.
+    // Greetings, thanks and one-word reactions are not documentation
+    // questions: answer them instantly and never let them inherit the previous
+    // question ("oh snap" after a deploy question re-answered the deploy
+    // question). Anything with a domain word or a real question goes to the model.
+    const small = smallTalk(question);
+    if (small) {
+      if (body.stream !== false && req.url !== '/v1/chat/completions') {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+        res.write(`${JSON.stringify({ sources: [], smalltalk: true })}\n`);
+        res.write(`${JSON.stringify({ delta: small })}\n`);
+        res.write(`${JSON.stringify({ done: true, answer: small, smalltalk: true })}\n`);
+        return res.end();
+      }
+      return send(200, { answer: small, sources: [], smalltalk: true });
+    }
     const history = cleanHistory(body.history);
-    const cached = history.length ? null : cache.get(cacheKey(question));
+    // The question is embedded here, once: the cache lookup needs the vector
+    // and retrieval reuses it, so a miss costs nothing extra.
+    let qvec = null;
+    if (!history.length) {
+      try { [qvec] = await embed([question]); } catch { qvec = null; }
+    }
+    const cached = history.length ? null : cacheLookup(question, qvec);
     if (cached) {
       if (body.stream !== false && req.url !== '/v1/chat/completions') {
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
         res.write(`${JSON.stringify({ sources: cached.sources, cached: true })}\n`);
+        clearInterval(heartbeat);
         res.write(`${JSON.stringify({ delta: cached.answer })}\n`);
         res.write(`${JSON.stringify({ done: true, answer: cached.answer, cached: true })}\n`);
         return res.end();
@@ -708,7 +808,7 @@ http.createServer(async (req, res) => {
       // `return await`, not `return`: a returned promise's rejection escapes
       // the surrounding try/catch, and one "fetch failed" from the engine
       // then took the whole process down - and with it a two-hour index.
-      return await answerStream(question, res, history);
+      return await answerStream(question, res, history, qvec);
     }
 
     const result = await answer(question);

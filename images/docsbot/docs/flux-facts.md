@@ -50,28 +50,18 @@ An application larger than **7 cores or 28000 MB** cannot be placed on a nimbus 
 
 ## Pricing
 
-Two prices exist and they are not the same number.
+Applications are priced per month from the resources each component declares, in USD (Flux Cloud shows the exact quote before you sign; paying in FLUX applies a 5% discount):
 
-**Consensus price** — what nodes verify a payment against, in FLUX per month:
+- $1.50 per CPU core (0.15 per 0.1 core)
+- $0.50 per GB of RAM (0.05 per 100 MB)
+- $0.02 per GB of SSD
+- $4.00 extra per month for an enterprise application (private images, secrets, targeting specific nodes)
+- $2.00 extra for a static IP, $2.00 per surcharged port
+- minimum $0.99 per month; the total is divided by 3, then multiplied by the number of instances
 
-- 0.03 per 0.1 CPU core
-- 0.01 per 100 MB RAM
-- 0.004 per GB SSD
-- 0.8 extra for an enterprise application or one targeting specific nodes
-- 0.4 extra for a static IP, 0.4 per surcharged port
-- minimum 0.01 FLUX
-- the total is divided by 3, then multiplied by the number of instances
+Worked example — 9.5 cores, 28000 MB RAM, 67 GB SSD, enterprise, 1 instance, one month:
 
-**Marketplace price** — what Flux Home quotes, in USD per month:
-
-- 0.15 per 0.1 CPU core, 0.05 per 100 MB RAM, 0.02 per GB SSD
-- 4 extra for enterprise, 2 for static IP, 2 per surcharged port
-- minimum $0.99; paying in FLUX applies a 5% discount
-
-Worked example — 9.5 cores, 28000 MB, 67 GB, enterprise, 1 instance, one month:
-
-- consensus: 2.24 FLUX
-- marketplace: $11.20
+- about $11.20 per month
 
 ## Enterprise applications
 
@@ -84,4 +74,4 @@ Worked example — 9.5 cores, 28000 MB, 67 GB, enterprise, 1 instance, one month
 
 Every application gets its own docker network. A component reaches another component of the same application at `flux<component>_<appname>` on its container port, with nothing published.
 
-_Generated 2026-09-10 from FluxOS config; regenerate when the source changes._
+_Generated 2026-09-13 from FluxOS config; regenerate when the source changes._

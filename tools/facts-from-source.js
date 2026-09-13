@@ -99,33 +99,25 @@ p('');
 
 p('## Pricing');
 p('');
-const chain = a.price[a.price.length - 1];
-p('Two prices exist and they are not the same number.');
-p('');
-p('**Consensus price** — what nodes verify a payment against, in FLUX per month:');
-p('');
-p(`- ${chain.cpu} per 0.1 CPU core`);
-p(`- ${chain.ram} per 100 MB RAM`);
-p(`- ${chain.hdd} per GB SSD`);
-p(`- ${chain.scope} extra for an enterprise application or one targeting specific nodes`);
-p(`- ${chain.staticip} extra for a static IP, ${chain.port} per surcharged port`);
-p(`- minimum ${chain.minPrice} FLUX`);
-p('- the total is divided by 3, then multiplied by the number of instances');
-p('');
+// Only the price people pay. FluxOS also carries a chain-level "consensus"
+// price table that nodes verify payments against; it is an internal figure,
+// and putting it next to the USD price made the bot quote both ("2.24 FLUX
+// consensus / $11.20 marketplace") to confused users.
 const usd = a.usdprice;
-p('**Marketplace price** — what Flux Home quotes, in USD per month:');
+p('Applications are priced per month from the resources each component declares, in USD (Flux Cloud shows the exact quote before you sign; paying in FLUX applies a '
+  + `${Math.round((1 - usd.fluxmultiplier) * 100)}% discount):`);
 p('');
-p(`- ${usd.cpu} per 0.1 CPU core, ${usd.ram} per 100 MB RAM, ${usd.hdd} per GB SSD`);
-p(`- ${usd.scope} extra for enterprise, ${usd.staticip} for static IP, ${usd.port} per surcharged port`);
-p(`- minimum $${usd.minUSDPrice}; paying in FLUX applies a ${Math.round((1 - usd.fluxmultiplier) * 100)}% discount`);
+p(`- $${(usd.cpu * 10).toFixed(2)} per CPU core (${usd.cpu} per 0.1 core)`);
+p(`- $${(usd.ram * 10).toFixed(2)} per GB of RAM (${usd.ram} per 100 MB)`);
+p(`- $${usd.hdd.toFixed(2)} per GB of SSD`);
+p(`- $${usd.scope.toFixed(2)} extra per month for an enterprise application (private images, secrets, targeting specific nodes)`);
+p(`- $${usd.staticip.toFixed(2)} extra for a static IP, $${usd.port.toFixed(2)} per surcharged port`);
+p(`- minimum $${usd.minUSDPrice} per month; the total is divided by 3, then multiplied by the number of instances`);
 p('');
-p('Worked example — 9.5 cores, 28000 MB, 67 GB, enterprise, 1 instance, one month:');
-const ex = { cpu: 9.5, ram: 28000, hdd: 67 };
-const chainTotal = ex.cpu * chain.cpu * 10 + (ex.ram * chain.ram) / 100 + ex.hdd * chain.hdd + chain.scope;
-const usdTotal = ex.cpu * usd.cpu * 10 + (ex.ram * usd.ram) / 100 + ex.hdd * usd.hdd + usd.scope;
+p('Worked example — 9.5 cores, 28000 MB RAM, 67 GB SSD, enterprise, 1 instance, one month:');
 p('');
-p(`- consensus: ${(Math.ceil((chainTotal / 3) * 100) / 100).toFixed(2)} FLUX`);
-p(`- marketplace: $${(Math.ceil((usdTotal / 3) * 100) / 100).toFixed(2)}`);
+const usdTotal = 9.5 * 10 * usd.cpu + (28000 / 100) * usd.ram + 67 * usd.hdd + usd.scope;
+p(`- about $${(Math.ceil((usdTotal / 3) * 100) / 100).toFixed(2)} per month`);
 p('');
 
 p('## Enterprise applications');

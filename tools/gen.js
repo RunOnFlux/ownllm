@@ -366,14 +366,15 @@ const docsbot = {
     // Plus a short, hand-written how-to sheet for the questions everyone asks
     // (deploy an app, run a node, what it costs): the vetted summary answers
     // those, not whichever chunk scored highest. ~350 tokens of prefill.
-    'PINNED_DOCS=flux-facts.md',
-    // Embedded at boot and retrieved like any source, at the facts tier - so
-    // for "how do I deploy" it is [1] and cited, not a prefix the model may
-    // rank below whatever chunk scored highest.
-    'INDEX_DOCS=flux-howto.md',
+    // Nothing pinned: every pinned token is prefill on every question, and the
+    // facts sheet alone was ~1,000 tokens (7-10 s on the median node). Both
+    // sheets are embedded at boot and retrieved at the facts tier instead, so
+    // they are in the prompt - as cited [1] - exactly when they are relevant.
+    'PINNED_DOCS=',
+    'INDEX_DOCS=flux-facts.md,flux-howto.md',
     // Fewer, because prefill dominates. Six chunks is ~1,800 tokens; on the
     // slowest node measured that is 25 seconds before a word is generated.
-    'TOP_K=4',
+    'TOP_K=3',
     // Public mode: the widget runs on your website, where any key would be
     // readable in page source. /ask is open and rate limited per IP; the model
     // API on the gate still requires the key.
