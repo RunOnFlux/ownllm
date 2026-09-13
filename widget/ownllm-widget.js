@@ -13,6 +13,11 @@
  *   data-suggestions  starter questions, separated by |
  *   data-theme        light | dark (default: follows the page's colour scheme)
  *   data-logo         URL of a logo to show instead of the Flux mark
+ *   data-button-hide  "true" to render no launcher; open it from your own
+ *                     button with window.ownllm.open()
+ *
+ * window.ownllm = { open, close, toggle, ask(question), reset } is set once
+ * the widget is mounted, and an "ownllm-ready" event fires on window.
  *
  * Deliberately dependency-free: a docs widget that pulls a framework onto
  * every page of your site is a bad trade. No API key: the endpoint runs in
@@ -33,6 +38,7 @@
   var ACCENT = script.dataset.accent || '#2656d7';
   var THEME = script.dataset.theme || '';
   var LOGO = script.dataset.logo || '';
+  var HIDE_BUTTON = script.dataset.buttonHide === 'true';
   var SUGGESTIONS = (script.dataset.suggestions || 'How do I deploy an application on Flux?|What are the resource limits per node tier?|How much does an app cost per month?|How do I run a FluxNode?')
     .split('|').map(function (s) { return s.trim(); }).filter(Boolean);
   if (!ENDPOINT) return console.error('[ownllm] data-endpoint is required');
@@ -97,6 +103,11 @@
   ].join('');
   document.head.appendChild(css);
 
+  // Docusaurus and similar inject scripts into <head>; there is no <body> yet.
+  if (!document.body) { document.addEventListener('DOMContentLoaded', mount); return; }
+  mount();
+
+  function mount() {
   var dark = THEME ? THEME === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   var markImg = '<img alt="" src="' + (LOGO || ('data:image/svg+xml;utf8,' + encodeURIComponent(FLUX_MARK))) + '">';
 
@@ -118,7 +129,7 @@
     '<button class="ol-send" type="submit" aria-label="Send">' + SEND_ICON + '</button></form>' +
     '<div class="ol-foot"><span>May be wrong &middot; check the sources</span>' +
     '<a href="https://runonflux.com" target="_blank" rel="noopener">' + markImg + 'Powered by Flux</a></div>';
-  document.body.appendChild(launch);
+  if (!HIDE_BUTTON) document.body.appendChild(launch);
   document.body.appendChild(panel);
 
   var log = panel.querySelector('.ol-log');
@@ -254,4 +265,14 @@
   }
 
   welcome();
+
+  window.ownllm = {
+    open: open,
+    close: close,
+    toggle: function () { panel.classList.contains('open') ? close() : open(); },
+    ask: function (q) { open(); ask(String(q || '')); },
+    reset: welcome,
+  };
+  window.dispatchEvent(new CustomEvent('ownllm-ready'));
+  } // mount
 }());
