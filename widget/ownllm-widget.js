@@ -195,8 +195,16 @@
   async function ask(q) {
     if (busy) return;
     busy = true; sendBtn.disabled = true;
+    try { askInner(q); } catch (err) { busy = false; sendBtn.disabled = false; throw err; }
+  }
+
+  // Everything that can throw runs under ask()'s guard, so a rendering error
+  // can never leave the widget marked busy - which is what a second question
+  // silently ignored looked like: the suggestion list was removed on the first
+  // question, and removing it again threw before the new row was even drawn.
+  async function askInner(q) {
     input.value = ''; input.style.height = 'auto';
-    var w = log.querySelector('.ol-welcome'); if (w) w.querySelector('.ol-sugs').remove();
+    var sugs = log.querySelector('.ol-sugs'); if (sugs) sugs.remove();
 
     var row = document.createElement('div');
     row.className = 'ol-row';

@@ -212,10 +212,18 @@ function requiredPrice({ formatted, previous, priceTable, height }) {
   const quote = requiredPrice({ formatted, previous: isUpdate ? previous : null, priceTable: deployment.price, height: quoteHeight });
   const total = Math.ceil(Math.max(quote.required * (1 + MARGIN), quote.required + 0.01) * 100) / 100;
   const satoshis = Math.round(total * 1e8);
-  const balance = await explorer.balance(payer.fluxAddress);
+  let balance = await explorer.balance(payer.fluxAddress);
   log(`price: ${quote.detail} FLUX at height ~${quoteHeight}`);
+  // Right after another payment the payer's change is unconfirmed, and only
+  // confirmed coins are spendable. Wait a few blocks for it rather than fail
+  // the second deploy of a batch.
+  for (let waited = 0; balance.spendable < satoshis + 100000 && balance.total >= satoshis + 100000 && waited < 240; waited += 30) {
+    log(`  ${flux(balance.spendable)} spendable of ${flux(balance.total)} - waiting for change to confirm`);
+    await sleep(30000);
+    balance = await explorer.balance(payer.fluxAddress);
+  }
   log(`paying ${total} FLUX (margin ${Math.round(MARGIN * 100)}%) to ${deployment.address}; payer holds ${flux(balance.spendable)} spendable`);
-  if (balance.spendable < satoshis + 100000) throw new Error('payer balance is too low');
+  if (balance.spendable < satoshis + 100000) throw new Error(`payer balance is too low (${flux(balance.spendable)} spendable, ${flux(balance.total)} total)`);
 
   if (DRY_RUN) { log('\ndry run - nothing signed, nothing spent'); return; }
 
