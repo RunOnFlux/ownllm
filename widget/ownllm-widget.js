@@ -1,9 +1,11 @@
 /**
  * Embeddable documentation assistant.
  *
- *   <script src="https://your.cdn/ownllm-widget.js"
- *           data-endpoint="https://ownllmdocs_33001.app.runonflux.io"
+ *   <script src="https://ownllmrouter.app.runonflux.io/widget.js"
  *           data-title="Ask the Flux docs"></script>
+ *
+ * The router serves this file and is also the default endpoint, so that is
+ * the whole integration. data-endpoint overrides it.
  *
  * Deliberately dependency-free and self-contained: a docs widget that pulls a
  * framework onto every page of your site is a bad trade.
@@ -14,7 +16,11 @@
  */
 (function () {
   var script = document.currentScript;
-  var ENDPOINT = (script.dataset.endpoint || '').replace(/\/$/, '');
+  // Served by the router itself, so with no data-endpoint the endpoint is
+  // wherever this script came from: one tag, no configuration.
+  var SELF = '';
+  try { SELF = new URL(script.src).origin; } catch (e) { /* inline use */ }
+  var ENDPOINT = (script.dataset.endpoint || SELF || '').replace(/\/$/, '');
   var TITLE = script.dataset.title || 'Ask the docs';
   var ACCENT = script.dataset.accent || '#2b6cb0';
   if (!ENDPOINT) return console.error('[ownllm] data-endpoint is required');

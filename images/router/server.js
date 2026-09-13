@@ -25,6 +25,27 @@ const DISCOVER_MS = Number(process.env.DISCOVER_MS || 60000);
 const PROBE_MS = Number(process.env.PROBE_MS || 20000);
 const EWMA = 0.3;
 
+/**
+ * Origin allow-list, by hostname. ALLOWED_ORIGINS is a comma-separated list
+ * of hostnames ("docs.runonflux.io"); an origin matches if its host is one of
+ * them or the www. form of one, on http or https. "*" allows every origin.
+ * Hostnames rather than full origins because a Flux env value is capped at
+ * 400 characters and fourteen sites with schemes would not fit.
+ */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(o => o.trim().toLowerCase()).filter(Boolean);
+function originAllowed(origin) {
+  if (ALLOWED_ORIGINS.includes('*')) return true;
+  if (!origin) return false;
+  let host;
+  try { host = new URL(origin).hostname.toLowerCase(); } catch { return false; }
+  return ALLOWED_ORIGINS.some(h => host === h || host === `www.${h}`);
+}
+
+// The widget is served from here, so a site needs one script tag and no CDN:
+//   <script src="https://<router>/widget.js"></script>
+const fs = require('node:fs');
+const WIDGET = (() => { try { return fs.readFileSync(`${__dirname}/widget.js`); } catch { return null; } })();
+
 /** ip -> { healthy, inflight, latencyMs, detail } */
 const peers = new Map();
 
@@ -92,8 +113,20 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(up ? 200 : 503, { 'Content-Type': 'text/plain' });
     return res.end(up ? `ok (${up} healthy)` : 'no healthy instances');
   }
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.url === '/widget.js' || req.url === '/ownllm-widget.js') {
+    if (!WIDGET) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    return res.end(WIDGET);
+  }
+  // CORS only for allowed sites. A page elsewhere gets no header and the
+  // browser refuses the response; curl and servers are unaffected, and the
+  // instances' own per-IP rate limit still applies to everyone.
+  const origin = req.headers.origin || '';
+  if (originAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Vary', 'Origin');
+  }
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
 
   const ip = pick();

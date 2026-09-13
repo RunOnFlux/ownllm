@@ -67,6 +67,8 @@ function existingApiKey(specsDir, basename) {
 // identical, which is what makes horizontal scaling and node migration a
 // non-event - there is no dataset to keep in sync.
 const API_ONLY = argv.includes('--api-only');
+const ALLOWED_ORIGINS = arg('allowed-origins', '*');
+if (`ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`.length > 400) throw new Error('--allowed-origins exceeds the 400-char env limit');
 // Adds the grounded docs bot alongside the raw model API, on the next port.
 const DOCSBOT = argv.includes('--docsbot');
 // The router is a standalone app in front of the bot, not a component of it.
@@ -325,6 +327,7 @@ const router = {
   containerPorts: [8080],
   domains: [''],
   environmentParameters: [
+    `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
     `TARGET_APP=${arg('target', 'ownllmdocs')}`,
     `TARGET_PORT=${arg('target-port', '33001')}`,
     'FLUX_API=https://api.runonflux.io',
@@ -369,7 +372,9 @@ const docsbot = {
     // API on the gate still requires the key.
     'PUBLIC_ASK=true',
     'RATE_PER_MIN=6',
-    'ALLOWED_ORIGINS=*',
+    // Hostnames the widget may be embedded on; * for a rig, real sites for
+    // production. Enforced by the router (what browsers talk to) and here.
+    `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
     // Live network lookups. The corpus is a snapshot, so node counts and app
     // status come from the API instead of from build-time text.
     'FLUX_API=https://api.runonflux.io',

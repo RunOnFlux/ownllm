@@ -21,6 +21,10 @@ jobs:
           # component's constraint either: amd64 is the mandatory one.
           - image: ternary
             platforms: linux/amd64
+          # Ships widget/ownllm-widget.js, so its build context is the repo root.
+          - image: router
+            context: .
+            file: images/router/Dockerfile
           # Shares images/ternary/shim.js, so its build context is the repo root.
           - image: ternary-tq2
             platforms: linux/amd64

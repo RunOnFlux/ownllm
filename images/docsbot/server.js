@@ -30,7 +30,21 @@ const TOP_K = Number(process.env.TOP_K || 5);
  */
 const PUBLIC_ASK = process.env.PUBLIC_ASK === 'true';
 const RATE_PER_MIN = Number(process.env.RATE_PER_MIN || 6);
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(o => o.trim());
+/**
+ * Origin allow-list, by hostname. ALLOWED_ORIGINS is a comma-separated list
+ * of hostnames ("docs.runonflux.io"); an origin matches if its host is one of
+ * them or the www. form of one, on http or https. "*" allows every origin.
+ * Hostnames rather than full origins because a Flux env value is capped at
+ * 400 characters and fourteen sites with schemes would not fit.
+ */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(o => o.trim().toLowerCase()).filter(Boolean);
+function originAllowed(origin) {
+  if (ALLOWED_ORIGINS.includes('*')) return true;
+  if (!origin) return false;
+  let host;
+  try { host = new URL(origin).hostname.toLowerCase(); } catch { return false; }
+  return ALLOWED_ORIGINS.some(h => host === h || host === `www.${h}`);
+}
 
 const hits = new Map();
 function rateLimited(ip) {
@@ -551,7 +565,7 @@ http.createServer(async (req, res) => {
     return;
   }
   const origin = req.headers.origin || '';
-  if (PUBLIC_ASK && (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin))) {
+  if (PUBLIC_ASK && originAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
