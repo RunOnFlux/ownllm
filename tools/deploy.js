@@ -120,6 +120,10 @@ async function encryptEnvelope(node, envelope, plaintextPath, isUpdate) {
       log(`  encrypted with ${padding.name}; node decrypted and validated it`);
       return { candidate, formatted };
     } catch (err) {
+      // Only a decryption failure is a reason to try the next padding. Any
+      // other rejection - an image that is not on the registry yet, a limit
+      // exceeded - is about the spec, and the node's message is the answer.
+      if (!/decrypt|key length|padding/i.test(err.message)) throw new Error(`spec rejected: ${err.message}`);
       log(`  ${padding.name} rejected: ${err.message}`);
     }
   }

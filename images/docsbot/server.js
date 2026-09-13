@@ -408,7 +408,27 @@ function buildPinned() {
   if (pinnedBlock) console.log(`pinned prefix: ${chunks.length} chunks, ~${Math.round(pinnedBlock.length / 4)} tokens`);
 }
 
-function buildPrompt(question, hits, live) {
+/**
+ * Conversation history from the widget: up to the last two turns, trimmed
+ * hard. It goes into the prompt after the documentation and before the
+ * question, so the model can resolve "and on NIMBUS?"; it also joins the
+ * previous question to the retrieval query, so the search does too. Kept
+ * small on purpose: history is prompt, prompt is prefill, prefill is what a
+ * CPU pays for in seconds.
+ */
+const HISTORY_TURNS = Number(process.env.HISTORY_TURNS || 2);
+const HISTORY_Q_CHARS = Number(process.env.HISTORY_Q_CHARS || 200);
+const HISTORY_A_CHARS = Number(process.env.HISTORY_A_CHARS || 400);
+function cleanHistory(raw) {
+  if (!Array.isArray(raw) || HISTORY_TURNS <= 0) return [];
+  return raw.slice(-HISTORY_TURNS).map(t => ({
+    q: String((t && t.q) || '').slice(0, HISTORY_Q_CHARS),
+    a: String((t && t.a) || '').replace(/\s+/g, ' ').slice(0, HISTORY_A_CHARS),
+  })).filter(t => t.q && t.a);
+}
+const retrievalQuery = (question, history) => (history.length ? `${history[history.length - 1].q}\n${question}` : question);
+
+function buildPrompt(question, hits, live, history = []) {
   const ctx = hits.map((h, i) => {
     const where = [h.source, h.heading].filter(Boolean).join(' > ');
     return `[${i + 1}] ${where}${h.url ? ` <${h.url}>` : ''}\n${h.text}`;
@@ -420,7 +440,9 @@ function buildPrompt(question, hits, live) {
     + `Never guess and never use outside knowledge.\n\n`
     + (live ? `LIVE NETWORK STATUS (accurate as of now, prefer this over the documentation for current figures):\n${live}\n\n` : '')
     + (pinnedBlock ? `CORE DOCUMENTATION:\n${pinnedBlock}\n\n` : '')
-    + `RETRIEVED DOCUMENTATION:\n${ctx}\n\nQUESTION: ${question}\n\nANSWER:`;
+    + `RETRIEVED DOCUMENTATION:\n${ctx}\n\n`
+    + (history.length ? `CONVERSATION SO FAR (for context; the QUESTION below may refer to it):\n${history.map(t => `User: ${t.q}\nAssistant: ${t.a}`).join('\n')}\n\n` : '')
+    + `QUESTION: ${question}\n\nANSWER:`;
 }
 
 /**
@@ -438,15 +460,15 @@ function buildPrompt(question, hits, live) {
  *
  * Sources go first, so a client can render citations before the prose arrives.
  */
-async function answerStream(question, res) {
+async function answerStream(question, res, history = []) {
   // Both at once: the API call is network-bound and the embedding is
   // CPU-bound, so serialising them would add a round trip to every question.
-  const [qvec] = await embed([question]);
+  const [qvec] = await embed([retrievalQuery(question, history)]);
   // The question vector is already computed for retrieval, so routing to a live
   // lookup reuses it - the decision costs a few thousand multiplications, not a
   // second pass through the language model.
   const live = await liveContext(question, qvec);
-  const hits = retrieve(qvec, question);
+  const hits = retrieve(qvec, retrievalQuery(question, history));
   res.writeHead(200, {
     'Content-Type': 'application/x-ndjson',
     'Cache-Control': 'no-cache',
@@ -466,8 +488,8 @@ async function answerStream(question, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: CHAT_MODEL, prompt: buildPrompt(question, hits, live),
-        stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:'] },
+        model: CHAT_MODEL, prompt: buildPrompt(question, hits, live, history),
+        stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:', '\nUser:'] },
       }),
       signal: AbortSignal.timeout(900000),
     });
@@ -497,7 +519,7 @@ async function answerStream(question, res) {
         // hour is exactly the stale number this feature exists to avoid.
         if (finished && !live) {
           if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
-          cache.set(cacheKey(question), { answer: finished, sources: hits.map((h, i) => ({ n: i + 1, source: h.source, url: h.url || undefined, tier: h.tier || undefined })) });
+          if (!history.length) cache.set(cacheKey(question), { answer: finished, sources: hits.map((h, i) => ({ n: i + 1, source: h.source, url: h.url || undefined, tier: h.tier || undefined })) });
         }
         res.write(`${JSON.stringify({ done: true, answer: finished })}\n`);
       }
@@ -592,7 +614,8 @@ http.createServer(async (req, res) => {
     // Streaming is the default: a non-streamed answer is silent long enough
     // for FDM to drop it. Pass {"stream": false} for a single JSON body when
     // the caller is going direct to an instance and can wait.
-    const cached = cache.get(cacheKey(question));
+    const history = cleanHistory(body.history);
+    const cached = history.length ? null : cache.get(cacheKey(question));
     if (cached) {
       if (body.stream !== false && req.url !== '/v1/chat/completions') {
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
@@ -608,7 +631,7 @@ http.createServer(async (req, res) => {
       // `return await`, not `return`: a returned promise's rejection escapes
       // the surrounding try/catch, and one "fetch failed" from the engine
       // then took the whole process down - and with it a two-hour index.
-      return await answerStream(question, res);
+      return await answerStream(question, res, history);
     }
 
     const result = await answer(question);

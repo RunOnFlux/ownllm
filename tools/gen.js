@@ -379,6 +379,11 @@ const docsbot = {
     // status come from the API instead of from build-time text.
     'FLUX_API=https://api.runonflux.io',
     'LIVE_TTL_MS=120000',
+    // Follow-up context: turns of (question, answer) the bot keeps from the
+    // widget, trimmed to 200/400 chars. Two is the measured sweet spot on CPU:
+    // each turn is ~150 tokens of prefill (~1.5 s on the median node) and the
+    // ternary model's 4k window is already ~3k full.
+    'HISTORY_TURNS=2',
   ],
   commands: [],
   // The index lives in memory, rebuilt at boot from documents baked into the
