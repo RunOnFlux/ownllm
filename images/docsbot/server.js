@@ -274,6 +274,35 @@ function loadVectors(corpusPath, count) {
   }
 }
 
+/**
+ * Hand-written documents that ship with the image but are not in the corpus
+ * (the how-to sheet). They are embedded at boot - a handful of chunks, a few
+ * seconds - and indexed at the facts tier, so for "how do I deploy" they are
+ * retrieved as [1] and cited, instead of competing from the pinned prefix
+ * with whatever chunk scored highest. A heading may carry the page to cite
+ * in angle brackets: "## Deploy an app <https://docs.runonflux.com/...>".
+ */
+const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
+async function indexExtraDocs() {
+  for (const name of INDEX_DOCS) {
+    const file = path.join(DOCS_DIR, name);
+    if (!fs.existsSync(file)) { console.log(`INDEX_DOCS: ${name} not found, skipped`); continue; }
+    const text = fs.readFileSync(file, 'utf8');
+    const sections = text.split(/\n(?=## )/).map(s => s.trim()).filter(s => s.startsWith('## '));
+    const chunks = sections.map((sec) => {
+      const first = sec.split('\n')[0];
+      const m = /^## (.*?)\s*(?:<(https?:[^>]+)>)?\s*$/.exec(first);
+      return { source: `RunOnFlux/ownllm/images/docsbot/docs/${name}`, heading: m ? m[1] : first.slice(3), url: m && m[2] ? m[2] : undefined, tier: 'facts', text: sec.replace(/^## .*\n/, `${m ? m[1] : ''}\n`) };
+    });
+    const vecs = await embedBatch(chunks, 0);
+    chunks.forEach((c, j) => {
+      const v = Float32Array.from(vecs[j]);
+      index.push({ ...c, vec: v, mag: norm(v), tf: termFreq(c.text), len: countTokens(c.text) });
+    });
+    console.log(`indexed ${chunks.length} sections of ${name} at the facts tier`);
+  }
+}
+
 async function buildIndex() {
   // A restarted build must start from an empty index. It used to append to
   // the previous attempt's entries: forty-eight restarts at the same failing
@@ -322,6 +351,7 @@ async function buildIndex() {
   // invariant prefix now, so the first real user does not pay for a 4 GB load
   // from disk plus a cold prefill. Ollama unloads on a timer, so the engine is
   // configured with OLLAMA_KEEP_ALIVE=-1 to keep them there.
+  await indexExtraDocs();
   status = 'warming models';
   console.log(status);
   const t0 = Date.now();
@@ -477,7 +507,7 @@ function buildPrompt(question, hits, live, history = []) {
   // Invariant part first (instruction + pinned), variable part after: anything
   // before the first difference is a cache hit on the next request.
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
-    + `Answer the question that was asked, in plain prose or short steps; do not list the source headings, `
+    + `Answer the question that was asked, in plain prose or at most eight short steps; do not list the source headings, `
     + `do not mention "the documentation" or section names, and do not include links. `
     + `If the documentation does not contain the answer, reply exactly: "Not covered in the documentation." `
     + `Never guess and never use outside knowledge.\n\n`
@@ -532,7 +562,7 @@ async function answerStream(question, res, history = []) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: CHAT_MODEL, prompt: buildPrompt(question, hits, live, history),
-        stream: true, options: { temperature: 0.1, num_predict: 250, stop: ['\n_', '\nQUESTION:', '\nUser:'] },
+        stream: true, options: { temperature: 0.1, num_predict: 400, stop: ['\n_', '\nQUESTION:', '\nUser:'] },
       }),
       signal: AbortSignal.timeout(900000),
     });
@@ -629,10 +659,14 @@ http.createServer(async (req, res) => {
     res.end(ready ? 'ok' : status);
     return;
   }
+  // Refuse, do not merely withhold (FDM adds a permissive CORS header to any
+  // response without one). Requests without an Origin are unaffected.
   const origin = req.headers.origin || '';
-  if (PUBLIC_ASK && originAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  if (origin && !originAllowed(origin)) return send(403, { error: 'origin not allowed' });
+  if (PUBLIC_ASK && origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Vary', 'Origin');
   }
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 

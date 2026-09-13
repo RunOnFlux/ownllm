@@ -366,7 +366,11 @@ const docsbot = {
     // Plus a short, hand-written how-to sheet for the questions everyone asks
     // (deploy an app, run a node, what it costs): the vetted summary answers
     // those, not whichever chunk scored highest. ~350 tokens of prefill.
-    'PINNED_DOCS=flux-facts.md,flux-howto.md',
+    'PINNED_DOCS=flux-facts.md',
+    // Embedded at boot and retrieved like any source, at the facts tier - so
+    // for "how do I deploy" it is [1] and cited, not a prefix the model may
+    // rank below whatever chunk scored highest.
+    'INDEX_DOCS=flux-howto.md',
     // Fewer, because prefill dominates. Six chunks is ~1,800 tokens; on the
     // slowest node measured that is 25 seconds before a word is generated.
     'TOP_K=4',

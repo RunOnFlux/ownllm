@@ -121,9 +121,17 @@ const server = http.createServer(async (req, res) => {
   // CORS only for allowed sites. A page elsewhere gets no header and the
   // browser refuses the response; curl and servers are unaffected, and the
   // instances' own per-IP rate limit still applies to everyone.
+  // Refuse, do not merely withhold: FDM's HAProxy adds
+  // "access-control-allow-origin: *" to any response that lacks the header,
+  // so an omitted header restricts nothing behind it. A 403 fails the
+  // browser's preflight; requests without an Origin (curl, servers) pass.
   const origin = req.headers.origin || '';
-  if (originAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  if (origin && !originAllowed(origin)) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    return res.end('{"error":"origin not allowed"}');
+  }
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Vary', 'Origin');
   }
