@@ -33,7 +33,7 @@
  *   data-mode         "page": render inline, full height, into the element
  *                     with id "ownllm" (or the body) - used by the router's /chat
  *
- * window.ownllm = { open, close, toggle, ask(question), reset } is set once
+ * window.ownllm = { open, close, toggle, ask(question), reset, setTheme } is set once
  * the widget is mounted, and an "ownllm-ready" event fires on window.
  *
  * Deliberately dependency-free: a docs widget that pulls a framework onto
@@ -341,12 +341,33 @@
 
   welcome();
 
+  // Apps with their own theme switch (FluxOS, Vuetify) call this so the panel
+  // follows the app, not the OS. Also picked up automatically from <html>
+  // when it carries data-theme="dark"/"light" or a class containing "dark".
+  function setTheme(name) {
+    var d = name === 'dark';
+    panel.classList.toggle('ol-dark', d); panel.classList.toggle('ol-light', !d);
+  }
+  function htmlTheme() {
+    var h = document.documentElement; var t = h.getAttribute('data-theme') || '';
+    if (/dark|light/.test(t)) return /dark/.test(t) ? 'dark' : 'light';
+    if (/(^|\s)(dark|v-theme--dark|theme--dark)(\s|$)/.test(h.className)) return 'dark';
+    if (/(^|\s)(light|v-theme--light|theme--light)(\s|$)/.test(h.className)) return 'light';
+    return null;
+  }
+  if (!THEME) {
+    var ht = htmlTheme(); if (ht) setTheme(ht);
+    if (window.MutationObserver) new MutationObserver(function () { var t = htmlTheme(); if (t) setTheme(t); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+  }
+
   window.ownllm = {
     open: open,
     close: close,
     toggle: function () { panel.classList.contains('open') ? close() : open(); },
     ask: function (q) { open(); ask(String(q || '')); },
     reset: welcome,
+    setTheme: setTheme,
   };
   window.dispatchEvent(new CustomEvent('ownllm-ready'));
   } // mount
