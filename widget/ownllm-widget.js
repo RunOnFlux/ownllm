@@ -165,10 +165,12 @@
 
   function mount() {
   var dark = THEME ? THEME === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  var siteLogo = dark ? LOGO : (LOGO_LIGHT || LOGO);
-  var markImg = '<img alt="" src="' + (siteLogo || fluxSrc) + '">';
+  // Defined before anything that embeds them: the launcher image was built
+  // first and shipped as src="undefined" on every site without a data-logo.
   var fluxSrc = 'data:image/svg+xml;utf8,' + encodeURIComponent(FLUX_MARK);
   var fluxImg = '<img alt="" src="' + fluxSrc + '">';
+  var siteLogo = dark ? LOGO : (LOGO_LIGHT || LOGO);
+  var markImg = '<img alt="" src="' + (siteLogo || fluxSrc) + '">';
 
   var launch = document.createElement('button');
   launch.className = 'ol-launch ol-' + (LAUNCHER === 'pill' || LAUNCHER === 'icon' ? LAUNCHER : 'tab');
