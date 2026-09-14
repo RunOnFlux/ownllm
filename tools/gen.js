@@ -379,7 +379,9 @@ const docsbot = {
     // readable in page source. /ask is open and rate limited per IP; the model
     // API on the gate still requires the key.
     'PUBLIC_ASK=true',
-    'RATE_PER_MIN=6',
+    // A conversation is several questions in a row; 6 was hit by a single
+    // tester. Small talk does not count.
+    'RATE_PER_MIN=12',
     // Hostnames the widget may be embedded on; * for a rig, real sites for
     // production. Enforced by the router (what browsers talk to) and here.
     `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,

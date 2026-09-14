@@ -8,13 +8,30 @@
  * the whole integration. Optional attributes:
  *   data-endpoint     override the API origin
  *   data-title        panel title (default "Ask the docs")
- *   data-subtitle     one line under the title
+ *   data-subject      what it knows, for the default texts: "SSP Wallet"
+ *   data-subtitle     one line under the title (default "Ask anything about <subject>")
+ *   data-assistant    how it introduces itself (default "the <subject> assistant")
+ *   data-welcome      first message in the panel
  *   data-accent       brand colour (default Flux blue)
  *   data-suggestions  starter questions, separated by |
  *   data-theme        light | dark (default: follows the page's colour scheme)
- *   data-logo         URL of a logo to show instead of the Flux mark
+ *   data-logo         URL of the site's logo, shown in the header and launcher
+ *                     instead of the Flux mark (no box behind it)
+ *   data-logo-light   variant of data-logo for the light theme (e.g. a black
+ *                     icon when data-logo is white)
  *   data-button-hide  "true" to render no launcher; open it from your own
  *                     button with window.ownllm.open()
+ *   data-launcher     "pill" (default: logo + short label in a compact pill),
+ *                     "tab" (logo above the label) or "icon" (logo only)
+ *   data-launcher-label  launcher text (default "Ask AI")
+ *   data-launcher-bg  launcher background (default: the accent); use it when the
+ *                     site logo is itself the accent colour
+ *   data-launcher-text  launcher text colour (default: chosen for contrast)
+ *   data-position     "right" (default) or "left"
+ *   data-accent-text  text colour on the accent (default: chosen for contrast)
+ *   data-radius       corner radius in px for panel and launcher (default 16)
+ *   data-mode         "page": render inline, full height, into the element
+ *                     with id "ownllm" (or the body) - used by the router's /chat
  *
  * window.ownllm = { open, close, toggle, ask(question), reset } is set once
  * the widget is mounted, and an "ownllm-ready" event fires on window.
@@ -34,38 +51,77 @@
   try { SELF = new URL(script.src).origin; } catch (e) { /* inline use */ }
   var ENDPOINT = (script.dataset.endpoint || SELF || '').replace(/\/$/, '');
   var TITLE = script.dataset.title || 'Ask the docs';
-  var SUBTITLE = script.dataset.subtitle || 'Answers from the documentation, with sources';
+  var SUBJECT = script.dataset.subject || 'the documentation';
+  var SUBTITLE = script.dataset.subtitle || ('Ask anything about ' + SUBJECT);
+  // The header already says "Ask anything about <subject>", so the greeting
+  // says who is answering and from what, not the same line again.
+  var ASSISTANT = script.dataset.assistant || (SUBJECT === 'the documentation' ? 'the docs assistant' : 'the ' + SUBJECT + ' assistant');
+  var WELCOME = script.dataset.welcome || ('Hello! I\u2019m ' + ASSISTANT + '. I know the docs, guides and support articles \u2014 what can I help you with?');
   var ACCENT = script.dataset.accent || '#2656d7';
   var THEME = script.dataset.theme || '';
   var LOGO = script.dataset.logo || '';
+  var LOGO_LIGHT = script.dataset.logoLight || '';
   var HIDE_BUTTON = script.dataset.buttonHide === 'true';
+  var LAUNCHER = script.dataset.launcher || 'pill';
+  var LAUNCHER_LABEL = script.dataset.launcherLabel || 'Ask AI';
+  var POSITION = script.dataset.position === 'left' ? 'left' : 'right';
+  var RADIUS = parseInt(script.dataset.radius || '16', 10);
+  var PAGE_MODE = script.dataset.mode === 'page';
+  // Text on the accent: white unless the accent is light (SSP amber, say),
+  // then near-black - relative luminance, the WCAG way.
+  function contrastText(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return '#fff';
+    var n = parseInt(m[1], 16); var c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) > 0.4 ? '#111827' : '#fff';
+  }
+  var ACCENT_TEXT = script.dataset.accentText || contrastText(ACCENT);
+  // The launcher may need its own colours: a site whose logo is the accent
+  // colour (SSP's amber mark) gets an amber-on-amber blob otherwise.
+  var LAUNCHER_BG = script.dataset.launcherBg || ACCENT;
+  var LAUNCHER_TEXT = script.dataset.launcherText || (script.dataset.launcherBg ? contrastText(LAUNCHER_BG) : ACCENT_TEXT);
   var SUGGESTIONS = (script.dataset.suggestions || 'How do I deploy an application on Flux?|What are the resource limits per node tier?|How much does an app cost per month?|How do I run a FluxNode?')
     .split('|').map(function (s) { return s.trim(); }).filter(Boolean);
   if (!ENDPOINT) return console.error('[ownllm] data-endpoint is required');
 
-  var FLUX_MARK = "<svg width=\"22\" height=\"23\" viewBox=\"0 0 140 149\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M74.7415 38.4807C81.8512 38.5284 88.7876 40.6802 94.676 44.6648C100.564 48.6495 105.141 54.2885 107.829 60.8707C110.517 67.453 111.195 74.6837 109.779 81.6511C108.363 88.6185 104.915 95.0105 99.8709 100.021C94.8267 105.032 88.4117 108.437 81.435 109.806C74.4583 111.176 67.2323 110.449 60.6681 107.717C54.104 104.985 48.4957 100.371 44.5505 94.4563C40.6053 88.5415 38.4999 81.5908 38.4998 74.481C38.532 64.9012 42.3684 55.7265 49.165 48.9752C55.9616 42.2239 65.1617 38.4489 74.7415 38.4807Z\" fill=\"#2656D7\"/><path d=\"M79.0362 95.3835L74.908 97.7676L66.0398 92.6549L70.0672 90.3294L70.168 90.2707L79.0362 95.3835Z\" fill=\"white\"/><path d=\"M94.8832 63.1743V67.973L83.7856 61.5662L67.955 70.7087V73.5382L61.3185 69.7077L54.9352 73.3905V63.1743L74.908 51.6431L94.8832 63.1743Z\" fill=\"white\"/><path d=\"M94.8832 73.4332V86.2561L83.7879 92.6558H83.7739L72.6904 86.2561V73.4332L83.7879 67.0241L94.8832 73.4332Z\" fill=\"white\"/><path d=\"M67.6995 78.8526V86.2205L61.3162 89.908L54.9352 86.2229V78.855L61.3185 75.1698L67.6995 78.8526Z\" fill=\"white\"/></svg>";
+  var FLUX_MARK = "<svg width=\"22\" height=\"22\" viewBox=\"28.5 28.5 92 92\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M74.7415 38.4807C81.8512 38.5284 88.7876 40.6802 94.676 44.6648C100.564 48.6495 105.141 54.2885 107.829 60.8707C110.517 67.453 111.195 74.6837 109.779 81.6511C108.363 88.6185 104.915 95.0105 99.8709 100.021C94.8267 105.032 88.4117 108.437 81.435 109.806C74.4583 111.176 67.2323 110.449 60.6681 107.717C54.104 104.985 48.4957 100.371 44.5505 94.4563C40.6053 88.5415 38.4999 81.5908 38.4998 74.481C38.532 64.9012 42.3684 55.7265 49.165 48.9752C55.9616 42.2239 65.1617 38.4489 74.7415 38.4807Z\" fill=\"#2656D7\"/><path d=\"M79.0362 95.3835L74.908 97.7676L66.0398 92.6549L70.0672 90.3294L70.168 90.2707L79.0362 95.3835Z\" fill=\"white\"/><path d=\"M94.8832 63.1743V67.973L83.7856 61.5662L67.955 70.7087V73.5382L61.3185 69.7077L54.9352 73.3905V63.1743L74.908 51.6431L94.8832 63.1743Z\" fill=\"white\"/><path d=\"M94.8832 73.4332V86.2561L83.7879 92.6558H83.7739L72.6904 86.2561V73.4332L83.7879 67.0241L94.8832 73.4332Z\" fill=\"white\"/><path d=\"M67.6995 78.8526V86.2205L61.3162 89.908L54.9352 86.2229V78.855L61.3185 75.1698L67.6995 78.8526Z\" fill=\"white\"/></svg>";
   var CHAT_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   var SEND_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
 
   var css = document.createElement('style');
   css.textContent = [
-    ':root{--ol-accent:' + ACCENT + '}',
-    '.ol-launch{position:fixed;right:20px;bottom:20px;z-index:2147483000;display:flex;align-items:center;gap:8px;border:0;border-radius:999px;',
-    'padding:12px 18px 12px 14px;font:600 14px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#fff;background:var(--ol-accent);cursor:pointer;',
-    'box-shadow:0 8px 24px rgba(38,86,215,.35);transition:transform .15s,box-shadow .15s}',
-    '.ol-launch:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(38,86,215,.45)}',
+    ':root{--ol-accent:' + ACCENT + ';--ol-on-accent:' + ACCENT_TEXT + ';--ol-radius:' + RADIUS + 'px}',
+    // Launcher. "tab": logo above a short label, a rounded square hugging the
+    // corner; "pill": icon and label in a row; "icon": logo only.
+    '.ol-launch{position:fixed;' + POSITION + ':20px;bottom:20px;z-index:2147483000;display:flex;border:0;cursor:pointer;',
+    'font:600 13px/1.1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:' + LAUNCHER_TEXT + ';background:' + LAUNCHER_BG + ';',
+    'box-shadow:0 8px 24px rgba(0,0,0,.22);transition:transform .15s,box-shadow .15s}',
+    '.ol-launch:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.28)}',
+    '.ol-launch:focus-visible{outline:3px solid ' + LAUNCHER_TEXT + ';outline-offset:2px}',
     '.ol-launch.hidden{display:none}',
-    '.ol-panel{position:fixed;right:20px;bottom:20px;z-index:2147483001;width:400px;max-width:calc(100vw - 24px);height:min(680px,calc(100vh - 40px));',
-    'display:none;flex-direction:column;background:var(--ol-bg);color:var(--ol-fg);border:1px solid var(--ol-line);border-radius:16px;',
+    '.ol-launch img{width:28px;height:28px;display:block}',
+    '.ol-launch.ol-tab{flex-direction:column;align-items:center;justify-content:center;gap:7px;width:64px;height:64px;padding:0;border-radius:var(--ol-radius)}',
+    '.ol-launch.ol-tab span{font-size:11.5px;letter-spacing:.01em}',
+    '.ol-launch.ol-pill{flex-direction:row;align-items:center;gap:8px;height:40px;padding:0 15px 0 8px;border-radius:999px;font-size:13.5px}',
+    '.ol-launch.ol-pill img{width:24px;height:24px;object-fit:contain}',
+    '.ol-launch.ol-icon{width:56px;height:56px;align-items:center;justify-content:center;padding:0;border-radius:50%}',
+    '.ol-launch.ol-icon span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}',
+    '.ol-panel{position:fixed;' + POSITION + ':20px;bottom:20px;z-index:2147483001;width:400px;max-width:calc(100vw - 24px);height:min(680px,calc(100vh - 40px));',
+    'display:none;flex-direction:column;background:var(--ol-bg);color:var(--ol-fg);border:1px solid var(--ol-line);border-radius:var(--ol-radius);',
     'box-shadow:0 24px 64px rgba(0,0,0,.28);font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;',
-    'transform-origin:bottom right;animation:ol-in .18s ease-out}',
+    'transform-origin:bottom ' + POSITION + ';animation:ol-in .18s ease-out}',
+    '@media(prefers-reduced-motion:reduce){.ol-panel{animation:none}.ol-launch{transition:none}}',
+    // Page mode: the panel is the page.
+    '.ol-panel.ol-page{position:static;display:flex;width:100%;max-width:none;height:100%;min-height:480px;border-radius:0;border:0;box-shadow:none;animation:none}',
     '@keyframes ol-in{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}',
     '.ol-panel.open{display:flex}',
     '@media(max-width:480px){.ol-panel{right:0;bottom:0;width:100vw;max-width:100vw;height:100vh;border-radius:0}}',
     '.ol-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--ol-line);background:var(--ol-bg)}',
-    '.ol-head .ol-mark{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:var(--ol-accent);flex:none}',
-    '.ol-head .ol-mark img{width:22px;height:22px}',
-    '.ol-head .ol-t{flex:1;min-width:0}.ol-head .ol-t b{display:block;font-size:15px;line-height:1.2}.ol-head .ol-t span{display:block;font-size:12px;color:var(--ol-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ol-head .ol-mark{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:11px;background:var(--ol-accent);flex:none}',
+    '.ol-head .ol-mark img{width:26px;height:26px;object-fit:contain}',
+    // A site's own logo is shown as-is on the header background, no box: it
+    // has its own colours, and a light/dark variant keeps it visible.
+    '.ol-head .ol-mark.ol-custom{background:none}.ol-head .ol-mark.ol-custom img{width:36px;height:36px}',
+    '.ol-head .ol-t{flex:1;min-width:0}.ol-head .ol-t b{display:block;font-size:15px;line-height:1.2}.ol-head .ol-t span{display:block;font-size:12px;line-height:1.3;margin-top:2px;color:var(--ol-muted)}',
     '.ol-ib{border:0;background:none;color:var(--ol-muted);cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}',
     '.ol-ib:hover{background:var(--ol-soft);color:var(--ol-fg)}',
     '.ol-log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}',
@@ -74,7 +130,7 @@
     '.ol-sug{text-align:left;border:1px solid var(--ol-line);background:var(--ol-bg);color:var(--ol-fg);border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;cursor:pointer}',
     '.ol-sug:hover{border-color:var(--ol-accent);color:var(--ol-accent)}',
     '.ol-row{display:flex;flex-direction:column;gap:6px}',
-    '.ol-u{align-self:flex-end;max-width:85%;background:var(--ol-accent);color:#fff;padding:9px 13px;border-radius:14px 14px 4px 14px;white-space:pre-wrap;word-break:break-word}',
+    '.ol-u{align-self:flex-end;max-width:85%;background:var(--ol-accent);color:var(--ol-on-accent);padding:9px 13px;border-radius:14px 14px 4px 14px;white-space:pre-wrap;word-break:break-word}',
     '.ol-a{align-self:flex-start;max-width:100%;background:var(--ol-soft);padding:10px 13px;border-radius:14px 14px 14px 4px;word-break:break-word}',
     '.ol-a p{margin:0 0 8px}.ol-a p:last-child{margin:0}.ol-a ul,.ol-a ol{margin:4px 0 8px 20px;padding:0}.ol-a li{margin:2px 0}',
     '.ol-a code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--ol-code);padding:1px 5px;border-radius:5px}',
@@ -92,12 +148,12 @@
     '.ol-src i{font-style:normal;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ol-muted)}',
     '.ol-form{display:flex;align-items:flex-end;gap:8px;padding:12px 12px 8px;border-top:1px solid var(--ol-line)}',
     '.ol-form textarea{flex:1;resize:none;border:1px solid var(--ol-line);border-radius:12px;padding:10px 12px;font:inherit;line-height:1.4;background:var(--ol-bg);color:var(--ol-fg);outline:none;max-height:120px}',
-    '.ol-form textarea:focus{border-color:var(--ol-accent);box-shadow:0 0 0 3px rgba(38,86,215,.15)}',
-    '.ol-send{flex:none;width:40px;height:40px;border:0;border-radius:12px;background:var(--ol-accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}',
+    '.ol-form textarea:focus{border-color:var(--ol-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--ol-accent) 20%,transparent)}',
+    '.ol-send{flex:none;width:40px;height:40px;border:0;border-radius:12px;background:var(--ol-accent);color:var(--ol-on-accent);display:flex;align-items:center;justify-content:center;cursor:pointer}',
     '.ol-send:disabled{opacity:.5;cursor:default}',
     '.ol-foot{display:flex;justify-content:space-between;align-items:center;padding:0 14px 10px;font-size:11px;color:var(--ol-muted)}',
-    '.ol-foot a{color:var(--ol-muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}.ol-foot a:hover{color:var(--ol-accent)}',
-    '.ol-foot a img{width:14px;height:14px;border-radius:4px;background:var(--ol-accent);padding:2px;box-sizing:border-box}',
+    '.ol-foot a{color:var(--ol-muted);text-decoration:none;display:inline-flex;align-items:center;gap:6px;line-height:1}.ol-foot a:hover{color:var(--ol-accent)}',
+    '.ol-foot a img{width:22px;height:22px;display:block}',
     '.ol-light{--ol-bg:#fff;--ol-fg:#111827;--ol-muted:#6b7280;--ol-line:#e5e7eb;--ol-soft:#f3f4f6;--ol-code:#e9ebf0}',
     '.ol-dark{--ol-bg:#111827;--ol-fg:#e5e7eb;--ol-muted:#9ca3af;--ol-line:#273244;--ol-soft:#1f2937;--ol-code:#0b1220}',
   ].join('');
@@ -109,18 +165,21 @@
 
   function mount() {
   var dark = THEME ? THEME === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  var markImg = '<img alt="" src="' + (LOGO || ('data:image/svg+xml;utf8,' + encodeURIComponent(FLUX_MARK))) + '">';
+  var siteLogo = dark ? LOGO : (LOGO_LIGHT || LOGO);
+  var markImg = '<img alt="" src="' + (siteLogo || fluxSrc) + '">';
+  var fluxSrc = 'data:image/svg+xml;utf8,' + encodeURIComponent(FLUX_MARK);
+  var fluxImg = '<img alt="" src="' + fluxSrc + '">';
 
   var launch = document.createElement('button');
-  launch.className = 'ol-launch';
+  launch.className = 'ol-launch ol-' + (LAUNCHER === 'pill' || LAUNCHER === 'icon' ? LAUNCHER : 'tab');
   launch.setAttribute('aria-label', TITLE);
-  launch.innerHTML = CHAT_ICON + '<span>' + esc(TITLE) + '</span>';
+  launch.innerHTML = markImg + '<span>' + esc(LAUNCHER_LABEL) + '</span>';
   var panel = document.createElement('div');
   panel.className = 'ol-panel ' + (dark ? 'ol-dark' : 'ol-light');
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', TITLE);
   panel.innerHTML =
-    '<div class="ol-head"><div class="ol-mark">' + markImg + '</div>' +
+    '<div class="ol-head"><div class="ol-mark' + (siteLogo ? ' ol-custom' : '') + '">' + markImg + '</div>' +
     '<div class="ol-t"><b>' + esc(TITLE) + '</b><span>' + esc(SUBTITLE) + '</span></div>' +
     '<button class="ol-ib ol-new" title="New conversation" aria-label="New conversation">&#8635;</button>' +
     '<button class="ol-ib ol-close" aria-label="Close">&times;</button></div>' +
@@ -128,9 +187,15 @@
     '<form class="ol-form"><textarea rows="1" placeholder="Ask a question&hellip;" aria-label="Your question"></textarea>' +
     '<button class="ol-send" type="submit" aria-label="Send">' + SEND_ICON + '</button></form>' +
     '<div class="ol-foot"><span>May be wrong &middot; check the sources</span>' +
-    '<a href="https://runonflux.com" target="_blank" rel="noopener">' + markImg + 'Powered by Flux</a></div>';
-  if (!HIDE_BUTTON) document.body.appendChild(launch);
-  document.body.appendChild(panel);
+    '<a href="https://runonflux.com" target="_blank" rel="noopener">' + fluxImg + 'Powered by Flux</a></div>';
+  if (PAGE_MODE) {
+    panel.classList.add('ol-page', 'open');
+    panel.querySelector('.ol-close').remove();
+    (document.getElementById('ownllm') || document.body).appendChild(panel);
+  } else {
+    if (!HIDE_BUTTON) document.body.appendChild(launch);
+    document.body.appendChild(panel);
+  }
 
   var log = panel.querySelector('.ol-log');
   var form = panel.querySelector('.ol-form');
@@ -173,7 +238,7 @@
     log.innerHTML = '';
     var w = document.createElement('div');
     w.className = 'ol-welcome';
-    w.innerHTML = 'Hi! Ask anything about the documentation — I answer from it and show my sources.' +
+    w.innerHTML = esc(WELCOME) +
       '<div class="ol-sugs">' + SUGGESTIONS.map(function (s) { return '<button type="button" class="ol-sug">' + esc(s) + '</button>'; }).join('') + '</div>';
     log.appendChild(w);
     w.querySelectorAll('.ol-sug').forEach(function (b) { b.onclick = function () { ask(b.textContent); }; });
@@ -183,9 +248,9 @@
   function open() { panel.classList.add('open'); launch.classList.add('hidden'); setTimeout(function () { input.focus(); }, 50); }
   function close() { panel.classList.remove('open'); launch.classList.remove('hidden'); }
   launch.onclick = open;
-  panel.querySelector('.ol-close').onclick = close;
+  var closeBtn = panel.querySelector('.ol-close'); if (closeBtn) closeBtn.onclick = close;
   panel.querySelector('.ol-new').onclick = welcome;
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('open')) close(); });
+  if (!PAGE_MODE) document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('open')) close(); });
   input.addEventListener('input', function () { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; });
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true })); } });
   form.onsubmit = function (e) { e.preventDefault(); var q = input.value.trim(); if (q) ask(q); };

@@ -37,26 +37,28 @@ p('Generated from `ZelBack/config/default.js` and `appValidator.js`. These are t
 p('values FluxOS enforces, not a description of them.');
 p('');
 
-p('## Resources available to an application, by node tier');
+p('## Maximum resources an application can use, by node tier <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/components>');
 p('');
-p('A node reserves some of its capacity for the system, so an application can use');
-p('the tier total minus what is locked.');
+// Plain limits only. The earlier wording ("tier total minus what is locked",
+// with the collateral in the same table) led the model to explain a limit
+// as "the node has 28,000 MB but FluxOS locks 12,500 MB" - the collateral
+// figure, invented into a RAM story. Collateral lives in the node section.
+p('An application (all of its components together) may use at most:');
 p('');
-p('| tier | CPU cores | RAM (MB) | SSD (GB) | collateral (FLUX) |');
-p('|---|---|---|---|---|');
+p('| node tier | CPU cores | RAM (MB) | SSD (GB) |');
+p('|---|---|---|---|');
 for (const tier of ['cumulus', 'nimbus', 'stratus']) {
   const cpu = (spec.cpu[tier] - locked.cpu) / 10;
   const ram = spec.ram[tier] - locked.ram;
   const hdd = spec.hdd[tier] - locked.hdd;
-  p(`| ${tier} | ${cpu} | ${ram} | ${hdd} | ${spec.collateral[tier].toLocaleString()} |`);
+  p(`| ${tier} | ${cpu} | ${ram} | ${hdd} |`);
 }
 p('');
-p(`An application larger than **${(spec.cpu.nimbus - locked.cpu) / 10} cores or `
-  + `${spec.ram.nimbus - locked.ram} MB** cannot be placed on a nimbus node and is `
-  + 'restricted to stratus nodes, which reduces the number of machines that can host it.');
+p(`An application needing more than **${(spec.cpu.nimbus - locked.cpu) / 10} cores or `
+  + `${spec.ram.nimbus - locked.ram} MB RAM** can only run on stratus nodes, `
+  + 'which reduces the number of machines that can host it.');
 p('');
-
-p('## Validation rules');
+p('## Validation rules <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/general>');
 p('');
 p('- `cpu` must be a multiple of 0.1, minimum 0.1.');
 p('- `ram` must be a multiple of 100, minimum 100.');
@@ -69,7 +71,7 @@ p('- Maximum 20 environment variables and 20 commands per component, each at mos
 p('- `containerData` must be 2 to 200 characters.');
 p('');
 
-p('## Instances and lifetime');
+p('## Instances and lifetime <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/general>');
 p('');
 p(`- An application may have between ${a.minimumInstancesV8} and ${a.maximumInstances} instances (v8 or later).`);
 p(`- Minimum lifetime is ${a.cancel1BlockMinBlocksAllowance} block; maximum is ${a.postPonMaxBlocksAllowance.toLocaleString()} blocks.`);
@@ -90,14 +92,14 @@ for (const b of [1, 100, 2000, 22000, 88000, 264000, a.postPonMaxBlocksAllowance
 p(`- ${(88000).toLocaleString()} blocks is the figure pricing treats as one month.`);
 p('');
 
-p('## Ports');
+p('## Ports <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/components>');
 p('');
 p(`- Allowed range: ${a.portMin} to ${a.portMax}.`);
 p(`- Banned entirely: ${a.bannedPorts.join(', ')}.`);
 p(`- Charged an extra fee: ${a.enterprisePorts.join(', ')}.`);
 p('');
 
-p('## Pricing');
+p('## Pricing <https://docs.runonflux.com/fluxcloud/cost-calculator>');
 p('');
 // Only the price people pay. FluxOS also carries a chain-level "consensus"
 // price table that nodes verify payments against; it is an internal figure,
@@ -120,7 +122,7 @@ const usdTotal = 9.5 * 10 * usd.cpu + (28000 / 100) * usd.ram + 67 * usd.hdd + u
 p(`- about $${(Math.ceil((usdTotal / 3) * 100) / 100).toFixed(2)} per month`);
 p('');
 
-p('## Enterprise applications');
+p('## Enterprise applications <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/general>');
 p('');
 p('- Setting `enterprise` to an encrypted blob encrypts the whole compose section, so environment variables and private registry credentials never appear on the public chain.');
 p('- Enterprise applications can only be validated and run on nodes running ArcaneOS.');
@@ -128,7 +130,7 @@ p(`- Every component must support the ${c.enterpriseRequiredArchitectures ? c.en
 p('- Only enterprise applications may target specific nodes.');
 p('');
 
-p('## Networking between components');
+p('## Networking between components <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/components>');
 p('');
 p('Every application gets its own docker network. A component reaches another component of the same application at `flux<component>_<appname>` on its container port, with nothing published.');
 p('');

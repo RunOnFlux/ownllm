@@ -73,9 +73,10 @@ const cacheKey = q => q.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(
 // A rephrasing of an answered question ("how much RAM on nimbus" vs "NIMBUS
 // RAM limit?") is served from the cache too: entries keep the question
 // vector, and a new question within this cosine of one is the same question.
-// 0.96 is conservative - measured, paraphrases sit at 0.97-0.99 and different
-// questions on the same topic at 0.85-0.93.
-const SEMANTIC_CACHE = Number(process.env.SEMANTIC_CACHE || 0.96);
+// 0.93: a paraphrase ("NIMBUS node RAM limit for an application?" against
+// "How much RAM can an application use on a NIMBUS node?") missed at 0.96.
+// Near misses are logged so the threshold can be tuned from real traffic.
+const SEMANTIC_CACHE = Number(process.env.SEMANTIC_CACHE || 0.93);
 function cacheLookup(question, qvec) {
   const exact = cache.get(cacheKey(question));
   if (exact) return exact;
@@ -87,6 +88,7 @@ function cacheLookup(question, qvec) {
     const sim = dot(qvec, entry.vec) / (qn * entry.mag || 1);
     if (sim > bestSim) { bestSim = sim; best = entry; }
   }
+  if (best && bestSim >= 0.85 && bestSim < SEMANTIC_CACHE) console.log(`semantic cache near miss ${bestSim.toFixed(3)}: "${question.slice(0, 60)}"`);
   return bestSim >= SEMANTIC_CACHE ? best : null;
 }
 // Files listed here are prepended to every prompt, in a fixed order, ahead of
@@ -588,6 +590,7 @@ function buildPrompt(question, hits, live, history = []) {
   return `You answer strictly from the DOCUMENTATION below. Cite the sources you used as [1], [2]. `
     + `Answer the question that was asked, concisely, in plain prose or as a numbered list of at most eight short steps (1., 2., ...). `
     + `Put citations like [1] at the end of a sentence; never use [1] as a step number. `
+    + `State figures as the documentation gives them; do not explain how a figure is derived unless asked. `
     + `Stop after the last sentence of the answer - no list of sources, no headings, no links, and do not mention "the documentation". `
     + `If the documentation does not contain the answer, reply exactly: "Not covered in the documentation." `
     + `Never guess and never use outside knowledge.\n\n`
@@ -670,7 +673,7 @@ async function answerStream(question, res, history = [], qvecIn = null) {
       let obj;
       try { obj = JSON.parse(line); } catch { continue; }
       if (obj.error) { res.write(`${JSON.stringify({ error: String(obj.error).slice(0, 200) })}\n`); res.end(); return; }
-      if (obj.response) { text += obj.response; res.write(`${JSON.stringify({ delta: obj.response })}\n`); }
+      if (obj.response) { clearInterval(heartbeat); text += obj.response; res.write(`${JSON.stringify({ delta: obj.response })}\n`); }
       if (obj.done) {
         const finished = text.trim();
         // Live answers are deliberately not cached: a node count cached for an
@@ -762,7 +765,7 @@ http.createServer(async (req, res) => {
   if (!isPublicAsk && !authorized(req)) return send(401, { error: 'unauthorized' });
   if (isPublicAsk && !authorized(req)) {
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
-    if (rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
+    // (rate limit applied below, after small talk - greetings cost nothing)
   }
   if (!ready) return send(503, { error: 'index not ready', detail: status });
 
@@ -793,6 +796,7 @@ http.createServer(async (req, res) => {
       }
       return send(200, { answer: small, sources: [], smalltalk: true });
     }
+    if (rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
     const history = cleanHistory(body.history);
     // The question is embedded here, once: the cache lookup needs the vector
     // and retrieval reuses it, so a miss costs nothing extra.
@@ -805,7 +809,6 @@ http.createServer(async (req, res) => {
       if (body.stream !== false && req.url !== '/v1/chat/completions') {
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
         res.write(`${JSON.stringify({ sources: cached.sources, cached: true })}\n`);
-        clearInterval(heartbeat);
         res.write(`${JSON.stringify({ delta: cached.answer })}\n`);
         res.write(`${JSON.stringify({ done: true, answer: cached.answer, cached: true })}\n`);
         return res.end();

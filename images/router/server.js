@@ -128,6 +128,25 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(up ? 200 : 503, { 'Content-Type': 'text/plain' });
     return res.end(up ? `ok (${up} healthy)` : 'no healthy instances');
   }
+  // A full-page assistant, for sites that cannot embed a script (GitBook
+  // docs) and for "Ask AI" links: /chat?title=Ask%20SSP%20AI&accent=%23fbbf24
+  // &theme=dark&suggestions=a|b|c. Same origin as /ask, so no CORS question.
+  if (req.url.startsWith('/chat')) {
+    // Every query parameter becomes a data-* attribute on the widget tag, so
+    // the page takes exactly the options a script tag would (subject, accent,
+    // logo, logo-light, welcome, suggestions, theme, ...).
+    const u = new URL(req.url, 'http://x');
+    const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const title = u.searchParams.get('title') || 'Ask Flux AI';
+    let attrs = '';
+    for (const [k, v] of u.searchParams) if (/^[a-z][a-z-]{0,30}$/.test(k) && v) attrs += ` data-${k}="${esc(v)}"`;
+    if (!u.searchParams.get('title')) attrs += ` data-title="${esc(title)}"`;
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+      + `<title>${esc(title)}</title><style>html,body{margin:0;height:100%;background:${u.searchParams.get('theme') === 'dark' ? '#0e1424' : '#f7f8fb'}}#ownllm{height:100%}</style></head>`
+      + `<body><div id="ownllm"></div><script src="/widget.js" data-mode="page"${attrs}></script></body></html>`;
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' });
+    return res.end(html);
+  }
   if (req.url === '/widget.js' || req.url === '/ownllm-widget.js') {
     if (!WIDGET) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
