@@ -763,10 +763,11 @@ http.createServer(async (req, res) => {
   // /ask is open in public mode; the model API and everything else is not.
   const isPublicAsk = PUBLIC_ASK && req.url.startsWith('/ask');
   if (!isPublicAsk && !authorized(req)) return send(401, { error: 'unauthorized' });
-  if (isPublicAsk && !authorized(req)) {
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
-    // (rate limit applied below, after small talk - greetings cost nothing)
-  }
+  // Public, unauthenticated /ask is rate limited per IP (applied below, after
+  // small talk, which costs nothing). Declared here, in handler scope: the
+  // 1.4.19 move left `ip` inside this block and every question got 500.
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  const limitByIp = isPublicAsk && !authorized(req);
   if (!ready) return send(503, { error: 'index not ready', detail: status });
 
   try {
@@ -796,7 +797,7 @@ http.createServer(async (req, res) => {
       }
       return send(200, { answer: small, sources: [], smalltalk: true });
     }
-    if (rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
+    if (limitByIp && rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
     const history = cleanHistory(body.history);
     // The question is embedded here, once: the cache lookup needs the vector
     // and retrieval reuses it, so a miss costs nothing extra.
