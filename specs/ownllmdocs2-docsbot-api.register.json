@@ -1,10 +1,10 @@
 {
   "version": 8,
-  "name": "ownllmdocs",
+  "name": "ownllmdocs2",
   "description": "Self-hosted CPU LLM endpoint (Ollama + Open WebUI) on Flux",
   "owner": "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH",
   "compose": [],
-  "instances": 20,
+  "instances": 1,
   "contacts": [],
   "geolocation": [],
   "expire": 88000,

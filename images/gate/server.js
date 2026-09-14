@@ -79,7 +79,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (!ready) {
+  // Management calls from an authenticated client are allowed before the
+  // instance is ready - pulling a model is how it becomes ready, and refusing
+  // the pull because the model is missing locked an operator out for good.
+  const management = /^\/api\/(pull|delete|tags|ps|show)(\?|$)/.test(req.url);
+  if (!ready && !(management && authorized(req))) {
     res.writeHead(503, { 'Content-Type': 'application/json', 'Retry-After': '30' });
     res.end(JSON.stringify({ error: 'model not ready on this instance', detail: readyDetail }));
     return;

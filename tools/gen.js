@@ -73,6 +73,9 @@ if (`ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`.length > 400) throw new Error('--allowe
 const DOCSBOT = argv.includes('--docsbot');
 // The router is a standalone app in front of the bot, not a component of it.
 const ROUTER_ONLY = argv.includes('--router');
+// The hub is likewise standalone: one endpoint over many pool apps. Holds
+// secrets (pool keys, HUB_SECRET), so unlike the router it is enterprise.
+const HUB_ONLY = argv.includes('--hub');
 
 // Flux rules enforced in appValidator.js: app name is alphanumeric + inner
 // hyphens, max 63, and must not start with "flux" or "zel".
@@ -102,6 +105,17 @@ const PROFILES = {
   // hold open a few streaming connections and nothing more. Deployed as its own
   // app so it can scale and be replaced independently of the bot.
   router: { cpu: 0.5, ram: 500, hdd: 1, threads: 1, loaded: 1, ctx: 2048, models: '' },
+  // The hub is the same shape: a proxy holding keys and a routing table.
+  hub: { cpu: 0.5, ram: 500, hdd: 1, threads: 1, loaded: 1, ctx: 2048, models: '' },
+  // Model pools behind the hub (tools/gen.js --api-only --profile pool-*).
+  // Small models share one pool: three resident at once is ~7 GB of weights.
+  // parallel: 2 so two clients of the same instance do not queue; each slot
+  // gets half the context, which at 16k is still 8k per request.
+  'pool-small': { cpu: 8, ram: 16000, hdd: 20, threads: 8, parallel: 2, loaded: 3, ctx: 16384, models: 'qwen3.5:0.8b qwen3.5:2b granite4.2:3b' },
+  // Mid: two ~8-12B models resident (5.2 + 7.6 GB weights plus KV).
+  'pool-mid': { cpu: 8, ram: 26000, hdd: 40, threads: 8, parallel: 1, loaded: 2, ctx: 16384, models: 'qwen3:8b gemma4:12b' },
+  // gpt-oss:20b alone: 14 GB resident.
+  'pool-gptoss': { cpu: 8, ram: 24000, hdd: 40, threads: 8, parallel: 1, loaded: 1, ctx: 16384, models: 'gpt-oss:20b' },
   small: { cpu: 4, ram: 8000, hdd: 20, threads: 4, models: 'qwen3:4b', loaded: 1, ctx: 16384 },
   // Sized to fit a NIMBUS node too: nimbus offers 7.0 cores / 28000 MB to apps,
   // so the whole app must stay under that. Triples the pool of eligible hosts.
@@ -197,7 +211,7 @@ const ENGINE_URL = `http://${dns('engine')}:11434`;
 // Each command string must stay under 400 chars (appValidator.js).
 const bootCmd = 'apk add -q --no-cache curl; U=' + ENGINE_URL
   + '; until curl -sf $U/api/tags >/dev/null 2>&1; do sleep 5; done'
-  + '; for m in $MODELS; do echo "pulling $m"; curl -s $U/api/pull -d \'{"model":"\'$m\'"}\' >/dev/null; echo "done $m"; done'
+  + '; for m in $MODELS; do echo "pulling $m"; curl -s $U/api/pull -d \'{"model":"\'$m\'"}\' | tail -c 300 | grep -o \'"error":"[^"]*"\' && echo "FAILED $m" || echo "done $m"; done'
   + '; while :; do sleep 3600; done';
 
 const engine = {
@@ -222,7 +236,7 @@ const engine = {
     // One slot, not three. Parallel slots divide the context window between
     // them, and this bot sends 3,000+ token prompts - concurrency it does not
     // need was costing context it does.
-    'OLLAMA_NUM_PARALLEL=1',
+    `OLLAMA_NUM_PARALLEL=${P.parallel || 1}`,
     // -1 never unloads. A reload costs a multi-GB read from the volume, which
     // on a cold node is minutes; there is nothing else competing for this RAM.
     'OLLAMA_KEEP_ALIVE=-1',
@@ -342,6 +356,57 @@ const router = {
   hdd: 1,
 };
 
+/**
+ * Hub secrets follow the gate key's rule: reused from the prior plaintext spec
+ * so a regeneration does not invalidate every key in circulation; --rotate-key
+ * mints fresh ones (and every issued key stops working).
+ */
+function existingEnv(specsDir, basename, prefix) {
+  try {
+    const prior = JSON.parse(fs.readFileSync(path.join(specsDir, `${basename}.plaintext.json`), 'utf8'));
+    for (const component of prior.compose || []) {
+      const entry = (component.environmentParameters || []).find(e => e.startsWith(`${prefix}=`));
+      if (entry) return entry.slice(prefix.length + 1);
+    }
+  } catch { /* none yet */ }
+  return null;
+}
+const HUB_SECRET = HUB_ONLY ? (ROTATE ? null : existingEnv(SPECS_DIR, `${APP}-hub`, 'HUB_SECRET')) || crypto.randomBytes(32).toString('base64url') : '';
+const hubEnv = HUB_ONLY ? [
+  // model=app:port[,alias=name@app:port]; see images/hub/server.js.
+  `POOLS=${arg('pools', '')}`,
+  // Gate key shared by the pools generated for the hub (--api-key on each).
+  `UPSTREAM_KEY=${arg('upstream-key', API_KEY)}`,
+  // app=key overrides for pools that keep their own key (the docs pool).
+  `UPSTREAM_KEYS=${arg('upstream-keys', '')}`,
+  `HUB_SECRET=${HUB_SECRET}`,
+  `KEY_RPM=${arg('key-rpm', 60)}`,
+  `KEY_CONCURRENCY=${arg('key-concurrency', 4)}`,
+  `KEY_LIMITS=${arg('key-limits', '')}`,
+  `REVOKED=${arg('revoked', '')}`,
+  `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
+  'FLUX_API=https://api.runonflux.io',
+  'DISCOVER_MS=60000',
+  'PROBE_MS=20000',
+] : [];
+for (const e of hubEnv) if (e.length > 400) throw new Error(`hub env exceeds 400 chars: ${e.slice(0, 40)}...`);
+if (HUB_ONLY && !arg('pools', '')) throw new Error('--hub needs --pools model=app:port[,...]');
+const hub = {
+  name: 'hub',
+  description: 'OpenAI-compatible endpoint with API keys, routing each model to its pool of instances',
+  repotag: `${REGISTRY}/ownllm-hub:${GATE_VERSION}`,
+  ports: [PORT],
+  containerPorts: [8080],
+  domains: [''],
+  environmentParameters: hubEnv,
+  commands: [],
+  containerData: '/tmp',
+  repoauth: '',
+  cpu: 0.5,
+  ram: 500,
+  hdd: 1,
+};
+
 const docsbot = {
   name: 'docsbot',
   description: 'Grounded documentation bot: retrieval over baked-in docs, with citations',
@@ -352,7 +417,7 @@ const docsbot = {
   environmentParameters: [
     `UPSTREAM=${ENGINE_URL}`,
     `API_KEY=${API_KEY}`,
-    `CHAT_MODEL=${TERNARY ? (TQ2 ? 'bitnet-2b-4t-tq2' : 'bitnet-2b-4t') : 'granite4:tiny-h'}`,
+    `CHAT_MODEL=${TERNARY ? (TQ2 ? 'bitnet-2b-4t-tq2' : 'bitnet-2b-4t') : arg('chat-model', 'granite4:tiny-h')}`,
     `EMBED_MODEL=${TERNARY && !TQ2 ? 'bitnet-embedding-270m' : 'granite-embedding:278m'}`,
     // Always in front of the retrieved chunks, so the prompt prefix is
     // identical between requests and the KV cache covers it.
@@ -445,6 +510,8 @@ const spec = {
   owner: OWNER,
   compose: ROUTER_ONLY
     ? [router]
+    : HUB_ONLY
+    ? [hub]
     : API_ONLY
     ? (DOCSBOT ? [engine, boot, gate, docsbot] : [engine, boot, gate]).filter(c => !(TERNARY && c === boot))
     : (ENTERPRISE ? [engine, boot, gate, webui] : [engine, boot, webui]).filter(c => !(TERNARY && c === boot)),
@@ -459,7 +526,7 @@ const spec = {
   // Flux Home (see README); this generator emits the plaintext to feed it.
   // The router holds no secret - it proxies a public endpoint - so it needs no
   // encrypted specification and can be a plain application.
-  enterprise: ROUTER_ONLY ? false : (ENTERPRISE || API_ONLY || DOCSBOT ? '<PASTE_ENCRYPTED_BLOB>' : false),
+  enterprise: ROUTER_ONLY ? false : (ENTERPRISE || API_ONLY || DOCSBOT || HUB_ONLY ? '<PASTE_ENCRYPTED_BLOB>' : false),
 };
 
 // --- sanity checks against the rules in appValidator.js -------------------
@@ -544,28 +611,30 @@ if (price < CHAIN.minPrice) price = CHAIN.minPrice;
 // The envelope must not carry the compose in cleartext: it holds API_KEY, and
 // this is the file that gets committed. Emptying it also matches exactly what
 // reaches the chain - registryManager.js:1946 does the same before broadcast.
-const envelope = (ENTERPRISE || API_ONLY)
+// The hub's compose holds HUB_SECRET and the pool keys: sealed like the rest.
+const SEALED = ENTERPRISE || API_ONLY || HUB_ONLY;
+const envelope = SEALED
   ? { ...spec, contacts: [], compose: [] }
   : spec;
 
 const suffix = API_ONLY ? `${PROFILE}-api` : (ENTERPRISE ? `${PROFILE}-enterprise` : PROFILE);
-const out = path.join(__dirname, '..', 'specs', (ENTERPRISE || API_ONLY)
+const out = path.join(__dirname, '..', 'specs', SEALED
   ? `${APP}-${suffix}.register.json`
   : `${APP}-${suffix}.json`);
 fs.writeFileSync(out, `${JSON.stringify(envelope, null, 2)}\n`);
-console.log(`wrote ${out}${(ENTERPRISE || API_ONLY) ? '  (tools/register.js only - compose is empty, the UI will reject it)' : ''}`);
+console.log(`wrote ${out}${SEALED ? '  (tools/register.js only - compose is empty, the UI will reject it)' : ''}`);
 
 // For deploying through Flux Home rather than tools/register.js: the UI wants
 // the compose in cleartext and does the encrypting itself when you turn on the
 // enterprise toggle. Same secret exposure as the plaintext file, so gitignored.
-if (ENTERPRISE || API_ONLY) {
+if (SEALED) {
   const uiSpec = { ...spec, enterprise: false };
   const uiOut = path.join(__dirname, '..', 'specs', `${APP}-${suffix}.ui.json`);
   fs.writeFileSync(uiOut, `${JSON.stringify(uiSpec, null, 2)}\n`);
   console.log(`wrote ${uiOut}\n        ^ THIS is the file to import into Flux Home. Turn ON the enterprise toggle.`);
 }
 
-if (ENTERPRISE || API_ONLY) {
+if (SEALED) {
   // What goes INSIDE the encrypted blob, and the only file that holds API_KEY
   // in cleartext - .gitignore excludes it. tools/encrypt-enterprise.js reads it
   // and writes the resulting ciphertext into the envelope's "enterprise" field.

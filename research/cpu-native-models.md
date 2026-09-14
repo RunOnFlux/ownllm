@@ -385,6 +385,104 @@ it must be built with native flags); (2) ggml-org/llama.cpp - the `bitnet`
 arch needs three one-line changes to load Microsoft's own release (tensor
 names, relu2, BPE vocab).
 
+**2026-09-14, thread sweep on production nodes (granite4:tiny-h, 12-core
+instances, `FILLER_WORDS=400`):**
+
+| threads | fast node (82.65.58.211) gen / prefill | median node (65.109.104.88) gen / prefill |
+|---|---|---|
+| 4 | 29.0 / 77 | 27.7 / 77 |
+| 6 | 31.1 / 99 | 27.8 / 106 |
+| **8** | 31.0 / **113** | 27.2 / 134 |
+| 10 | 29.5 / 98 | 25.2 / **148** |
+| 12 | 28.6 / 106 | 22.6 / 147 |
+
+Generation is flat from 6 threads up and falls past 8 on both nodes -
+bandwidth-bound, as predicted. Prefill peaks at 8 on the fast node and at
+10 on the median one (+10% over 8, for -7% generation). Not worth a fleet
+change: 8 stays. Also visible: the docs bot's 40-token warm-up measurement
+(16 tok/s on the median node) under-reads the sustained rate (27); fine for
+ranking nodes, not a benchmark.
+
+## 6d. Model sweep on one node (2026-09-14/15)
+
+Twelve models through the same harness on one 12-core STRATUS node
+(`ownllmeval`, 159.194.230.145; granite4:tiny-h measured 13.3 tok/s there,
+so it is a mid-speed node - production's best does 31). Speed is
+generation / prefill tok/s; grounding is the 9-question eval, strict / soft
+prompt; "answer" is average length.
+
+| model | params (active) | gen | prefill | strict | soft | answer | note |
+|---|---|---|---|---|---|---|---|
+| granite4:tiny-h (production) | 7B (1B) MoE | 13.3 | 60 | 7/9 | 7/9 | 85-126 ch | baseline |
+| **granite4:micro-h** | 3B hybrid | 7.9 | 35 | 7/9 | **9/9** | 165 ch | best quality at usable speed |
+| granite4:small-h | 32B (9B) MoE | 3.3 | 10.7 | 7/9 | **9/9** | 155 ch | quality tier, slow |
+| granite4.2:3b | 3B | 9.6 | 21.5 | 8/9 | **9/9** | 850 ch | reasons out loud, 4x longer answers |
+| granite4.2:8b | 8B | 3.9 | 12 | 7/9 | 7/9 | 750 ch | |
+| granite4.1:8b | 8B | 5.2 | 13 | - | 7/9 | 237 ch | |
+| granite4.2:30b | 30B (MoE) | not measured* | | 5/9 | 5/9 | 740 ch | worse than tiny-h here |
+| gpt-oss:20b | 21B (3.6B) MoE, MXFP4 | 4.6 | 16.6 | 7/9 | 6/9 | 19-60 ch | |
+| lfm2.5:8b | 8B (1B) MoE | **17.0** | 59 | 3/9 | 4/9 | 11-14 ch | fastest; over-refuses |
+| qwen3:8b | 8B | 5.3 | 15.5 | 6/9 | 5/9 | 29-72 ch | thinking model |
+| qwen3.5:2b | 2B | 9.5 | 62 | 0/9 | 0/9 | 0 ch | thinks, never answers in budget |
+| gemma4:12b | 12B | 2.4 | 9.7 | 0/9 | 0/9 | 0 ch | same |
+| gemma4:26b | 26B (4B) MoE | 1.5 | 15.3 | 1/9 | 0/9 | 1 ch | same, and slow |
+
+\* The speed bench for the 30b dropped the connection twice while the 19 GB
+model loaded (the rig was sharing its node with the micro-h A/B bot, and
+the two engines together exceed the node's RAM). Its grounding score
+already rules it out, so the cell was not chased further.
+
+What it says:
+
+- **The newest generations (qwen3.5, gemma4) are reasoning models by
+  default** and produce nothing inside a 200-token budget; they would need
+  thinking disabled and a much larger budget, and gemma4 is slow regardless.
+  "Newest" bought nothing here.
+- **granite4:micro-h is the finding.** 9/9 on the soft prompt - the first
+  perfect score, including the multi-hop question tiny-h always fails - with
+  answers that cite sections, at 60% of tiny-h's speed. On production's fast
+  node that is ~18 tok/s and ~130 prefill: interactive. Candidate to replace
+  tiny-h as the docs answerer, pending a run on the real corpus prompt.
+  **That run did not confirm it** (see the A/B below).
+- granite4:small-h matches that quality but at a quarter of the speed: a
+  "slow, thorough" tier if one is wanted.
+- gpt-oss:20b is not better than granite on grounded QA (7/9 vs 7/9) and is
+  three times slower. Its case is general reasoning, not documentation.
+- lfm2.5:8b is the speed king (17 tok/s) and cannot be trusted to answer.
+- Bigger is not better on this task: 4.2:30b scored 5/9.
+
+**A/B on the real bot (`tools/ab-docsbot.js`).** A one-instance copy of the
+production docs bot (`ownllmdocs2`, same image, prompt, corpus and vectors,
+only `CHAT_MODEL=granite4:micro-h`) against production tiny-h, twelve real
+questions, identical requests. micro-h did not win:
+
+- Won one: the Cumulus/Nimbus/Stratus comparison, where tiny-h produced
+  nonsense ("Cumulus nodes ... have 3,176,000 FLUX") and micro-h listed the
+  collateral and hardware per tier.
+- Lost two: "how much does an app cost per month" (micro-h returned an
+  eight-step procedure with no number; tiny-h gave the $0.99 floor, the
+  formula and the $11.20 example) and the Stratus cost ($40.00/month,
+  invented, vs tiny-h's "$4.00 extra", which is what the source says).
+- Tied on the rest, with micro-h wordier ("as stated in [1]") and
+  formatting even one-line facts as numbered lists.
+- Slower everywhere: first token 13-32 s vs 6-10 s, whole answer 18-90 s vs
+  6-19 s (its node was also pulling the 30b model, so treat the ratio, not
+  the absolute, as the result; the clean sweep says 60% of tiny-h).
+
+The 9/9 came from the eval's short, clean contexts. On the real prompt
+(3 chunks + facts tier + history rules) micro-h's extra capacity goes into
+structure rather than into being more right. Decision: stay on tiny-h.
+What the A/B did expose is corpus gaps shared by both models: "how do I
+update a running application" retrieves the Enshrouded game page for both
+(no how-to covered it; added), and the how-to sheet itself said "minimum 3
+instances" where v8 apps allow 1 (fixed) - both are corpus fixes, not model
+fixes.
+
+Harness notes from this run: the puller reported failed pulls as "done"
+(two of the eight tags did not exist); the gate refused an authenticated
+pull while unready, which is exactly when a pull is needed (fixed in gate
+1.4.24); an 80 GB volume holds about eight models - measure-then-delete.
+
 ## 6c. Round-one and round-two verdict
 
 - The ternary *substrate* works on Flux CPUs and is the fastest thing we

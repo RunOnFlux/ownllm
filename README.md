@@ -408,6 +408,52 @@ anyone who portscans the network.
 If opencode's tool-calling misbehaves through Open WebUI, build `images/gate`
 (a ~20-line Caddy bearer-token proxy) and point it at the engine's native `/v1`.
 
+## The hub: one endpoint, many models, API keys
+
+`images/hub` is an OpenAI-compatible endpoint that stands in front of any
+number of model pools. A pool is an ordinary `--api-only` app (gate + engine);
+the hub maps each model name to a pool, discovers that pool's instances from
+the Flux API and sends each request to the least busy healthy one. Clients get
+one base URL, one key and `/v1/models`; pools scale, migrate and get replaced
+underneath without any client noticing.
+
+```
+node tools/gen.js --name ownllmpoolsmall --profile pool-small --api-only --port 38000 --instances 2 --api-key $K
+node tools/gen.js --name ownllmhub --profile hub --hub --port 34000 --instances 3 \
+  --pools "granite4:tiny-h=ownllmdocs:33000,granite4.2:3b=ownllmpoolsmall:38000,qwen3.5:2b=ownllmpoolsmall:38000,gpt-oss:20b=ownllmpoolgptoss:38200" \
+  --upstream-key $K --upstream-keys "ownllmdocs=<that app's gate key>"
+node tools/deploy.js specs/ownllmhub-hub.register.json
+```
+
+`--pools` is `model=app:port`, or `alias=name@app:port` when the pool knows the
+model by another name. Every pool generated for the hub shares one gate key
+(`--api-key` on each, `--upstream-key` on the hub); a pool that keeps its own
+key goes in `--upstream-keys`.
+
+**Keys are stateless.** A key is `sk-flux-<name>-<sig>`, the signature an HMAC
+of the name under the hub's `HUB_SECRET`. Nothing is stored: every hub instance
+verifies every key, which is the only kind of state a multi-instance Flux app
+can have. Mint one per user or application with `node tools/hub-key.js <name>`,
+revoke a name by adding it to `--revoked` and pushing a spec update, rotate
+everything with `--rotate-key`. The key named `admin` reads `/admin/usage` and
+`/admin/status`. Limits are per key (`--key-rpm`, `--key-concurrency`, per-name
+overrides in `--key-limits name:rpm:concurrency`) and enforced per hub
+instance, as are the usage counters, so read them as a sample, not a ledger.
+
+The hub speaks `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings` and
+`/v1/models`, plus ollama's native `/api/chat`, `/api/generate`, `/api/embed`
+and `/api/tags`, so both OpenAI and ollama clients work. Model names are
+matched exactly, then case-insensitively, then with `-` for `:` for clients
+that reject colons (`granite4-tiny-h`). Token usage is counted from the
+response (streams get `stream_options.include_usage` injected).
+
+### Using the hub from opencode
+
+`opencode.json` in this repository is written for the hub. Copy it to
+`~/.config/opencode/opencode.json`, set `baseURL` to the hub's FDM domain plus
+`/v1`, and `export FLUX_LLM_KEY=sk-flux-...`. Any other OpenAI client is the
+same two settings.
+
 ## Enterprise variant (encrypted env vars)
 
 `gen.js` emits `specs/<name>.plaintext.json` — the `{contacts, compose}` object

@@ -1,6 +1,6 @@
 {
   "version": 8,
-  "name": "ownllmdocs",
+  "name": "ownllmpoolgptoss",
   "description": "Self-hosted CPU LLM endpoint (Ollama + Open WebUI) on Flux",
   "owner": "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH",
   "compose": [],

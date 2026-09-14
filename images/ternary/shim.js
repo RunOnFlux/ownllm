@@ -14,6 +14,8 @@
  *                     template applied here, SSE -> NDJSON,
  *                     with ollama's nanosecond timing fields filled from
  *                     llama-server's timings so tools/ollama.js rate() works
+ *   /api/chat, /v1/chat/completions
+ *                  -> the same, from a message list, answered in each dialect
  *   /api/embed     -> /v1/embeddings on the embedding server
  */
 const http = require('node:http');
@@ -137,8 +139,33 @@ function bitnetPrompt(system, user) {
   return p;
 }
 
-async function generate(body, res, req) {
+/** Multi-turn form of the same template, for /api/chat and /v1/chat/completions. */
+function bitnetChatPrompt(messages) {
+  const role = { system: 'System', user: 'User', assistant: 'Assistant' };
+  let p = '';
+  for (const m of messages || []) {
+    const text = Array.isArray(m.content) ? m.content.map(c => c.text || '').join('') : String(m.content ?? '');
+    p += `${role[m.role] || 'User'}: ${text.trim()}${EOT}`;
+  }
+  return `${p}Assistant: `;
+}
+
+/**
+ * Streams a completion from llama-server for a preformatted prompt and
+ * reports it in the caller's dialect: ollama /api/generate ("response"),
+ * ollama /api/chat ("message"), or OpenAI chat completions (SSE chunks).
+ */
+async function generate(body, res, req, dialect = 'generate') {
   const o = body.options || {};
+  if (dialect === 'openai') {
+    // OpenAI parameters live at the top level, not under options.
+    if (body.max_tokens != null) o.num_predict = body.max_tokens;
+    if (body.max_completion_tokens != null) o.num_predict = body.max_completion_tokens;
+    if (body.temperature != null) o.temperature = body.temperature;
+    if (body.top_p != null) o.top_p = body.top_p;
+    if (body.stop) o.stop = Array.isArray(body.stop) ? body.stop : [body.stop];
+  }
+  const prompt = dialect === 'generate' ? bitnetPrompt(body.system, body.prompt || '') : bitnetChatPrompt(body.messages);
   // If the caller disconnects mid-stream, stop llama-server generating into a
   // dead pipe rather than let it run the request out (or worse).
   const ac = new AbortController();
@@ -150,7 +177,7 @@ async function generate(body, res, req) {
     // resets mid-POST. One connection per request costs nothing on localhost.
     headers: { 'Content-Type': 'application/json', Connection: 'close' },
     body: JSON.stringify({
-      prompt: bitnetPrompt(body.system, body.prompt || ''),
+      prompt,
       stream: true,
       n_predict: o.num_predict ?? -1,
       temperature: o.temperature ?? 0.6,
@@ -163,13 +190,18 @@ async function generate(body, res, req) {
   });
   if (!upstream.ok) return json(res, 502, { error: `chat server ${upstream.status}: ${(await upstream.text()).slice(0, 200)}` });
 
-  const stream = body.stream !== false;
+  const stream = dialect === 'openai' ? !!body.stream : body.stream !== false;
   const model = body.model || MODELS[0].name;
   const t0 = process.hrtime.bigint();
+  const id = `chatcmpl-${Date.now().toString(36)}`;
+  const created = Math.floor(Date.now() / 1000);
   let text = '';
   let timings = null;
   let buf = '';
-  if (stream) res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+  if (stream) res.writeHead(200, { 'Content-Type': dialect === 'openai' ? 'text/event-stream' : 'application/x-ndjson' });
+  const piece_ = (delta) => dialect === 'generate' ? JSON.stringify({ model, response: delta, done: false }) + '\n'
+    : dialect === 'chat' ? JSON.stringify({ model, message: { role: 'assistant', content: delta }, done: false }) + '\n'
+    : `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { content: delta }, finish_reason: null }] })}\n\n`;
   const decoder = new TextDecoder();
   for await (const piece of upstream.body) {
     buf += decoder.decode(piece, { stream: true });
@@ -182,7 +214,7 @@ async function generate(body, res, req) {
       const delta = ev.content || '';
       if (!delta) continue;
       text += delta;
-      if (stream) res.write(JSON.stringify({ model, response: delta, done: false }) + '\n');
+      if (stream) res.write(piece_(delta));
     }
   }
   const total = Number(process.hrtime.bigint() - t0);
@@ -197,6 +229,16 @@ async function generate(body, res, req) {
     eval_count: timings?.predicted_n ?? 0,
     eval_duration: Math.round((timings?.predicted_ms ?? 0) * 1e6),
   };
+  if (dialect === 'openai') {
+    const usage = { prompt_tokens: done.prompt_eval_count, completion_tokens: done.eval_count, total_tokens: done.prompt_eval_count + done.eval_count };
+    if (stream) {
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model, choices: [], usage })}\n\ndata: [DONE]\n\n`);
+      return res.end();
+    }
+    return json(res, 200, { id, object: 'chat.completion', created, model, choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }], usage });
+  }
+  if (dialect === 'chat') { done.message = { role: 'assistant', content: stream ? '' : text }; delete done.response; }
   if (stream) { res.write(JSON.stringify(done) + '\n'); res.end(); } else json(res, 200, done);
 }
 
@@ -231,6 +273,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'POST') return json(res, 404, { error: 'not found' });
     const body = await readBody(req);
     if (url.pathname === '/api/generate') return await generate(body, res, req);
+    if (url.pathname === '/api/chat') return await generate(body, res, req, 'chat');
+    if (url.pathname === '/v1/chat/completions') return await generate(body, res, req, 'openai');
+    if (url.pathname === '/v1/models') return json(res, 200, { object: 'list', data: MODELS.map(m => ({ id: m.name, object: 'model', owned_by: 'flux' })) });
     if (url.pathname === '/api/embed' || url.pathname === '/api/embeddings') return await embed(body, res);
     return json(res, 404, { error: 'not found' });
   } catch (err) {

@@ -14,7 +14,7 @@ jobs:
       # image is expected to break more often than the production ones.
       fail-fast: false
       matrix:
-        image: [gate, docsbot, router, ternary, ternary-tq2]
+        image: [gate, docsbot, router, hub, ternary, ternary-tq2]
         include:
           # bitnet.cpp's I2_S kernel is a separate code path per ISA and the
           # research rig only targets x86 Flux nodes. Not an enterprise

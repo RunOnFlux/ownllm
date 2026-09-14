@@ -3,15 +3,20 @@
   "provider": {
     "flux": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Flux Cloud LLM",
+      "name": "Flux LLM hub",
       "options": {
-        "baseURL": "https://<your-app>.app.runonflux.io/api",
+        "baseURL": "https://ownllmhub.app.runonflux.io/v1",
         "apiKey": "{env:FLUX_LLM_KEY}"
       },
       "models": {
-        "gpt-oss:20b": { "name": "gpt-oss 20b (Flux)", "tools": true },
-        "qwen3-coder:30b": { "name": "Qwen3 Coder 30B-A3B (Flux)", "tools": true },
-        "qwen3:4b": { "name": "Qwen3 4B (Flux, fast)", "tools": true }
+        "gpt-oss:20b": { "name": "gpt-oss 20B (Flux)", "tools": true },
+        "qwen3:8b": { "name": "Qwen3 8B (Flux)", "tools": true },
+        "gemma4:12b": { "name": "Gemma 4 12B (Flux)", "tools": true },
+        "granite4:tiny-h": { "name": "Granite 4 tiny-h (Flux, fast)", "tools": true },
+        "granite4.2:3b": { "name": "Granite 4.2 3B (Flux)", "tools": true },
+        "qwen3.5:2b": { "name": "Qwen3.5 2B (Flux, fast)", "tools": true },
+        "qwen3.5:0.8b": { "name": "Qwen3.5 0.8B (Flux, fastest)", "tools": false },
+        "bitnet-2b-4t": { "name": "BitNet b1.58 2B (Flux, ternary research)", "tools": false }
       }
     }
   }
