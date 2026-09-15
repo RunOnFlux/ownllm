@@ -26,3 +26,6 @@ specs/*.ui.json
 # Checkpoint of tools/embed-corpus.js; the finished .vec is what ships.
 images/docsbot/docs/*.vec.progress
 ab-docsbot.json
+finetune/data/
+finetune/__pycache__/
+runs/

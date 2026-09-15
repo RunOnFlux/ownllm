@@ -1,0 +1,23 @@
+# fine-tuning deps for finetune/train.py and merge_and_convert.sh
+#
+# transformers: granite 4.0 hybrid (model_type "granitemoehybrid", mamba2 +
+#   attention + moe) landed in 4.54; qwen3 needs >=4.51. anything older fails
+#   with "model type granitemoehybrid not recognized".
+# trl: >=0.20 renamed max_seq_length -> max_length in SFTConfig; train.py
+#   pre-tokenizes and skips trl's own dataset prep so it works on 0.19-0.2x.
+# torch: cuda wheels come from the pytorch index; on a rented gpu box use
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.4,<3
+transformers>=4.56,<5
+peft>=0.17,<1
+trl>=0.21,<1
+datasets>=3.0,<5
+accelerate>=1.0,<2
+sentencepiece>=0.2.0
+protobuf>=4.25
+gguf>=0.17
+# optional: 4-bit qlora (--qlora). linux + cuda only.
+bitsandbytes>=0.45; sys_platform == "linux"
+# optional, recommended for granite hybrid: fused mamba2 kernels. without them
+# transformers uses a slow pure-torch scan (works, ~3-5x slower). needs nvcc:
+#   pip install causal-conv1d>=1.4 mamba-ssm>=2.2 --no-build-isolation
