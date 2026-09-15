@@ -460,7 +460,7 @@ instance that saw the prefix: same instance, a few hundred new tokens of
 prefill; a different one, the full context again, which on CPU is minutes.
 
 **Thinking is off by default for the small reasoning models** (`--think-off`,
-default qwen3.5, qwen3:8b, gemma4:12b). On CPU they otherwise spend a
+default qwen3.5, qwen3:8b, gemma4:12b, granite4.2:3b). On CPU they otherwise spend a
 400-token budget reasoning about 17x23 and never answer. A client that wants
 reasoning passes `reasoning_effort` (OpenAI) or `think` (ollama) itself. The
 mid and gpt-oss pools run a 32k context for the same reason: an agent's

@@ -214,6 +214,10 @@ async function probe() {
       p.latencyMs = p.latencyMs ? p.latencyMs * (1 - EWMA) + rtt * EWMA : rtt;
       p.healthy = res.status === 200;
       p.detail = text.slice(0, 60);
+      // The gate reports its own in-flight count (1.4.31+): load from every
+      // hub instance, not just this one. Unknown on older gates.
+      const m = /inflight=(\d+)/.exec(text);
+      p.remoteInflight = m ? Number(m[1]) : undefined;
     } catch (err) {
       p.healthy = false;
       p.detail = err.message.slice(0, 60);
@@ -232,14 +236,17 @@ async function probe() {
  * on CPU. A busy sticky instance is not waited for - a session with two
  * requests in flight is already paying for it.
  */
+// Busy-ness as this hub sees it: its own in-flight count, or the gate's
+// reported one when that is higher (requests from the other hub instances).
+const load = (p) => Math.max(p.inflight, p.remoteInflight || 0);
 function pick(pool, exclude, prefer) {
   if (prefer && prefer !== exclude) {
     const p = pool.peers.get(prefer);
-    if (p && p.healthy && p.inflight === 0) return prefer;
+    if (p && p.healthy && load(p) === 0) return prefer;
   }
   const healthy = [...pool.peers.entries()].filter(([ip, p]) => p.healthy && ip !== exclude);
   if (!healthy.length) return null;
-  healthy.sort(([, a], [, b]) => (a.inflight - b.inflight) || (a.latencyMs - b.latencyMs));
+  healthy.sort(([, a], [, b]) => (load(a) - load(b)) || (a.latencyMs - b.latencyMs));
   return healthy[0][0];
 }
 
@@ -442,11 +449,12 @@ const server = http.createServer(async (req, res) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), Authorization: `Bearer ${pool.key}` },
           body: payload,
-          timeoutMs: 900000,
+          timeoutMs: 1800000,
         });
         if ((upstream.status === 503 || upstream.status === 502) && attempt === 0) {
           // The instance is not ready (pulling) or its engine is gone: mark it
           // and try another before the client sees anything.
+          console.log(`${modelId} ${ip}: upstream ${upstream.status} after ${Date.now() - started} ms, retrying elsewhere`);
           peer.healthy = false; peer.detail = `upstream ${upstream.status}`; tried = ip;
           try { upstream.destroy(); } catch { /* ignore */ }
           continue;
@@ -454,6 +462,7 @@ const server = http.createServer(async (req, res) => {
         if (upstream.status >= 400) {
           // Already committed to a 200: relay the error in the body.
           const text = await upstream.text().catch(() => '');
+          console.log(`${modelId} ${ip}: upstream ${upstream.status} after ${Date.now() - started} ms: ${text.slice(0, 120)}`);
           let msg = text.slice(0, 300); try { msg = JSON.parse(text).error?.message || JSON.parse(text).error || msg; } catch { /* raw */ }
           acct.errors += 1;
           if (heartbeat) clearInterval(heartbeat);
@@ -470,11 +479,13 @@ const server = http.createServer(async (req, res) => {
         }
         if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
         res.end();
+        if (!tail.trim()) console.log(`${modelId} ${ip}: upstream ${upstream.status} ended with an empty body after ${Date.now() - started} ms`);
         countUsage(tail, acct, per);
         peer.latencyMs = peer.latencyMs * (1 - EWMA) + (Date.now() - started) * EWMA;
         if (upstream.status >= 400) acct.errors += 1;
         return;
       } catch (err) {
+        console.log(`${modelId} ${ip}: request failed after ${Date.now() - started} ms (attempt ${attempt + 1}): ${err.message.slice(0, 100)}`);
         peer.healthy = false; peer.detail = `request failed: ${err.message.slice(0, 50)}`;
         if (attempt === 1) {
           acct.errors += 1;
@@ -507,8 +518,8 @@ function countUsage(tail, acct, per) {
   per.promptTokens += prompt; per.completionTokens += completion;
 }
 
-server.headersTimeout = 900000;
-server.requestTimeout = 900000;
+server.headersTimeout = 1800000;
+server.requestTimeout = 1800000;
 server.listen(PORT, () => console.log(`hub on :${PORT}: ${models.size} model(s) over ${pools.size} pool(s): ${[...models.keys()].join(', ')}`));
 
 discover().then(probe);

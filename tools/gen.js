@@ -395,9 +395,10 @@ const hubEnv = HUB_ONLY ? [
   `HUB_VERSION=${GATE_VERSION}`,
   `REVOKED=${arg('revoked', '')}`,
   // Thinking off by default for the small reasoning models: on CPU they spend
-  // a 400-token budget reasoning about 17x23 and never answer. A client that
+  // a 400-token budget reasoning about 17x23 and never answer. granite4.2
+  // thinks too: with five tool schemas it produced no answer at all in 800. A client that
   // wants it passes reasoning_effort (OpenAI) or think (ollama) itself.
-  `THINK_OFF=${arg('think-off', 'qwen3.5:0.8b,qwen3.5:2b,qwen3:8b,gemma4:12b')}`,
+  `THINK_OFF=${arg('think-off', 'qwen3.5:0.8b,qwen3.5:2b,qwen3:8b,gemma4:12b,granite4.2:3b')}`,
   `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
   // Discovery hosts, tried in order. --seeds adds FluxOS nodes by IP
   // (tools/hub-seeds.js) for an instance whose node cannot resolve the API

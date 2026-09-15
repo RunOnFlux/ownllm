@@ -24,6 +24,12 @@ if (!API_KEY) {
 
 let ready = false;
 let readyDetail = 'starting';
+// Requests currently being served, reported on the health line so a router
+// can see real load. The hub keeps its own in-flight count per hub instance,
+// but three hub instances do not share it: each thought a gpt-oss node was
+// idle and all sent it a ten-minute prompt at once (OLLAMA_NUM_PARALLEL=1),
+// so the second and third queued behind the first.
+let inflight = 0;
 
 // Readiness is "every required model is actually pulled", not "ollama answers".
 // Ollama replies 200 on /api/tags from the moment it boots, long before a 13 GB
@@ -90,8 +96,8 @@ const server = http.createServer(async (req, res) => {
   // for good. '/health' is the path FDM's custom entries use; '/healthz' is
   // kept because things may already point at it.
   if (req.url === '/' || req.url === '/health' || req.url === '/healthz') {
-    res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain' });
-    res.end(ready ? 'ok' : readyDetail);
+    res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain', 'X-Inflight': String(inflight) });
+    res.end(ready ? `ok inflight=${inflight}` : readyDetail);
     return;
   }
 
@@ -111,13 +117,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  inflight += 1;
+  res.on('close', () => { inflight -= 1; });
   try {
     const upstream = await upstreamRequest(`${UPSTREAM}${req.url}`, {
       method: req.method,
       headers: { 'Content-Type': req.headers['content-type'] || 'application/json', ...(req.headers['content-length'] ? { 'Content-Length': req.headers['content-length'] } : { 'Transfer-Encoding': 'chunked' }) },
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req,
-      // CPU inference is slow; a long generation must not be cut short.
-      timeoutMs: 900000,
+      // CPU inference is slow, and a request may also queue behind another
+      // on this instance; a long generation must not be cut short.
+      timeoutMs: 1800000,
     });
     res.writeHead(upstream.status, {
       'Content-Type': upstream.headers['content-type'] || 'application/json',
@@ -126,11 +135,12 @@ const server = http.createServer(async (req, res) => {
     for await (const chunk of upstream.body) res.write(chunk);
     res.end();
   } catch (err) {
-    res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'upstream failed', detail: err.message }));
+    console.log(`${req.method} ${req.url}: upstream failed: ${err.message.slice(0, 120)}`);
+    if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(res.headersSent ? undefined : JSON.stringify({ error: 'upstream failed', detail: err.message }));
   }
 });
 
-server.headersTimeout = 900000;
-server.requestTimeout = 900000;
+server.headersTimeout = 1800000;
+server.requestTimeout = 1800000;
 server.listen(PORT, () => console.log(`gate listening on :${PORT} -> ${UPSTREAM}`));
