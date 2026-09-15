@@ -436,9 +436,14 @@ verifies every key, which is the only kind of state a multi-instance Flux app
 can have. Mint one per user or application with `node tools/hub-key.js <name>`,
 revoke a name by adding it to `--revoked` and pushing a spec update, rotate
 everything with `--rotate-key`. The key named `admin` reads `/admin/usage` and
-`/admin/status`. Limits are per key (`--key-rpm`, `--key-concurrency`, per-name
-overrides in `--key-limits name:rpm:concurrency`) and enforced per hub
-instance, as are the usage counters, so read them as a sample, not a ledger.
+`/admin/status`. Limits are per key and enforced per hub instance, as are
+the usage counters, so read them as a sample, not a ledger. Rate is a token
+bucket (`--key-rpm` sustained, `--key-burst` at once; defaults 120 and 20),
+concurrency a counter (`--key-concurrency`, default 6); per-name overrides
+in `--key-limits name:rpm:concurrency[:burst]`. The shared demo key adds a
+per-visitor bucket (`--public-ip-rpm`, default 8, burst 4, one at a time) so
+one script cannot use it up for everyone. Responses carry `X-RateLimit-Limit`,
+`X-RateLimit-Remaining` and, on a 429, `Retry-After`.
 
 The hub speaks `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings` and
 `/v1/models`, plus ollama's native `/api/chat`, `/api/generate`, `/api/embed`

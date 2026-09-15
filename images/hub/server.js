@@ -25,9 +25,13 @@
  *   UPSTREAM_KEYS  app=key[,app=key] overrides for pools with their own key
  *   HUB_SECRET     master secret for API keys (required)
  *   ADMIN_KEY      bearer for /admin/*; defaults to the key named "admin"
- *   KEY_RPM        requests per minute per key (default 60)
- *   KEY_CONCURRENCY concurrent requests per key (default 4)
- *   KEY_LIMITS     name:rpm:concurrency[,...] per-key overrides
+ *   KEY_RPM        sustained requests per minute per key (default 120)
+ *   KEY_BURST      how many may arrive at once before the rate applies (20)
+ *   KEY_CONCURRENCY concurrent requests per key (default 6)
+ *   KEY_LIMITS     name:rpm:concurrency[:burst][,...] per-key overrides
+ *   PUBLIC_IP_RPM  for the shared PUBLIC_KEY_NAME key, an extra per-visitor
+ *                  limit (rpm, default 8; burst PUBLIC_IP_BURST 4; one at a
+ *                  time), so one script cannot use the demo key up for all
  *   REVOKED        comma-separated key names that no longer work
  *   THINK_OFF      models whose thinking is switched off unless the client
  *                  asks for it (reasoning_effort on /v1, think on /api): a
@@ -52,8 +56,11 @@ const FLUX_APIS = (process.env.FLUX_API || 'https://api.runonflux.io').split(','
 const DISCOVER_MS = Number(process.env.DISCOVER_MS || 60000);
 const PROBE_MS = Number(process.env.PROBE_MS || 20000);
 const HUB_SECRET = process.env.HUB_SECRET || '';
-const KEY_RPM = Number(process.env.KEY_RPM || 60);
-const KEY_CONCURRENCY = Number(process.env.KEY_CONCURRENCY || 4);
+const KEY_RPM = Number(process.env.KEY_RPM || 120);
+const KEY_BURST = Number(process.env.KEY_BURST || 20);
+const KEY_CONCURRENCY = Number(process.env.KEY_CONCURRENCY || 6);
+const PUBLIC_IP_RPM = Number(process.env.PUBLIC_IP_RPM || 8);
+const PUBLIC_IP_BURST = Number(process.env.PUBLIC_IP_BURST || 4);
 const THINK_OFF = new Set((process.env.THINK_OFF || '').split(',').map(s => s.trim()).filter(Boolean));
 const REVOKED = new Set((process.env.REVOKED || '').split(',').map(s => s.trim()).filter(Boolean));
 const EWMA = 0.3;
@@ -79,9 +86,23 @@ for (const entry of (process.env.POOLS || '').split(',').map(s => s.trim()).filt
 if (!models.size) { console.error('POOLS is empty'); process.exit(1); }
 
 const KEY_LIMITS = new Map((process.env.KEY_LIMITS || '').split(',').map(s => s.trim()).filter(Boolean).map(s => {
-  const [name, rpm, conc] = s.split(':');
-  return [name, { rpm: Number(rpm) || KEY_RPM, concurrency: Number(conc) || KEY_CONCURRENCY }];
+  const [name, rpm, conc, burst] = s.split(':');
+  return [name, { rpm: Number(rpm) || KEY_RPM, concurrency: Number(conc) || KEY_CONCURRENCY, burst: Number(burst) || Math.max(1, Math.min(KEY_BURST, Number(rpm) || KEY_RPM)) }];
 }));
+
+/**
+ * Token bucket: `burst` tokens to start, refilled at `rpm` per minute. A
+ * client that sends a burst of requests gets them through; one that keeps
+ * going settles to the sustained rate; neither sees the "fixed window"
+ * cliff where the 11th request of a quiet minute is refused.
+ */
+function takeToken(b, rpm, burst, now) {
+  if (b.tokens === undefined) { b.tokens = burst; b.at = now; }
+  b.tokens = Math.min(burst, b.tokens + ((now - b.at) / 60000) * rpm);
+  b.at = now;
+  if (b.tokens >= 1) { b.tokens -= 1; return 0; }
+  return Math.ceil(((1 - b.tokens) / rpm) * 60); // seconds until a token exists
+}
 
 // --- API keys ---------------------------------------------------------------
 
@@ -113,13 +134,17 @@ function bearer(req) {
   return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
 }
 
-/** name -> { window: number[], inflight, requests, promptTokens, completionTokens, last, byModel, sticky } */
+/** name -> { tokens, at (bucket), inflight, requests, promptTokens, completionTokens, last, byModel, sticky } */
 const usage = new Map();
 function account(name) {
-  if (!usage.has(name)) usage.set(name, { window: [], inflight: 0, requests: 0, promptTokens: 0, completionTokens: 0, errors: 0, last: 0, byModel: {}, sticky: {} });
+  if (!usage.has(name)) usage.set(name, { inflight: 0, requests: 0, promptTokens: 0, completionTokens: 0, errors: 0, last: 0, byModel: {}, sticky: {} });
   return usage.get(name);
 }
-function limitsFor(name) { return KEY_LIMITS.get(name) || { rpm: KEY_RPM, concurrency: KEY_CONCURRENCY }; }
+function limitsFor(name) { return KEY_LIMITS.get(name) || { rpm: KEY_RPM, concurrency: KEY_CONCURRENCY, burst: KEY_BURST }; }
+/** visitor ip -> bucket, for the shared public key only; pruned hourly. */
+const visitors = new Map();
+setInterval(() => { const cut = Date.now() - 3600000; for (const [ip, v] of visitors) if (v.at < cut && !v.inflight) visitors.delete(ip); }, 600000).unref();
+const clientIp = (req) => (req.headers['cf-connecting-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?');
 
 // --- pools ------------------------------------------------------------------
 
@@ -321,14 +346,26 @@ const server = http.createServer(async (req, res) => {
   const target = models.get(modelId);
   const pool = pools.get(target.app);
 
-  // Per-key limits, per instance.
+  // Per-key limits, per instance: a token bucket for rate, a counter for
+  // concurrency. The shared public key also gets a bucket per visitor.
   const acct = account(keyId);
   const lim = limitsFor(keyId);
   const now = Date.now();
-  acct.window = acct.window.filter(t => now - t < 60000);
-  if (acct.window.length >= lim.rpm) return openaiError(res, 429, `rate limit: ${lim.rpm} requests per minute`, 'rate_limit_error', { 'Retry-After': '10' });
-  if (acct.inflight >= lim.concurrency) return openaiError(res, 429, `concurrency limit: ${lim.concurrency} requests in flight`, 'rate_limit_error', { 'Retry-After': '5' });
-  acct.window.push(now);
+  const rl = (limit, remaining) => ({ 'X-RateLimit-Limit': String(limit), 'X-RateLimit-Remaining': String(Math.max(0, Math.floor(remaining))) });
+  if (acct.inflight >= lim.concurrency) return openaiError(res, 429, `Too many requests at once for this key: ${lim.concurrency} allowed in flight. Wait for one to finish.`, 'rate_limit_error', { 'Retry-After': '5', ...rl(lim.rpm, acct.tokens ?? lim.burst) });
+  let visitor = null;
+  if (process.env.PUBLIC_KEY_NAME && keyId === process.env.PUBLIC_KEY_NAME) {
+    const ip = clientIp(req);
+    visitor = visitors.get(ip) || visitors.set(ip, { inflight: 0 }).get(ip);
+    if (visitor.inflight >= 1) return openaiError(res, 429, 'The shared demo key allows one request at a time per visitor. Wait for yours to finish, or ask for your own key.', 'rate_limit_error', { 'Retry-After': '5' });
+    const waitIp = takeToken(visitor, PUBLIC_IP_RPM, PUBLIC_IP_BURST, now);
+    if (waitIp) return openaiError(res, 429, `The shared demo key allows ${PUBLIC_IP_RPM} requests per minute per visitor. Retry in ${waitIp}s, or ask for your own key.`, 'rate_limit_error', { 'Retry-After': String(waitIp), ...rl(PUBLIC_IP_RPM, 0) });
+  }
+  const wait = takeToken(acct, lim.rpm, lim.burst, now);
+  if (wait) return openaiError(res, 429, `Rate limit for this key: ${lim.rpm} requests per minute (bursts of ${lim.burst}). Retry in ${wait}s.`, 'rate_limit_error', { 'Retry-After': String(wait), ...rl(lim.rpm, 0) });
+  res.setHeader('X-RateLimit-Limit', String(lim.rpm));
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, Math.floor(acct.tokens))));
+  if (visitor) visitor.inflight += 1;
 
   body.model = target.upstreamModel;
   const isV1 = path.startsWith('/v1/');
@@ -411,6 +448,7 @@ const server = http.createServer(async (req, res) => {
     }
   } finally {
     acct.inflight -= 1;
+    if (visitor) visitor.inflight -= 1;
   }
 });
 

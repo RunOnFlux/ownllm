@@ -382,10 +382,15 @@ const hubEnv = HUB_ONLY ? [
   // app=key overrides for pools that keep their own key (the docs pool).
   `UPSTREAM_KEYS=${arg('upstream-keys', '')}`,
   `HUB_SECRET=${HUB_SECRET}`,
-  `KEY_RPM=${arg('key-rpm', 60)}`,
-  `KEY_CONCURRENCY=${arg('key-concurrency', 4)}`,
+  `KEY_RPM=${arg('key-rpm', 120)}`,
+  `KEY_BURST=${arg('key-burst', 20)}`,
+  `KEY_CONCURRENCY=${arg('key-concurrency', 6)}`,
+  // The shared demo key: 24/min sustained, bursts of 6, two at a time, and
+  // 8/min per visitor on top so one script cannot drain it for everyone.
+  `PUBLIC_IP_RPM=${arg('public-ip-rpm', 8)}`,
+  `PUBLIC_IP_BURST=${arg('public-ip-burst', 4)}`,
   // The front page hands out one shared demo key, throttled hard.
-  `KEY_LIMITS=${arg('key-limits', 'public:10:1')}`,
+  `KEY_LIMITS=${arg('key-limits', 'public:24:2:6')}`,
   `PUBLIC_KEY_NAME=${arg('public-key-name', 'public')}`,
   `HUB_VERSION=${GATE_VERSION}`,
   `REVOKED=${arg('revoked', '')}`,
