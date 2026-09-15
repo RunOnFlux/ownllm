@@ -368,14 +368,25 @@ const server = http.createServer(async (req, res) => {
           try { await upstream.body?.cancel(); } catch { /* ignore */ }
           continue;
         }
+        const ctype = upstream.headers.get('content-type') || 'application/json';
         res.writeHead(upstream.status, {
-          'Content-Type': upstream.headers.get('content-type') || 'application/json',
+          'Content-Type': ctype,
           'X-Served-By': `${target.app}/${ip}`,
           'X-Model': modelId,
         });
+        // Prefill on CPU can run for minutes before the first token, and the
+        // Flux domain manager cuts a connection that carries no bytes (an
+        // agent's first turn - 10k+ tokens of system prompt and tools - died
+        // as a 504 after 267 s). Until the first upstream byte arrives, send
+        // something every client ignores: an SSE comment on event streams,
+        // whitespace ahead of a JSON body. ndjson gets a bare newline, which
+        // line readers skip.
+        const filler = /text\/event-stream/.test(ctype) ? ': keepalive\n\n' : /x-ndjson/.test(ctype) ? '\n' : ' ';
+        const heartbeat = upstream.status < 400 ? setInterval(() => { if (!res.writableEnded) res.write(filler); }, 10000) : null;
         let tail = '';
         if (upstream.body) {
           for await (const chunk of upstream.body) {
+            if (heartbeat) clearInterval(heartbeat);
             res.write(chunk);
             // Keep only the end of the response for token accounting: the
             // usage object is in the final chunk (SSE) or the final line
@@ -383,6 +394,7 @@ const server = http.createServer(async (req, res) => {
             tail = (tail + Buffer.from(chunk).toString('utf8')).slice(-4096);
           }
         }
+        if (heartbeat) clearInterval(heartbeat);
         res.end();
         countUsage(tail, acct, per);
         peer.latencyMs = peer.latencyMs * (1 - EWMA) + (Date.now() - started) * EWMA;
