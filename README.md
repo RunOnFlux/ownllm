@@ -447,6 +447,27 @@ matched exactly, then case-insensitively, then with `-` for `:` for clients
 that reject colons (`granite4-tiny-h`). Token usage is counted from the
 response (streams get `stream_options.include_usage` injected).
 
+**Sessions stick to an instance.** Within a pool, a key's requests go back to
+the instance it used last as long as that instance is healthy and idle,
+otherwise to the least busy one. Agent harnesses re-send the whole
+conversation on every tool call, and ollama reuses its KV cache only on the
+instance that saw the prefix: same instance, a few hundred new tokens of
+prefill; a different one, the full context again, which on CPU is minutes.
+
+**Thinking is off by default for the small reasoning models** (`--think-off`,
+default qwen3.5, qwen3:8b, gemma4:12b). On CPU they otherwise spend a
+400-token budget reasoning about 17x23 and never answer. A client that wants
+reasoning passes `reasoning_effort` (OpenAI) or `think` (ollama) itself. The
+mid and gpt-oss pools run a 32k context for the same reason: an agent's
+system prompt and tools are ~10k tokens before the first turn.
+
+**The hub has a front page.** `/` served to a browser is a public page: what
+this is, live model status (`/status.json`, no IPs), quick start for curl,
+Python, JavaScript, opencode and ollama clients, a try-it box, and a shared
+demo key (`--public-key-name`, throttled by `--key-limits`, default
+`public:10:1`). Put it on a domain with `--domains llm.example.com` and a DNS
+CNAME to `<app>.app.runonflux.io`; FDM issues the certificate.
+
 ### Using the hub from opencode
 
 `opencode.json` in this repository is written for the hub. Copy it to

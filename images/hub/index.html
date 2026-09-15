@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flux LLM</title>
+<meta name="description" content="Open language models running on the Flux decentralized cloud. One OpenAI-compatible endpoint, many models, free to try.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='28.5 28.5 92 92'%3E%3Ccircle cx='74.5' cy='74.5' r='36' fill='%232656D7'/%3E%3Cpath d='M94.88 63.17v4.8l-11.1-6.4-15.83 9.14v2.83l-6.64-3.83-6.38 3.68V63.17l19.97-11.53zM94.88 73.43v12.83l-11.1 6.4-11.08-6.4V73.43l11.1-6.41zM67.7 78.85v7.37l-6.38 3.69-6.38-3.69v-7.37l6.38-3.68z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#0b1020;--panel:#111a2e;--panel2:#16213a;--line:#233052;--text:#e6ebf7;--muted:#93a0bf;--accent:#5679ff;--accent2:#2656d7;--ok:#3ddc97;--warn:#f5b84b;--bad:#ff6b6b;--code:#0a0f1c;--radius:14px}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,16,32,.85);backdrop-filter:blur(10px);z-index:5}
+header .wrap{display:flex;align-items:center;gap:14px;height:60px}
+header .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;color:var(--text)}
+header nav{margin-left:auto;display:flex;gap:18px;font-size:14px}
+header nav a{color:var(--muted)}header nav a:hover{color:var(--text);text-decoration:none}
+.hero{padding:64px 0 36px}
+.hero h1{font-size:clamp(30px,5vw,46px);line-height:1.1;margin:0 0 14px;letter-spacing:-.02em;text-wrap:balance}
+.hero h1 span{color:var(--accent)}
+.hero p{font-size:18px;color:var(--muted);max-width:640px;margin:0 0 22px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(61,220,151,.18)}
+.dot.bad{background:var(--bad);box-shadow:0 0 0 3px rgba(255,107,107,.18)}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.btn{display:inline-block;padding:10px 16px;border-radius:10px;background:var(--accent);color:#fff;font-weight:600}
+.btn:hover{background:var(--accent2);text-decoration:none}
+.btn.ghost{background:var(--panel);border:1px solid var(--line);color:var(--text)}
+section{padding:34px 0;border-top:1px solid var(--line)}
+h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 18px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+td code{font-size:13px}
+.tscroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.num{font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+.tag.ok{color:var(--ok)}.tag.warn{color:var(--warn)}.tag.bad{color:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.card h3{margin:0 0 6px;font-size:16px}
+.card p{margin:0;color:var(--muted);font-size:14px}
+pre{margin:0;background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#d7e0ff}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--panel2);padding:1px 5px;border-radius:5px}
+pre code{background:none;padding:0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
+.tabs button.on{color:var(--text);border-color:var(--accent);background:var(--panel2)}
+.snip{display:none}.snip.on{display:block}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin:12px 0}
+.kv b{color:var(--muted);font-weight:600}
+.copy{position:relative}
+.copy button{position:absolute;top:8px;right:8px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:3px 8px;border-radius:6px;font:inherit;font-size:12px;cursor:pointer}
+.try{display:grid;grid-template-columns:1fr;gap:10px}
+.try .row{display:flex;gap:10px;flex-wrap:wrap}
+select,input,textarea{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+select:focus,input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+textarea{width:100%;min-height:84px;resize:vertical}
+.out{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px;min-height:90px;white-space:pre-wrap;font-size:14px;line-height:1.55}
+.meta{color:var(--muted);font-size:12px;margin-top:6px}
+footer{padding:30px 0 50px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+footer .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+@media (prefers-reduced-motion:no-preference){.dot{animation:pulse 2.4s infinite}@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(61,220,151,0)}}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="/"><svg width="26" height="26" viewBox="28.5 28.5 92 92" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M74.7415 38.4807C81.8512 38.5284 88.7876 40.6802 94.676 44.6648C100.564 48.6495 105.141 54.2885 107.829 60.8707C110.517 67.453 111.195 74.6837 109.779 81.6511C108.363 88.6185 104.915 95.0105 99.8709 100.021C94.8267 105.032 88.4117 108.437 81.435 109.806C74.4583 111.176 67.2323 110.449 60.6681 107.717C54.104 104.985 48.4957 100.371 44.5505 94.4563C40.6053 88.5415 38.4999 81.5908 38.4998 74.481C38.532 64.9012 42.3684 55.7265 49.165 48.9752C55.9616 42.2239 65.1617 38.4489 74.7415 38.4807Z" fill="#2656D7"/><path d="M79.0362 95.3835L74.908 97.7676L66.0398 92.6549L70.0672 90.3294L70.168 90.2707L79.0362 95.3835Z" fill="white"/><path d="M94.8832 63.1743V67.973L83.7856 61.5662L67.955 70.7087V73.5382L61.3185 69.7077L54.9352 73.3905V63.1743L74.908 51.6431L94.8832 63.1743Z" fill="white"/><path d="M94.8832 73.4332V86.2561L83.7879 92.6558H83.7739L72.6904 86.2561V73.4332L83.7879 67.0241L94.8832 73.4332Z" fill="white"/><path d="M67.6995 78.8526V86.2205L61.3162 89.908L54.9352 86.2229V78.855L61.3185 75.1698L67.6995 78.8526Z" fill="white"/></svg>Flux LLM</a>
+  <nav><a href="#models">Models</a><a href="#start">Quick start</a><a href="#try">Try it</a><a href="#keys">Keys</a><a href="#how">How it works</a><a href="https://github.com/RunOnFlux/ownllm" rel="noopener">GitHub</a></nav>
+</div></header>
+
+<div class="wrap hero">
+  <div class="pill"><span class="dot" id="live-dot"></span><span id="live-text">checking status…</span></div>
+  <h1>Open language models,<br>running on <span>Flux</span>.</h1>
+  <p>One OpenAI-compatible endpoint in front of a fleet of models on the Flux decentralized cloud. Works with every OpenAI or Ollama client. Free to try, no sign-up.</p>
+  <div class="btns"><a class="btn" href="#start">Quick start</a><a class="btn ghost" href="#try">Try it in the browser</a></div>
+</div>
+
+<section id="models"><div class="wrap">
+  <h2>Models</h2>
+  <p class="sub">Live status of every model pool. Each pool is a set of CPU nodes across the Flux network; requests go to the least busy healthy one.</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>Model</th><th>Size</th><th>Best for</th><th>Instances</th><th>Status</th></tr></thead>
+    <tbody id="model-rows"><tr><td colspan="5" style="color:var(--muted)">loading…</td></tr></tbody>
+  </table></div>
+  <p class="meta">Speeds are CPU speeds: expect roughly 5 to 15 tokens per second for generation depending on the model and node, and longer waits on the first token for long prompts. Reasoning is off by default on the small reasoning models; pass <code>reasoning_effort</code> to turn it on.</p>
+</div></section>
+
+<section id="start"><div class="wrap">
+  <h2>Quick start</h2>
+  <p class="sub">Point any OpenAI-compatible client at the base URL with a key. The demo key below works right away, with low limits.</p>
+  <div class="kv"><b>Base URL</b><code id="base-url">…</code><b>API key</b><code id="demo-key">…</code><b>Model IDs</b><span>as listed above, for example <code>gpt-oss:20b</code>; dashes for colons also work (<code>gpt-oss-20b</code>)</span></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="snips"></div>
+</div></section>
+
+<section id="try"><div class="wrap">
+  <h2>Try it</h2>
+  <p class="sub">Runs in your browser against the live endpoint with the key below. Answers stream in as they are generated.</p>
+  <div class="try">
+    <div class="row">
+      <select id="try-model" aria-label="Model"></select>
+      <input id="try-key" type="text" placeholder="API key" aria-label="API key" style="flex:1;min-width:260px;font-family:ui-monospace,Menlo,monospace;font-size:13px">
+    </div>
+    <textarea id="try-q" placeholder="Ask anything… e.g. Write a haiku about decentralized computing.">Explain in two sentences what a decentralized cloud is.</textarea>
+    <div class="row"><button class="btn" id="try-go">Send</button><span class="meta" id="try-meta"></span></div>
+    <div class="out" id="try-out"></div>
+  </div>
+</div></section>
+
+<section id="keys"><div class="wrap">
+  <h2>API keys</h2>
+  <div class="grid">
+    <div class="card"><h3>Demo key</h3><p>The key on this page is public and shared. It is limited per hub instance to a handful of requests per minute and one request at a time. Good for trying models and for small scripts, not for an app.</p></div>
+    <div class="card"><h3>Your own key</h3><p>Keys are issued per person or project with higher limits, and can be revoked individually. Ask in the Flux <a href="https://docs.runonflux.com/resources/socials" rel="noopener">community channels</a> or open an issue on <a href="https://github.com/RunOnFlux/ownllm/issues" rel="noopener">GitHub</a>.</p></div>
+    <div class="card"><h3>Run your own</h3><p>Everything here is open source and deploys from one command. Run the same endpoint under your own Flux account with the models you choose: <a href="https://github.com/RunOnFlux/ownllm" rel="noopener">RunOnFlux/ownllm</a>.</p></div>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <h2>How it works</h2>
+  <div class="grid">
+    <div class="card"><h3>Pools of nodes</h3><p>Each model runs in a pool: an application on the Flux network with many instances, each a CPU node somewhere in the world running the model server. Instances migrate and scale without anyone reconfiguring clients.</p></div>
+    <div class="card"><h3>One endpoint</h3><p>The hub maps the <code>model</code> in your request to its pool, discovers that pool's instances from the Flux API, and sends each request to the least busy healthy one. Sessions stay on the same instance while it is free, so long conversations keep their prompt cache.</p></div>
+    <div class="card"><h3>Stateless keys</h3><p>A key is a signed name. Every hub instance verifies it with no shared database, which is the only kind of state a multi-instance application on a decentralized network can have. Limits and usage are enforced per key.</p></div>
+    <div class="card"><h3>No GPUs</h3><p>These are CPU nodes. Small and mixture-of-experts models with few active parameters are what run well here: that is why the roster looks the way it does. The <a href="https://github.com/RunOnFlux/ownllm/blob/master/research/cpu-native-models.md" rel="noopener">research notes</a> cover what was measured.</p></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>Powered by <a href="https://runonflux.com" rel="noopener">Flux</a></span>
+  <span>·</span><a href="https://docs.runonflux.com" rel="noopener">Flux docs</a>
+  <span>·</span><a href="https://github.com/RunOnFlux/ownllm" rel="noopener">Source</a>
+  <span style="margin-left:auto" id="foot-status"></span>
+</div></footer>
+
+<script>
+(function () {
+  var CFG = __CONFIG__;
+  var base = location.origin;
+  var demoKey = CFG.publicKey || '';
+  var INFO = {
+    'granite4:tiny-h': { size: '7B MoE, 1B active', best: 'Fast general chat and Q&A; the model behind the Flux docs assistant' },
+    'granite4.2:3b': { size: '3B', best: 'Small, precise answers; instruction following' },
+    'qwen3.5:0.8b': { size: '0.8B', best: 'Fastest; simple tasks, classification, extraction' },
+    'qwen3.5:2b': { size: '2B', best: 'Quick chat and summaries' },
+    'qwen3:8b': { size: '8B', best: 'Strong general model; tool calling' },
+    'gemma4:12b': { size: '12B', best: 'Best writing quality here; slower' },
+    'gpt-oss:20b': { size: '21B MoE, 3.6B active', best: 'Reasoning and tool use; coding agents' },
+    'bitnet-2b-4t': { size: '2B ternary (1.58-bit)', best: 'Research: Microsoft BitNet on CPU' },
+  };
+  document.getElementById('base-url').textContent = base + '/v1';
+  document.getElementById('demo-key').textContent = demoKey || '(ask for a key)';
+  document.getElementById('try-key').value = demoKey;
+
+  var sel = document.getElementById('try-model');
+  function renderModels(status) {
+    var rows = '';
+    var opts = '';
+    var ids = Object.keys(status.models);
+    ids.forEach(function (id) {
+      var m = status.models[id]; var info = INFO[id] || { size: '', best: '' };
+      var pct = m.instances ? m.healthy / m.instances : 0;
+      var cls = m.healthy === 0 ? 'bad' : pct < 0.5 ? 'warn' : 'ok';
+      var label = m.healthy === 0 ? 'offline' : pct < 0.5 ? 'starting' : 'online';
+      rows += '<tr><td><code>' + id + '</code></td><td>' + info.size + '</td><td>' + info.best + '</td>'
+        + '<td class="num">' + m.healthy + ' / ' + m.instances + '</td><td><span class="tag ' + cls + '">' + label + '</span></td></tr>';
+      opts += '<option value="' + id + '"' + (m.healthy === 0 ? ' disabled' : '') + '>' + id + '</option>';
+    });
+    document.getElementById('model-rows').innerHTML = rows || '<tr><td colspan="5">no models configured</td></tr>';
+    if (!sel.options.length) { sel.innerHTML = opts; if (status.models['granite4:tiny-h']) sel.value = 'granite4:tiny-h'; }
+    var up = ids.filter(function (id) { return status.models[id].healthy > 0; }).length;
+    var total = ids.reduce(function (n, id) { return n + status.models[id].healthy; }, 0);
+    document.getElementById('live-text').textContent = up + ' of ' + ids.length + ' models online · ' + total + ' healthy instances';
+    document.getElementById('live-dot').className = 'dot' + (up ? '' : ' bad');
+    document.getElementById('foot-status').textContent = 'hub ' + (status.version || '') + ' · updated ' + new Date().toLocaleTimeString();
+  }
+  function refresh() {
+    fetch(base + '/status.json').then(function (r) { return r.json(); }).then(renderModels).catch(function () {
+      document.getElementById('live-text').textContent = 'status unavailable';
+      document.getElementById('live-dot').className = 'dot bad';
+    });
+  }
+  refresh(); setInterval(refresh, 30000);
+
+  var SNIPS = [
+    ['curl', 'curl ' + base + '/v1/chat/completions \\\n  -H "Authorization: Bearer ' + (demoKey || '$FLUX_LLM_KEY') + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model": "granite4:tiny-h", "messages": [{"role": "user", "content": "Hello!"}]}\''],
+    ['Python', 'from openai import OpenAI\n\nclient = OpenAI(base_url="' + base + '/v1", api_key="' + (demoKey || 'sk-flux-...') + '")\nr = client.chat.completions.create(\n    model="gpt-oss:20b",\n    messages=[{"role": "user", "content": "Write a limerick about Flux."}],\n    stream=True,\n)\nfor chunk in r:\n    print(chunk.choices[0].delta.content or "", end="", flush=True)'],
+    ['JavaScript', 'import OpenAI from "openai";\n\nconst client = new OpenAI({ baseURL: "' + base + '/v1", apiKey: "' + (demoKey || 'sk-flux-...') + '" });\nconst r = await client.chat.completions.create({\n  model: "qwen3:8b",\n  messages: [{ role: "user", content: "Three facts about the Flux network." }],\n});\nconsole.log(r.choices[0].message.content);'],
+    ['opencode', '// ~/.config/opencode/opencode.json\n{\n  "$schema": "https://opencode.ai/config.json",\n  "provider": {\n    "flux": {\n      "npm": "@ai-sdk/openai-compatible",\n      "name": "Flux LLM",\n      "options": { "baseURL": "' + base + '/v1", "apiKey": "{env:FLUX_LLM_KEY}" },\n      "models": {\n        "gpt-oss:20b": { "name": "gpt-oss 20B (Flux)", "tools": true },\n        "qwen3:8b": { "name": "Qwen3 8B (Flux)", "tools": true },\n        "granite4:tiny-h": { "name": "Granite 4 tiny-h (Flux, fast)", "tools": true }\n      }\n    }\n  }\n}'],
+    ['Ollama clients', '# Anything that speaks the Ollama API works too:\ncurl ' + base + '/api/chat \\\n  -H "Authorization: Bearer ' + (demoKey || '$FLUX_LLM_KEY') + '" \\\n  -d \'{"model": "granite4.2:3b", "messages": [{"role": "user", "content": "Hi"}], "stream": false}\'\n\n# List models\ncurl -H "Authorization: Bearer ' + (demoKey || '$FLUX_LLM_KEY') + '" ' + base + '/v1/models'],
+  ];
+  var tabs = document.getElementById('tabs'); var snips = document.getElementById('snips');
+  SNIPS.forEach(function (s, i) {
+    var b = document.createElement('button'); b.textContent = s[0]; b.className = i === 0 ? 'on' : '';
+    b.onclick = function () { [].forEach.call(tabs.children, function (x, j) { x.className = j === i ? 'on' : ''; }); [].forEach.call(snips.children, function (x, j) { x.className = 'snip copy' + (j === i ? ' on' : ''); }); };
+    tabs.appendChild(b);
+    var d = document.createElement('div'); d.className = 'snip copy' + (i === 0 ? ' on' : '');
+    var pre = document.createElement('pre'); var code = document.createElement('code'); code.textContent = s[1]; pre.appendChild(code);
+    var cp = document.createElement('button'); cp.textContent = 'copy';
+    cp.onclick = function () { navigator.clipboard.writeText(s[1]).then(function () { cp.textContent = 'copied'; setTimeout(function () { cp.textContent = 'copy'; }, 1200); }); };
+    d.appendChild(pre); d.appendChild(cp); snips.appendChild(d);
+  });
+
+  var out = document.getElementById('try-out'); var meta = document.getElementById('try-meta'); var go = document.getElementById('try-go');
+  var busy = false;
+  function ask() {
+    if (busy) return;
+    var key = document.getElementById('try-key').value.trim(); var q = document.getElementById('try-q').value.trim(); var model = sel.value;
+    if (!key || !q || !model) { out.textContent = key ? 'Type a question.' : 'An API key is needed.'; return; }
+    busy = true; go.textContent = 'Working…'; out.textContent = ''; meta.textContent = model + ' · waiting for the first token (prefill on CPU takes a few seconds)…';
+    var t0 = Date.now(); var first = 0; var n = 0;
+    fetch(base + '/v1/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model: model, stream: true, max_tokens: 600, messages: [{ role: 'user', content: q }] }),
+    }).then(function (res) {
+      if (!res.ok) return res.text().then(function (t) { throw new Error(res.status + ' ' + t.slice(0, 300)); });
+      var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return;
+          buf += dec.decode(r.value, { stream: true });
+          var lines = buf.split('\n'); buf = lines.pop();
+          lines.forEach(function (line) {
+            if (line.indexOf('data:') !== 0) return; var data = line.slice(5).trim(); if (!data || data === '[DONE]') return;
+            try {
+              var j = JSON.parse(data); var d = j.choices && j.choices[0] && j.choices[0].delta;
+              var piece = d && (d.content || (d.reasoning ? '' : ''));
+              if (piece) { if (!first) first = Date.now(); n += 1; out.textContent += piece; }
+              if (j.usage) meta.textContent = model + ' · ' + (first ? ((first - t0) / 1000).toFixed(1) + ' s to first token · ' : '') + j.usage.completion_tokens + ' tokens in ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s' + (first ? ' · ' + (j.usage.completion_tokens / Math.max(0.1, (Date.now() - first) / 1000)).toFixed(1) + ' tok/s' : '');
+            } catch (e) { /* partial line */ }
+          });
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function (err) { out.textContent = 'Error: ' + err.message; })
+      .then(function () { busy = false; go.textContent = 'Send'; if (!out.textContent) out.textContent = '(empty answer: the model spent its budget thinking; try another model)'; });
+  }
+  go.onclick = ask;
+  document.getElementById('try-q').addEventListener('keydown', function (e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ask(); });
+})();
+</script>
+</body>
+</html>

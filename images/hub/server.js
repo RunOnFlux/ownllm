@@ -29,20 +29,32 @@
  *   KEY_CONCURRENCY concurrent requests per key (default 4)
  *   KEY_LIMITS     name:rpm:concurrency[,...] per-key overrides
  *   REVOKED        comma-separated key names that no longer work
+ *   THINK_OFF      models whose thinking is switched off unless the client
+ *                  asks for it (reasoning_effort on /v1, think on /api): a
+ *                  small reasoning model on CPU otherwise spends its whole
+ *                  budget thinking and answers nothing
  *   ALLOWED_ORIGINS hostnames allowed to call from a browser ("*" = any)
+ *   PUBLIC_KEY_NAME name of a key the front page hands out (a demo key with
+ *                  tight KEY_LIMITS); empty = the page shows none
  *
  * No dependencies: node:http, node:crypto, global fetch.
  */
 const http = require('node:http');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 
 const PORT = Number(process.env.PORT || 8080);
-const FLUX_API = process.env.FLUX_API || 'https://api.runonflux.io';
+// Comma-separated; tried in order. Every Flux node also answers the same
+// query on :16127, and every pool instance runs on a Flux node, so once one
+// lookup has succeeded the pool IPs themselves are fallback API hosts - one
+// hub instance sat on a node that could not reach api.runonflux.io at all.
+const FLUX_APIS = (process.env.FLUX_API || 'https://api.runonflux.io').split(',').map(s => s.trim()).filter(Boolean);
 const DISCOVER_MS = Number(process.env.DISCOVER_MS || 60000);
 const PROBE_MS = Number(process.env.PROBE_MS || 20000);
 const HUB_SECRET = process.env.HUB_SECRET || '';
 const KEY_RPM = Number(process.env.KEY_RPM || 60);
 const KEY_CONCURRENCY = Number(process.env.KEY_CONCURRENCY || 4);
+const THINK_OFF = new Set((process.env.THINK_OFF || '').split(',').map(s => s.trim()).filter(Boolean));
 const REVOKED = new Set((process.env.REVOKED || '').split(',').map(s => s.trim()).filter(Boolean));
 const EWMA = 0.3;
 const MAX_BODY = 8 * 1024 * 1024;
@@ -87,6 +99,11 @@ function keyName(token) {
   return m[1];
 }
 const ADMIN_KEY = process.env.ADMIN_KEY || `sk-flux-admin-${sign('admin')}`;
+const PUBLIC_KEY = process.env.PUBLIC_KEY_NAME ? `sk-flux-${process.env.PUBLIC_KEY_NAME}-${sign(process.env.PUBLIC_KEY_NAME)}` : '';
+// The front page: what this is, live model status, quick start, a try-it box.
+// Served at / to browsers; FDM's health check and curl get the text version.
+const PAGE = (() => { try { return fs.readFileSync(`${__dirname}/index.html`, 'utf8'); } catch { return null; } })();
+const VERSION = process.env.HUB_VERSION || '';
 function isAdmin(token) {
   const a = Buffer.from(ADMIN_KEY); const b = Buffer.from(token || '');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -96,23 +113,44 @@ function bearer(req) {
   return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
 }
 
-/** name -> { window: number[], inflight, requests, promptTokens, completionTokens, last, byModel } */
+/** name -> { window: number[], inflight, requests, promptTokens, completionTokens, last, byModel, sticky } */
 const usage = new Map();
 function account(name) {
-  if (!usage.has(name)) usage.set(name, { window: [], inflight: 0, requests: 0, promptTokens: 0, completionTokens: 0, errors: 0, last: 0, byModel: {} });
+  if (!usage.has(name)) usage.set(name, { window: [], inflight: 0, requests: 0, promptTokens: 0, completionTokens: 0, errors: 0, last: 0, byModel: {}, sticky: {} });
   return usage.get(name);
 }
 function limitsFor(name) { return KEY_LIMITS.get(name) || { rpm: KEY_RPM, concurrency: KEY_CONCURRENCY }; }
 
 // --- pools ------------------------------------------------------------------
 
+let lastDiscovery = 'never';
+async function locate(app) {
+  const known = [...new Set([...pools.values()].flatMap(pool => [...pool.peers.values()].map(p => p.api).filter(Boolean)))];
+  const hosts = [...FLUX_APIS, ...known.sort(() => Math.random() - 0.5).slice(0, 3)];
+  let lastErr = null;
+  for (const host of hosts) {
+    try {
+      const res = await fetch(`${host}/apps/location/${app}`, { signal: AbortSignal.timeout(15000) });
+      const body = await res.json();
+      if (body.status !== 'success' || !Array.isArray(body.data)) throw new Error(`${host}: ${JSON.stringify(body).slice(0, 80)}`);
+      lastDiscovery = `${new Date().toISOString()} via ${host}`;
+      // ip is "host:fluxos-api-port" (16127, or another port on a host that
+      // runs several nodes); remember the API endpoint for fallback lookups.
+      return body.data.map(i => ({ ip: i.ip.split(':')[0], api: `http://${i.ip.includes(':') ? i.ip : `${i.ip}:16127`}` }));
+    } catch (err) { lastErr = err; }
+  }
+  throw lastErr || new Error('no API host');
+}
+
 async function discover() {
   await Promise.all([...pools.entries()].map(async ([app, pool]) => {
     try {
-      const res = await fetch(`${FLUX_API}/apps/location/${app}`, { signal: AbortSignal.timeout(20000) });
-      const body = await res.json();
-      const ips = (body.data || []).map(i => i.ip.split(':')[0]);
-      for (const ip of ips) if (!pool.peers.has(ip)) pool.peers.set(ip, { healthy: false, inflight: 0, latencyMs: 0, detail: 'new' });
+      const found = await locate(app);
+      const ips = found.map(f => f.ip);
+      for (const f of found) {
+        if (!pool.peers.has(f.ip)) pool.peers.set(f.ip, { healthy: false, inflight: 0, latencyMs: 0, detail: 'new', api: f.api });
+        else pool.peers.get(f.ip).api = f.api;
+      }
       for (const ip of [...pool.peers.keys()]) if (!ips.includes(ip) && pool.peers.get(ip).inflight === 0) pool.peers.delete(ip);
     } catch (err) {
       console.log(`discovery of ${app} failed, keeping ${pool.peers.size} known: ${err.message}`);
@@ -137,8 +175,22 @@ async function probe() {
   })));
 }
 
-/** Least busy healthy instance of a pool; latency breaks ties. */
-function pick(pool, exclude) {
+/**
+ * The instance a key used last for this pool, if it is healthy and idle;
+ * otherwise the least busy healthy instance, latency breaking ties.
+ *
+ * Sticky first because of the prompt cache: an agent harness re-sends the
+ * whole conversation on every tool call, and ollama reuses the KV cache only
+ * when the request lands on the instance that saw the prefix. Same instance:
+ * a few hundred new tokens of prefill. Any other: the full 20k again, minutes
+ * on CPU. A busy sticky instance is not waited for - a session with two
+ * requests in flight is already paying for it.
+ */
+function pick(pool, exclude, prefer) {
+  if (prefer && prefer !== exclude) {
+    const p = pool.peers.get(prefer);
+    if (p && p.healthy && p.inflight === 0) return prefer;
+  }
   const healthy = [...pool.peers.entries()].filter(([ip, p]) => p.healthy && ip !== exclude);
   if (!healthy.length) return null;
   healthy.sort(([, a], [, b]) => (a.inflight - b.inflight) || (a.latencyMs - b.latencyMs));
@@ -210,8 +262,18 @@ const server = http.createServer(async (req, res) => {
   const path = req.url.split('?')[0];
 
   // Unauthenticated: FDM's health check carries no token.
+  if (path === '/status.json') {
+    // Public, no IPs: per-model instance and health counts for the front page.
+    const out = {};
+    for (const [id, m] of models) { const ps = [...pools.get(m.app).peers.values()]; out[id] = { pool: m.app, instances: ps.length, healthy: ps.filter(p => p.healthy).length, inflight: ps.reduce((n, p) => n + p.inflight, 0) }; }
+    return json(res, 200, { models: out, version: VERSION }, { 'Cache-Control': 'no-store' });
+  }
   if (path === '/' || path === '/health' || path === '/healthz') {
     const anyUp = [...pools.values()].some(pool => [...pool.peers.values()].some(p => p.healthy));
+    if (path === '/' && PAGE && /text\/html/.test(req.headers.accept || '')) {
+      res.writeHead(anyUp ? 200 : 503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(PAGE.replace('__CONFIG__', JSON.stringify({ publicKey: PUBLIC_KEY, version: VERSION })));
+    }
     if (path === '/') {
       res.writeHead(anyUp ? 200 : 503, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end(`ownllm hub\n\nOpenAI-compatible API. Base URL: this origin + /v1\n`
@@ -227,11 +289,11 @@ const server = http.createServer(async (req, res) => {
     if (!isAdmin(token)) return openaiError(res, 401, 'admin key required', 'authentication_error');
     if (path === '/admin/usage') {
       const keys = {};
-      for (const [name, u] of usage) keys[name] = { requests: u.requests, promptTokens: u.promptTokens, completionTokens: u.completionTokens, errors: u.errors, inflight: u.inflight, last: u.last ? new Date(u.last).toISOString() : null, byModel: u.byModel, limits: limitsFor(name) };
+      for (const [name, u] of usage) keys[name] = { requests: u.requests, promptTokens: u.promptTokens, completionTokens: u.completionTokens, errors: u.errors, inflight: u.inflight, last: u.last ? new Date(u.last).toISOString() : null, byModel: u.byModel, sticky: u.sticky, limits: limitsFor(name) };
       return json(res, 200, { instance: process.env.HOSTNAME || null, keys });
     }
     if (path === '/admin/status') {
-      const out = {};
+      const out = { _discovery: lastDiscovery };
       for (const [app, pool] of pools) out[app] = { port: pool.port, models: [...models.entries()].filter(([, m]) => m.app === app).map(([k]) => k), peers: [...pool.peers.entries()].map(([ip, p]) => ({ ip, ...p })) };
       return json(res, 200, out);
     }
@@ -271,6 +333,10 @@ const server = http.createServer(async (req, res) => {
   body.model = target.upstreamModel;
   const isV1 = path.startsWith('/v1/');
   const streaming = !!body.stream;
+  if (THINK_OFF.has(modelId)) {
+    if (isV1 && body.reasoning_effort === undefined) body.reasoning_effort = 'none';
+    if (!isV1 && body.think === undefined) body.think = false;
+  }
   // Usage in the last chunk of a stream, so tokens can be counted here and the
   // client gets them too. Harmless for clients that ignore it.
   if (isV1 && streaming && path === '/v1/chat/completions' && !body.stream_options) body.stream_options = { include_usage: true };
@@ -282,8 +348,9 @@ const server = http.createServer(async (req, res) => {
   let tried = null;
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const ip = pick(pool, tried);
+      const ip = pick(pool, tried, acct.sticky[target.app]);
       if (!ip) { acct.errors += 1; return openaiError(res, 503, `no healthy instance for ${modelId} (${target.app})`, 'server_error', { 'Retry-After': '30' }); }
+      acct.sticky[target.app] = ip;
       const peer = pool.peers.get(ip);
       peer.inflight += 1;
       const started = Date.now();

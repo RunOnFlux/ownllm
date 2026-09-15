@@ -112,10 +112,12 @@ const PROFILES = {
   // parallel: 2 so two clients of the same instance do not queue; each slot
   // gets half the context, which at 16k is still 8k per request.
   'pool-small': { cpu: 8, ram: 16000, hdd: 20, threads: 8, parallel: 2, loaded: 3, ctx: 16384, models: 'qwen3.5:0.8b qwen3.5:2b granite4.2:3b' },
-  // Mid: two ~8-12B models resident (5.2 + 7.6 GB weights plus KV).
-  'pool-mid': { cpu: 8, ram: 26000, hdd: 40, threads: 8, parallel: 1, loaded: 2, ctx: 16384, models: 'qwen3:8b gemma4:12b' },
+  // Mid: two ~8-12B models resident (5.2 + 7.6 GB weights plus KV). 32k
+  // context because agent harnesses carry 10k of system prompt and tools
+  // before the first turn; q8 KV at 32k is ~2.5 GB per model, inside ram.
+  'pool-mid': { cpu: 8, ram: 26000, hdd: 40, threads: 8, parallel: 1, loaded: 2, ctx: 32768, models: 'qwen3:8b gemma4:12b' },
   // gpt-oss:20b alone: 14 GB resident.
-  'pool-gptoss': { cpu: 8, ram: 24000, hdd: 40, threads: 8, parallel: 1, loaded: 1, ctx: 16384, models: 'gpt-oss:20b' },
+  'pool-gptoss': { cpu: 8, ram: 24000, hdd: 40, threads: 8, parallel: 1, loaded: 1, ctx: 32768, models: 'gpt-oss:20b' },
   small: { cpu: 4, ram: 8000, hdd: 20, threads: 4, models: 'qwen3:4b', loaded: 1, ctx: 16384 },
   // Sized to fit a NIMBUS node too: nimbus offers 7.0 cores / 28000 MB to apps,
   // so the whole app must stay under that. Triples the pool of eligible hosts.
@@ -382,10 +384,20 @@ const hubEnv = HUB_ONLY ? [
   `HUB_SECRET=${HUB_SECRET}`,
   `KEY_RPM=${arg('key-rpm', 60)}`,
   `KEY_CONCURRENCY=${arg('key-concurrency', 4)}`,
-  `KEY_LIMITS=${arg('key-limits', '')}`,
+  // The front page hands out one shared demo key, throttled hard.
+  `KEY_LIMITS=${arg('key-limits', 'public:10:1')}`,
+  `PUBLIC_KEY_NAME=${arg('public-key-name', 'public')}`,
+  `HUB_VERSION=${GATE_VERSION}`,
   `REVOKED=${arg('revoked', '')}`,
+  // Thinking off by default for the small reasoning models: on CPU they spend
+  // a 400-token budget reasoning about 17x23 and never answer. A client that
+  // wants it passes reasoning_effort (OpenAI) or think (ollama) itself.
+  `THINK_OFF=${arg('think-off', 'qwen3.5:0.8b,qwen3.5:2b,qwen3:8b,gemma4:12b')}`,
   `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
-  'FLUX_API=https://api.runonflux.io',
+  // Discovery hosts, tried in order. --seeds adds FluxOS nodes by IP
+  // (tools/hub-seeds.js) for an instance whose node cannot resolve the API
+  // domain; a hub without any peers is a hub without any models.
+  `FLUX_API=${['https://api.runonflux.io', ...arg('seeds', '').split(',').map(v => v.trim()).filter(Boolean)].join(',')}`,
   'DISCOVER_MS=60000',
   'PROBE_MS=20000',
 ] : [];
@@ -397,7 +409,9 @@ const hub = {
   repotag: `${REGISTRY}/ownllm-hub:${GATE_VERSION}`,
   ports: [PORT],
   containerPorts: [8080],
-  domains: [''],
+  // A custom domain (--domains llm.runonflux.com): FDM issues its certificate
+  // and routes it once the DNS CNAME points at <app>.app.runonflux.io.
+  domains: [arg('domains', '')],
   environmentParameters: hubEnv,
   commands: [],
   containerData: '/tmp',
