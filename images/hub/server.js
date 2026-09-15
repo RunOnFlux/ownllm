@@ -383,10 +383,35 @@ const server = http.createServer(async (req, res) => {
   const per = acct.byModel[modelId] || (acct.byModel[modelId] = { requests: 0, promptTokens: 0, completionTokens: 0 });
   per.requests += 1;
   let tried = null;
+  // A streaming request commits to 200 + its stream type before the upstream
+  // is even contacted, because fetch() does not resolve until the engine
+  // sends headers, and ollama sends them after prefill - the whole silent
+  // stretch the heartbeat exists for. So for streams the heartbeat starts
+  // now; an upstream error is then delivered inside the stream. Non-stream
+  // requests cannot do that (the status must be right) and get no heartbeat.
+  // Non-streaming requests get the same treatment with whitespace: a JSON
+  // parser skips leading spaces, and the alternative - a 504 from the proxy
+  // for every agent whose harness does not stream - is worse than the one
+  // cost of committing early, which is that an engine error after prefill
+  // arrives as an {"error":...} body under a 200 instead of its own status.
+  const streamType = streaming ? (isV1 ? 'text/event-stream' : 'application/x-ndjson') : 'application/json';
+  const filler = streamType === 'text/event-stream' ? ': keepalive\n\n' : streaming ? '\n' : ' ';
+  let heartbeat = null;
+  const streamError = (status, message) => {
+    const err = { error: { message, type: status >= 500 ? 'server_error' : 'invalid_request_error', code: status } };
+    res.write(!streaming ? JSON.stringify(err) : isV1 ? `data: ${JSON.stringify(err)}\n\ndata: [DONE]\n\n` : `${JSON.stringify(err)}\n`);
+    res.end();
+  };
+  res.writeHead(200, { 'Content-Type': streamType, 'X-Model': modelId, 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no' });
+  res.write(filler);
+  heartbeat = setInterval(() => { if (!res.writableEnded) res.write(filler); }, 10000);
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const ip = pick(pool, tried, acct.sticky[target.app]);
-      if (!ip) { acct.errors += 1; return openaiError(res, 503, `no healthy instance for ${modelId} (${target.app})`, 'server_error', { 'Retry-After': '30' }); }
+      if (!ip) {
+        acct.errors += 1;
+        return streamError(503, `no healthy instance for ${modelId} (${target.app})`);
+      }
       acct.sticky[target.app] = ip;
       const peer = pool.peers.get(ip);
       peer.inflight += 1;
@@ -405,25 +430,18 @@ const server = http.createServer(async (req, res) => {
           try { await upstream.body?.cancel(); } catch { /* ignore */ }
           continue;
         }
-        const ctype = upstream.headers.get('content-type') || 'application/json';
-        res.writeHead(upstream.status, {
-          'Content-Type': ctype,
-          'X-Served-By': `${target.app}/${ip}`,
-          'X-Model': modelId,
-        });
-        // Prefill on CPU can run for minutes before the first token, and the
-        // Flux domain manager cuts a connection that carries no bytes (an
-        // agent's first turn - 10k+ tokens of system prompt and tools - died
-        // as a 504 after 267 s). Until the first upstream byte arrives, send
-        // something every client ignores: an SSE comment on event streams,
-        // whitespace ahead of a JSON body. ndjson gets a bare newline, which
-        // line readers skip.
-        const filler = /text\/event-stream/.test(ctype) ? ': keepalive\n\n' : /x-ndjson/.test(ctype) ? '\n' : ' ';
-        const heartbeat = upstream.status < 400 ? setInterval(() => { if (!res.writableEnded) res.write(filler); }, 10000) : null;
+        if (upstream.status >= 400) {
+          // Already committed to a 200: relay the error in the body.
+          const text = await upstream.text().catch(() => '');
+          let msg = text.slice(0, 300); try { msg = JSON.parse(text).error?.message || JSON.parse(text).error || msg; } catch { /* raw */ }
+          acct.errors += 1;
+          if (heartbeat) clearInterval(heartbeat);
+          return streamError(upstream.status, `upstream ${upstream.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
+        }
         let tail = '';
         if (upstream.body) {
           for await (const chunk of upstream.body) {
-            if (heartbeat) clearInterval(heartbeat);
+            if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
             res.write(chunk);
             // Keep only the end of the response for token accounting: the
             // usage object is in the final chunk (SSE) or the final line
@@ -431,7 +449,7 @@ const server = http.createServer(async (req, res) => {
             tail = (tail + Buffer.from(chunk).toString('utf8')).slice(-4096);
           }
         }
-        if (heartbeat) clearInterval(heartbeat);
+        if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
         res.end();
         countUsage(tail, acct, per);
         peer.latencyMs = peer.latencyMs * (1 - EWMA) + (Date.now() - started) * EWMA;
@@ -439,14 +457,18 @@ const server = http.createServer(async (req, res) => {
         return;
       } catch (err) {
         peer.healthy = false; peer.detail = `request failed: ${err.message.slice(0, 50)}`;
-        if (res.headersSent) { res.end(); return; }
-        if (attempt === 1) { acct.errors += 1; return openaiError(res, 502, `upstream failed: ${err.message.slice(0, 80)}`, 'server_error'); }
+        if (attempt === 1) {
+          acct.errors += 1;
+          if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+          return streamError(502, `upstream failed: ${err.message.slice(0, 80)}`);
+        }
         tried = ip;
       } finally {
         peer.inflight -= 1;
       }
     }
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
     acct.inflight -= 1;
     if (visitor) visitor.inflight -= 1;
   }

@@ -473,6 +473,17 @@ demo key (`--public-key-name`, throttled by `--key-limits`, default
 `public:10:1`). Put it on a domain with `--domains llm.example.com` and a DNS
 CNAME to `<app>.app.runonflux.io`; FDM issues the certificate.
 
+**Stream long prompts.** Two proxies sit in front of a public hub - the Flux
+domain manager and, on a custom domain, Cloudflare - and both cut a
+connection that carries no bytes for ~100 s. CPU prefill of an agent's first
+turn takes longer than that. For streaming requests the hub commits to the
+stream before contacting the engine and sends a keepalive every 10 s (an SSE
+comment, or an empty ndjson line) until the first token; an upstream error
+then arrives inside the stream. A non-streaming request gets whitespace
+ahead of its JSON body instead, which parsers skip; the one cost is that an
+engine error after a long prefill arrives as an `{"error": ...}` body under a
+200 rather than its own status.
+
 ### Using the hub from opencode
 
 `opencode.json` in this repository is written for the hub. Copy it to
