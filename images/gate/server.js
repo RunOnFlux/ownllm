@@ -57,6 +57,28 @@ function authorized(req) {
   return diff === 0;
 }
 
+
+/**
+ * Upstream request over node:http rather than fetch. Node's fetch (undici)
+ * gives up if response headers have not arrived within 300 s, and ollama
+ * sends headers only after prefill - a 10k-token prompt on CPU takes longer
+ * than that, so every long agent turn died as "fetch failed" at 300 s (twice,
+ * with the retry: 600 s). http.request has no such clock; the only limit is
+ * the explicit total one.
+ */
+function upstreamRequest(url, { method = 'GET', headers = {}, body, timeoutMs = 900000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers }, (res) => {
+      clearTimeout(timer);
+      resolve({ status: res.statusCode, headers: res.headers, body: res, destroy: () => res.destroy(), text: () => new Promise((ok) => { const parts = []; res.on('data', (d) => parts.push(d)); res.on('end', () => ok(Buffer.concat(parts).toString('utf8'))); res.on('error', () => ok('')); }) });
+    });
+    const timer = setTimeout(() => { req.destroy(new Error(`upstream timeout after ${timeoutMs} ms`)); }, timeoutMs);
+    req.on('error', (err) => { clearTimeout(timer); reject(err); });
+    if (body && typeof body.pipe === 'function') body.pipe(req); else req.end(body);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   // Unauthenticated, because FDM's health check cannot carry a bearer token.
   // It exposes only readiness, never anything about the models or the key.
@@ -90,27 +112,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    const upstream = await fetch(`${UPSTREAM}${req.url}`, {
+    const upstream = await upstreamRequest(`${UPSTREAM}${req.url}`, {
       method: req.method,
-      headers: { 'Content-Type': req.headers['content-type'] || 'application/json' },
+      headers: { 'Content-Type': req.headers['content-type'] || 'application/json', ...(req.headers['content-length'] ? { 'Content-Length': req.headers['content-length'] } : { 'Transfer-Encoding': 'chunked' }) },
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req,
-      duplex: 'half',
       // CPU inference is slow; a long generation must not be cut short.
-      signal: AbortSignal.timeout(900000),
+      timeoutMs: 900000,
     });
     res.writeHead(upstream.status, {
-      'Content-Type': upstream.headers.get('content-type') || 'application/json',
+      'Content-Type': upstream.headers['content-type'] || 'application/json',
     });
-    if (upstream.body) {
-      const reader = upstream.body.getReader();
-      // Streamed token-by-token so the client sees output as it is generated.
-      for (;;) {
-        // eslint-disable-next-line no-await-in-loop
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(value);
-      }
-    }
+    // Streamed token-by-token so the client sees output as it is generated.
+    for await (const chunk of upstream.body) res.write(chunk);
     res.end();
   } catch (err) {
     res.writeHead(502, { 'Content-Type': 'application/json' });

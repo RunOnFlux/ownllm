@@ -148,6 +148,27 @@ const clientIp = (req) => (req.headers['cf-connecting-ip'] || (req.headers['x-fo
 
 // --- pools ------------------------------------------------------------------
 
+/**
+ * Upstream request over node:http rather than fetch. Node's fetch (undici)
+ * gives up if response headers have not arrived within 300 s, and ollama
+ * sends headers only after prefill - a 10k-token prompt on CPU takes longer
+ * than that, so every long agent turn died as "fetch failed" at 300 s (twice,
+ * with the retry: 600 s). http.request has no such clock; the only limit is
+ * the explicit total one.
+ */
+function upstreamRequest(url, { method = 'GET', headers = {}, body, timeoutMs = 900000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers }, (res) => {
+      clearTimeout(timer);
+      resolve({ status: res.statusCode, headers: res.headers, body: res, destroy: () => res.destroy(), text: () => new Promise((ok) => { const parts = []; res.on('data', (d) => parts.push(d)); res.on('end', () => ok(Buffer.concat(parts).toString('utf8'))); res.on('error', () => ok('')); }) });
+    });
+    const timer = setTimeout(() => { req.destroy(new Error(`upstream timeout after ${timeoutMs} ms`)); }, timeoutMs);
+    req.on('error', (err) => { clearTimeout(timer); reject(err); });
+    if (body && typeof body.pipe === 'function') body.pipe(req); else req.end(body);
+  });
+}
+
 let lastDiscovery = 'never';
 async function locate(app) {
   const known = [...new Set([...pools.values()].flatMap(pool => [...pool.peers.values()].map(p => p.api).filter(Boolean)))];
@@ -417,17 +438,17 @@ const server = http.createServer(async (req, res) => {
       peer.inflight += 1;
       const started = Date.now();
       try {
-        const upstream = await fetch(`http://${ip}:${pool.port}${path}`, {
+        const upstream = await upstreamRequest(`http://${ip}:${pool.port}${path}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pool.key}` },
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), Authorization: `Bearer ${pool.key}` },
           body: payload,
-          signal: AbortSignal.timeout(900000),
+          timeoutMs: 900000,
         });
         if ((upstream.status === 503 || upstream.status === 502) && attempt === 0) {
           // The instance is not ready (pulling) or its engine is gone: mark it
           // and try another before the client sees anything.
           peer.healthy = false; peer.detail = `upstream ${upstream.status}`; tried = ip;
-          try { await upstream.body?.cancel(); } catch { /* ignore */ }
+          try { upstream.destroy(); } catch { /* ignore */ }
           continue;
         }
         if (upstream.status >= 400) {
@@ -439,15 +460,13 @@ const server = http.createServer(async (req, res) => {
           return streamError(upstream.status, `upstream ${upstream.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
         }
         let tail = '';
-        if (upstream.body) {
-          for await (const chunk of upstream.body) {
-            if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
-            res.write(chunk);
-            // Keep only the end of the response for token accounting: the
-            // usage object is in the final chunk (SSE) or the final line
-            // (ndjson) or the whole body (non-stream JSON).
-            tail = (tail + Buffer.from(chunk).toString('utf8')).slice(-4096);
-          }
+        for await (const chunk of upstream.body) {
+          if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+          res.write(chunk);
+          // Keep only the end of the response for token accounting: the
+          // usage object is in the final chunk (SSE) or the final line
+          // (ndjson) or the whole body (non-stream JSON).
+          tail = (tail + chunk.toString('utf8')).slice(-4096);
         }
         if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
         res.end();
