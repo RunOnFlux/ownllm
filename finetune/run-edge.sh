@@ -43,6 +43,9 @@ EPOCHS=${EPOCHS:-2}
   # Optional extras (e.g. "mamba-ssm causal-conv1d" for the fast Mamba-2
   # kernels; needs the devel image's nvcc and ~10 min to build).
   [ -n "${PIP_EXTRA:-}" ] && { log "installing extras: $PIP_EXTRA"; pip install -q --no-build-isolation $PIP_EXTRA >>"$LOG" 2>&1 || log "extras failed to install (continuing without)"; }
+  # Say exactly why an optional kernel does not import: transformers hides the
+  # real exception behind "Could not find GraniteMoeHybridForCausalLM".
+  for mod in mamba_ssm causal_conv1d; do python3 -c "import $mod" >/dev/null 2>/tmp/imp.err && log "$mod imports" || log "$mod does not import: $(tail -1 /tmp/imp.err | cut -c1-200)"; done
   log "deps installed; torch $(python3 -c 'import torch;print(torch.__version__, torch.cuda.is_available())'); transformers $(python3 -c 'import transformers;print(transformers.__version__)')"
   for BASE in $BASES; do
     NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-')-v1
