@@ -38,7 +38,7 @@ EPOCHS=${EPOCHS:-2}
   # granite hybrid (granitemoehybrid) needs a transformers newer than the
   # image carries. The latest 4.x release, not main: main is already the 5.x
   # line and renames TrainingArguments fields (warmup_ratio went away).
-  pip install -q -U "transformers>=4.56,<5" "trl>=0.21,<1" peft accelerate bitsandbytes >>"$LOG" 2>&1
+  pip install -q -U "transformers>=4.56,<5" "trl>=0.21,<1" peft accelerate bitsandbytes tensorboard >>"$LOG" 2>&1
   log "deps installed; torch $(python3 -c 'import torch;print(torch.__version__, torch.cuda.is_available())'); transformers $(python3 -c 'import transformers;print(transformers.__version__)')"
   for BASE in $BASES; do
     NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-')-v1

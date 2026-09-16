@@ -346,7 +346,7 @@ def main():
         gradient_accumulation_steps=a.grad_accum, lr_scheduler_type="cosine", warmup_ratio=a.warmup,
         weight_decay=0.0, bf16=a.bf16, fp16=False, logging_steps=5, logging_first_step=True,
         eval_strategy="epoch" if eval_ds is not None else "no", save_strategy="epoch", save_total_limit=2,
-        report_to=["tensorboard"], remove_unused_columns=False,  # keep completion_mask for the collator
+        report_to=[], remove_unused_columns=False,  # loss goes to log-history.json; no tensorboard dependency  # keep completion_mask for the collator
         gradient_checkpointing=a.grad_ckpt, gradient_checkpointing_kwargs={"use_reentrant": False},
         optim="paged_adamw_8bit" if a.qlora else "adamw_torch", seed=a.seed, dataloader_num_workers=2,
         group_by_length=True,  # fewer pad tokens per batch
