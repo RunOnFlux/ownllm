@@ -9,8 +9,10 @@
  * and this tool polls it.
  *
  *   FLUXEDGE_API_KEY=... node tools/fluxedge.js machines [--min-vram 24]
+ *   node tools/fluxedge.js offers [--max-price 5]                     # premium datacenter GPUs (L40, A100, H100...)
+ *   node tools/fluxedge.js rent-premium --offer <id>                  # rent a premium offer
  *   node tools/fluxedge.js rent --hash <machine hash>            # or --gpu "RTX 4090" --max-price 0.5
- *   node tools/fluxedge.js deploy --rental <id> [--yaml finetune/fluxedge-train.yaml] [--env QLORA=1 --env BASES="..."]
+ *   node tools/fluxedge.js deploy --rental <id> [--yaml finetune/fluxedge-train.yaml] [--env QLORA=1 --env BASES="..."] [--image <container image>]
  *   node tools/fluxedge.js status                                 # rentals, deployments, endpoints, balance
  *   node tools/fluxedge.js log <endpoint>                         # tail the job log
  *   node tools/fluxedge.js fetch <endpoint> <out dir>             # download GGUFs, Modelfiles, adapters
@@ -53,6 +55,19 @@ const vramOf = (g) => { for (const [k, v] of Object.entries(VRAM)) if (g.include
     if (!rows.length) console.log('no machines with that much VRAM right now');
     return;
   }
+  if (cmd === 'offers') {
+    // Premium (datacenter) hardware from partner providers. max_price_per_hour is required by the API.
+    const items = list(await api('GET', '/hardware_offers', null, { limit: 500, max_price_per_hour: Number(opt('max-price', 100)) }), 'hardware_offers');
+    const rows = items.filter((o) => o.gpu || /H100|A100|A6000|L40|H200/.test(o.description || '')).sort((a, b) => (b.max_available > 0) - (a.max_available > 0) || a.price_per_hour - b.price_per_hour);
+    for (const o of rows) console.log(`${String(o.gpu || (o.description || '').split('\n').find((l) => l.startsWith('Name:')) || '?').padEnd(30)} x${o.nb_gpu}  $${String(o.price_per_hour).padEnd(7)} avail ${String(o.max_available).padEnd(3)} ${o.provider} ${o.location || o.region || ''}  id ${o.id}`);
+    return;
+  }
+  if (cmd === 'rent-premium') {
+    const offer = Number(opt('offer', 0)); if (!offer) throw new Error('--offer <hardware offer id> required');
+    const r = await api('POST', '/rental/startPremium', { hardware_offer: offer, nb_instances: Number(opt('instances', 1)) });
+    console.log(JSON.stringify(r, null, 1));
+    return;
+  }
   if (cmd === 'rent') {
     const hash = opt('hash', null);
     const body = hash ? { hash, nb_gpu: 1, nb_computers: 1, premium: 'none' } : { gpu: opt('gpu', 'RTX 4090'), nb_gpu: 1, nb_computers: 1, max_price_per_hour: Number(opt('max-price', 0.6)), min_memory: Number(opt('min-memory', 32)), min_storage: Number(opt('min-storage', 100)), premium: 'none' };
@@ -70,6 +85,10 @@ const vramOf = (g) => { for (const [k, v] of Object.entries(VRAM)) if (g.include
       if (!re.test(yaml)) throw new Error(`env ${k} not found in manifest`);
       yaml = yaml.replace(re, `$1"${v.replace(/"/g, '\\"')}"`);
     }
+    // --image swaps the container image (the manifest is sent from here, so
+    // this needs no repo push, unlike the job script the pod fetches).
+    const image = opt('image', null);
+    if (image) yaml = yaml.replace(/(\n\s+image: )\S+/, `$1${image}`);
     const name = opt('name', `fluxai-train-${Date.now().toString(36)}`);
     const r = await api('POST', '/deployment/start', { name, rental_ids: [rental], yaml: Buffer.from(yaml).toString('base64') });
     console.log(JSON.stringify(r, null, 1));
@@ -114,7 +133,7 @@ const vramOf = (g) => { for (const [k, v] of Object.entries(VRAM)) if (g.include
     if (!dep && !rental) throw new Error('--deployment <id> and/or --rental <id>');
     return;
   }
-  console.error('commands: machines | rent | deploy | status | log <endpoint> | fetch <endpoint> <dir> | stop | stop-all');
+  console.error('commands: machines | offers | rent-premium | rent | deploy | status | log <endpoint> | fetch <endpoint> <dir> | stop | stop-all');
   process.exit(1);
 })().catch((err) => { console.error(err.message); process.exit(1); });
 

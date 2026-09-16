@@ -101,6 +101,10 @@ async function tailOf(res) {
  * result rather than a missing download.
  */
 async function ensure(model) {
+  // A model created locally (ollama create) has no registry manifest to pull.
+  const have = await fetch(`${base}/api/tags`, { headers: { Authorization: `Bearer ${KEY}` }, signal: AbortSignal.timeout(20000) })
+    .then(r => r.json()).then(j => (j.models || []).some(m => m.name === model || m.name === `${model}:latest`)).catch(() => false);
+  if (have) return;
   const res = await fetch(`${base}/api/pull`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },

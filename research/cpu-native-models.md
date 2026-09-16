@@ -540,3 +540,38 @@ If ternary wins on H1/H3, the follow-ups, in order of return per effort:
 If ternary loses, the fallback ideas on the same measurement rig: a smaller
 granite (granite4:micro), speculative decoding with a ternary draft model, and
 prompt compression - all cheaper than a new architecture.
+
+
+## 8. First fine-tune: fluxai-tinyh-v1 (2026-09-16)
+
+granite-4.0-h-tiny, LoRA (rank 16, 16 layers, 52.9M trainable) on the 4-bit MLX
+base, one epoch over 9,739 rendered assistant turns from 4,515 conversations
+(2,000 code-generated deploy dialogues, 600 marketplace-preset deploys, 2,153
+docs Q&A taught in-session and verified), lr 5e-5, seq 3072, batch 1. Trained
+on an M3 Max in 9 h 34 min (3.5 s/iter); mlx-lm main was needed for the MoE
+router gradient. Fused into the bf16 original, converted with llama.cpp after
+undoing mlx-lm's expert layout, quantized Q4_K_M (3.9 GB).
+
+| Eval | fluxai-tinyh-v1 | granite4:tiny-h (base) | gpt-oss:20b |
+|---|---|---|---|
+| Deploy agent, trained surface (compact tools) | 3/4, 4-12 s/turn | - | - |
+| Deploy agent, MCP-derived core tools | 0/4 | 2/4 (unsafe confirm) | 4/4, 40-100 s/turn |
+| Grounding strict | 9/9 | 7/9 | 7/9 |
+| Grounding soft | 7/9 | 7/9 | 6/9 |
+
+What it learned: the protocol. It builds the spec with the right units, quotes
+before deploying, asks, and deploys with confirm=true only after a yes, in a
+tenth of gpt-oss's time. Strict grounding went from 7/9 to 9/9.
+
+What it did not: (1) it is brittle to the tool surface - with the MCP schemas
+and a different system prompt it stops calling tools at all, so v2 data must
+vary system prompts and tool descriptions; (2) the vague sizing case ("a
+Minecraft server for 20 players, how much?") still yields nothing - more
+examples of sizing from a workload description; (3) one quote was reported as
+$1.15 where the tool returned $8.55 - copying numbers from tool results needs
+reinforcement (or the UI renders the quote card from the tool result, which it
+should anyway); (4) in plain generation without tools it can leak
+`<tool_call>` tags into a docs answer - mix docs examples rendered without a
+tools block, or strip tags at serving. Without retrieved context it answers
+"What is Flux?" as the Facebook framework: knowledge lives in retrieval by
+design, the fine-tune carries behaviour.

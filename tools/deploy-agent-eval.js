@@ -29,6 +29,12 @@ const TOOLS_FILE = opt('tools-file', '/tmp/mcp-tools.json');
 // refuse to quote until the user pastes a key and the careless ones invent
 // one ("your-wif-key"). --keyed keeps them, to reproduce that.
 const KEYED = args.includes('--keyed');
+// --compact: the trained surface - finetune/tools-compact.js and the system
+// prompt the fine-tune was taught with - instead of the MCP-derived schemas.
+const COMPACT = args.includes('--compact');
+// --native: talk ollama's /api/chat instead of /v1/chat/completions (the
+// base URL then ends in /api).
+const NATIVE = args.includes('--native');
 const KEY_PARAMS = ['fluxIdPrivateKey', 'paymentPrivateKey'];
 function stripKeys(schema) {
   if (KEYED || !schema || !schema.properties) return schema;
@@ -41,10 +47,13 @@ if (!KEY) { console.error('FLUX_LLM_KEY required'); process.exit(1); }
 
 const all = JSON.parse(fs.readFileSync(TOOLS_FILE, 'utf8'));
 const CORE = ['flux_get_pricing', 'flux_build_spec', 'flux_quote_app', 'flux_deploy_app', 'flux_wait_for_app'];
-const tools = (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
+const tools = COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
   .map(t => ({ type: 'function', function: { name: t.name, description: KEYED ? t.description : t.description.replace(/\b(Requires|Needs) (the )?(Flux ID|fluxIdPrivateKey|payment)[^.]*\./gi, '').trim(), parameters: stripKeys(t.inputSchema) } }));
 
-const SYSTEM = 'You are Flux AI inside Flux Cloud. Help the user run apps on the Flux decentralized cloud using the tools. '
+const SYSTEM = COMPACT ? 'You are Flux AI, the assistant inside Flux Cloud. You help people run apps on the Flux decentralized cloud with the tools. '
+  + 'Prices are USD per month. Get a quote with flux_quote_app and show it before any deployment; call flux_deploy_app with confirm=true only after the user has agreed to that quote. '
+  + 'The user is signed in: never ask for keys, wallets or addresses. Be brief.'
+  : 'You are Flux AI inside Flux Cloud. Help the user run apps on the Flux decentralized cloud using the tools. '
   + 'Prices are USD per month. Always get a quote with flux_quote_app and show it before deploying; deploy only after the user agrees, with confirm=true. '
   + 'Be brief. Use tools rather than guessing numbers.'
   + (KEYED ? '' : ' The user is signed in; their Flux ID and payment are handled by the app, so never ask for keys or addresses.');
@@ -83,6 +92,20 @@ const CASE_LIST = [
 
 async function chat(messages) {
   const t0 = Date.now();
+  if (NATIVE) {
+    // ollama native: tool_calls carry arguments as objects; normalise to the OpenAI shape used below
+    const res = await fetch(`${BASE}/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
+      body: JSON.stringify({ model: MODEL, messages: messages.map(m => m.role === 'tool' ? { role: 'tool', content: m.content } : m), tools, stream: false, options: { num_predict: 800, temperature: 0.1 } }),
+      signal: AbortSignal.timeout(1800000),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`${res.status} ${text.slice(0, 200)}`);
+    const j = JSON.parse(text.trim());
+    const msg = { role: 'assistant', content: j.message.content || '' };
+    if (j.message.tool_calls && j.message.tool_calls.length) msg.tool_calls = j.message.tool_calls.map((c, i) => ({ id: c.id || `call_${i}`, type: 'function', function: { name: c.function.name, arguments: typeof c.function.arguments === 'string' ? c.function.arguments : JSON.stringify(c.function.arguments) } }));
+    return { msg, usage: { prompt_tokens: j.prompt_eval_count, completion_tokens: j.eval_count }, ms: Date.now() - t0 };
+  }
   const res = await fetch(`${BASE}/chat/completions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
     body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto', max_tokens: 800, temperature: 0.1 }),
@@ -126,7 +149,7 @@ async function runCase(c, history) {
 }
 
 (async () => {
-  console.log(`=== ${MODEL} via ${BASE}, ${tools.length} tools${KEYED ? ' (keyed)' : ' (keyless)'} (~${Math.round(JSON.stringify(tools).length / 4)} tok of schema)`);
+  console.log(`=== ${MODEL} via ${BASE}, ${tools.length} tools${COMPACT ? ' (compact, trained surface)' : KEYED ? ' (keyed)' : ' (keyless)'}${NATIVE ? ' [native api]' : ''} (~${Math.round(JSON.stringify(tools).length / 4)} tok of schema)`);
   const results = {}; const hist = {};
   for (const c of CASE_LIST.filter(x => CASES.includes(x.id))) {
     try {
