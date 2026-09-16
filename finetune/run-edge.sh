@@ -9,7 +9,8 @@
 # appends to /work/out/log.txt, which is readable at <ingress>/log.txt from
 # the first minute; a DONE or FAILED marker ends it.
 #
-# Env: BASES (space-separated HF ids, default granite-4.0-h-tiny), EPOCHS,
+# Env: BASES (space-separated HF ids, default granite-4.0-h-tiny), EPOCHS, TRAIN_ARGS
+# (training shape override), PIP_EXTRA (extra pip packages),
 # QLORA=1 (24 GB cards), DATA_URL (tar.gz with data/train.jsonl + eval.jsonl),
 # REPO (git URL), PORT (default 8080).
 set -uo pipefail
@@ -39,12 +40,19 @@ EPOCHS=${EPOCHS:-2}
   # image carries. The latest 4.x release, not main: main is already the 5.x
   # line and renames TrainingArguments fields (warmup_ratio went away).
   pip install -q -U "transformers>=4.56,<5" "trl>=0.21,<1" peft accelerate bitsandbytes tensorboard >>"$LOG" 2>&1
+  # Optional extras (e.g. "mamba-ssm causal-conv1d" for the fast Mamba-2
+  # kernels; needs the devel image's nvcc and ~10 min to build).
+  [ -n "${PIP_EXTRA:-}" ] && { log "installing extras: $PIP_EXTRA"; pip install -q --no-build-isolation $PIP_EXTRA >>"$LOG" 2>&1 || log "extras failed to install (continuing without)"; }
   log "deps installed; torch $(python3 -c 'import torch;print(torch.__version__, torch.cuda.is_available())'); transformers $(python3 -c 'import transformers;print(transformers.__version__)')"
   for BASE in $BASES; do
     NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-')-v1
     # A 7B-total MoE on a 24 GB card: batch 1 with more accumulation and a
     # 3k cap. The dense 2B model can take the roomier settings.
     case "$BASE" in *h-tiny*|*h-small*|*micro-h*) SHAPE="--max-len 3072 --batch 1 --grad-accum 16";; *) SHAPE="--max-len 4096 --batch 2 --grad-accum 8";; esac
+    # TRAIN_ARGS overrides the shape (and may add any train.py flag) without a
+    # new image or a repo push: the manifest passes it as an env var.
+    [ -n "${TRAIN_ARGS:-}" ] && SHAPE="$TRAIN_ARGS"
+    nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader >>"$LOG" 2>&1 || true
     log "##### training $BASE -> runs/$NAME (epochs $EPOCHS${QLORA:+, qlora}; $SHAPE)"
     if ! python3 finetune/train.py --base "$BASE" --data finetune/data/train.jsonl --eval finetune/data/eval.jsonl \
       --out "runs/$NAME" --epochs "$EPOCHS" --lr 1e-4 --r 16 --alpha 32 $SHAPE --bf16 --grad-ckpt ${QLORA:+--qlora} >>"$LOG" 2>&1; then

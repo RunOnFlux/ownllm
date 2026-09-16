@@ -48,6 +48,10 @@ spec:
               value: "2"
             - name: QLORA
               value: ""          # set to "1" on a 24 GB card
+            - name: TRAIN_ARGS
+              value: ""           # e.g. "--max-len 1536 --batch 1 --grad-accum 16"; empty = script default
+            - name: PIP_EXTRA
+              value: ""           # e.g. "mamba-ssm causal-conv1d"
             - name: PORT
               value: "8080"
             - name: HF_HOME
