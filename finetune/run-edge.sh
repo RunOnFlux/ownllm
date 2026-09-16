@@ -36,8 +36,9 @@ EPOCHS=${EPOCHS:-2}
   log "train $(wc -l < finetune/data/train.jsonl) / eval $(wc -l < finetune/data/eval.jsonl) examples"
   pip install -q -r finetune/requirements.txt >>"$LOG" 2>&1
   # granite hybrid (granitemoehybrid) needs a transformers newer than the
-  # image carries; main is the safe choice.
-  pip install -q -U "git+https://github.com/huggingface/transformers" peft trl accelerate bitsandbytes >>"$LOG" 2>&1
+  # image carries. The latest 4.x release, not main: main is already the 5.x
+  # line and renames TrainingArguments fields (warmup_ratio went away).
+  pip install -q -U "transformers>=4.56,<5" "trl>=0.21,<1" peft accelerate bitsandbytes >>"$LOG" 2>&1
   log "deps installed; torch $(python3 -c 'import torch;print(torch.__version__, torch.cuda.is_available())'); transformers $(python3 -c 'import transformers;print(transformers.__version__)')"
   for BASE in $BASES; do
     NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-')-v1

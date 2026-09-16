@@ -343,10 +343,27 @@ def main():
     )
     collator = PadCollator(tok.pad_token_id)
 
+    def accepted(cls, kwargs):
+        # Field names move between transformers/trl releases (5.x drops
+        # warmup_ratio); keep only what this version's config accepts and
+        # say what was dropped rather than fail before the first step.
+        import inspect
+        try:
+            params = inspect.signature(cls.__init__).parameters
+        except (TypeError, ValueError):
+            return kwargs
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            return kwargs
+        kept = {k: v for k, v in kwargs.items() if k in params}
+        dropped = sorted(set(kwargs) - set(kept))
+        if dropped:
+            print(f"[trainer] dropping unsupported config fields for {cls.__name__}: {dropped}")
+        return kept
+
     try:
         from trl import SFTConfig, SFTTrainer
-        cfg = SFTConfig(**train_cfg, max_length=a.max_len, packing=False,
-                        dataset_kwargs={"skip_prepare_dataset": True})
+        cfg = SFTConfig(**accepted(SFTConfig, dict(train_cfg, max_length=a.max_len, packing=False,
+                                                    dataset_kwargs={"skip_prepare_dataset": True})))
         trainer = SFTTrainer(model=model, args=cfg, train_dataset=train_ds, eval_dataset=eval_ds,
                              data_collator=collator, processing_class=tok)
         print("[trainer] trl SFTTrainer (pre-tokenized, assistant-only labels via collator)")
@@ -354,7 +371,7 @@ def main():
         # fallback: plain hf trainer. functionally identical because the loss
         # masking lives in the collator, not in trl.
         from transformers import Trainer, TrainingArguments
-        cfg = TrainingArguments(**train_cfg)
+        cfg = TrainingArguments(**accepted(TrainingArguments, train_cfg))
         trainer = Trainer(model=model, args=cfg, train_dataset=train_ds, eval_dataset=eval_ds,
                           data_collator=collator, processing_class=tok)
         print("[trainer] transformers Trainer (trl not installed)")
