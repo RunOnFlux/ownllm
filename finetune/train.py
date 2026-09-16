@@ -297,7 +297,8 @@ def wrap_lora(model, a):
         for p_ in model.parameters():
             p_.requires_grad_(False)
     targets = a.target_modules.split(",") if a.target_modules else find_lora_targets(model)
-    print(f"[lora] target modules: {targets if isinstance(targets, list) else f'regex over {targets.count("|") + 1} modules'}")
+    shown = targets if isinstance(targets, list) else "regex over %d modules" % (targets.count("|") + 1)
+    print(f"[lora] target modules: {shown}")
     cfg = LoraConfig(r=a.r, lora_alpha=a.alpha, lora_dropout=a.dropout, bias="none",
                      task_type="CAUSAL_LM", target_modules=targets)
     model = get_peft_model(model, cfg)
