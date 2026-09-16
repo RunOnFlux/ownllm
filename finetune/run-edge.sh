@@ -9,7 +9,7 @@
 # appends to /work/out/log.txt, which is readable at <ingress>/log.txt from
 # the first minute; a DONE or FAILED marker ends it.
 #
-# Env: BASES (space-separated HF ids, default tiny-h + qwen3.5-2b), EPOCHS,
+# Env: BASES (space-separated HF ids, default granite-4.0-h-tiny), EPOCHS,
 # QLORA=1 (24 GB cards), DATA_URL (tar.gz with data/train.jsonl + eval.jsonl),
 # REPO (git URL), PORT (default 8080).
 set -uo pipefail
@@ -22,7 +22,7 @@ log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
 log "job start on $(hostname); gpu: $(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo none)"
 REPO=${REPO:-https://github.com/RunOnFlux/ownllm.git}
 DATA_URL=${DATA_URL:-https://github.com/RunOnFlux/ownllm/raw/master/finetune/data.tar.gz}
-BASES=${BASES:-"ibm-granite/granite-4.0-h-tiny Qwen/Qwen3.5-2B"}
+BASES=${BASES:-"ibm-granite/granite-4.0-h-tiny"}
 EPOCHS=${EPOCHS:-2}
 (
   set -e
@@ -35,14 +35,24 @@ EPOCHS=${EPOCHS:-2}
   curl -fsSL "$DATA_URL" -o /tmp/data.tar.gz && tar xzf /tmp/data.tar.gz -C finetune/
   log "train $(wc -l < finetune/data/train.jsonl) / eval $(wc -l < finetune/data/eval.jsonl) examples"
   pip install -q -r finetune/requirements.txt >>"$LOG" 2>&1
-  log "deps installed; torch $(python3 -c 'import torch;print(torch.__version__, torch.cuda.is_available())')"
+  # granite hybrid (granitemoehybrid) needs a transformers newer than the
+  # image carries; main is the safe choice.
+  pip install -q -U "git+https://github.com/huggingface/transformers" peft trl accelerate bitsandbytes >>"$LOG" 2>&1
+  log "deps installed; torch $(python3 -c 'import torch;print(torch.__version__, torch.cuda.is_available())'); transformers $(python3 -c 'import transformers;print(transformers.__version__)')"
   for BASE in $BASES; do
     NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-')-v1
-    log "##### training $BASE -> runs/$NAME (epochs $EPOCHS${QLORA:+, qlora})"
-    python3 finetune/train.py --base "$BASE" --data finetune/data/train.jsonl --eval finetune/data/eval.jsonl \
-      --out "runs/$NAME" --epochs "$EPOCHS" --lr 1e-4 --r 16 --alpha 32 --max-len 4096 --batch 2 --grad-accum 8 --bf16 --grad-ckpt ${QLORA:+--qlora} >>"$LOG" 2>&1
+    # A 7B-total MoE on a 24 GB card: batch 1 with more accumulation and a
+    # 3k cap. The dense 2B model can take the roomier settings.
+    case "$BASE" in *h-tiny*|*h-small*|*micro-h*) SHAPE="--max-len 3072 --batch 1 --grad-accum 16";; *) SHAPE="--max-len 4096 --batch 2 --grad-accum 8";; esac
+    log "##### training $BASE -> runs/$NAME (epochs $EPOCHS${QLORA:+, qlora}; $SHAPE)"
+    if ! python3 finetune/train.py --base "$BASE" --data finetune/data/train.jsonl --eval finetune/data/eval.jsonl \
+      --out "runs/$NAME" --epochs "$EPOCHS" --lr 1e-4 --r 16 --alpha 32 $SHAPE --bf16 --grad-ckpt ${QLORA:+--qlora} >>"$LOG" 2>&1; then
+      log "##### $NAME TRAINING FAILED: $(grep -E 'Error|error' "$LOG" | tail -1 | cut -c1-160)"; continue
+    fi
     log "##### converting $NAME"
-    bash finetune/merge_and_convert.sh "$BASE" "runs/$NAME/adapter" "$NAME" >>"$LOG" 2>&1
+    if ! bash finetune/merge_and_convert.sh "$BASE" "runs/$NAME/adapter" "$NAME" >>"$LOG" 2>&1; then
+      log "##### $NAME CONVERSION FAILED (adapter still saved): $(grep -E 'Error|error' "$LOG" | tail -1 | cut -c1-160)"
+    fi
     mkdir -p "$OUT/$NAME"
     cp runs/gguf/"$NAME"/*.Q4_K_M.gguf runs/gguf/"$NAME"/Modelfile "$OUT/$NAME/" 2>>"$LOG" || true
     tar czf "$OUT/$NAME-adapter.tar.gz" -C "runs/$NAME" adapter train-config.json 2>>"$LOG" || true
@@ -50,5 +60,6 @@ EPOCHS=${EPOCHS:-2}
     log "##### $NAME ready: $(ls -la "$OUT/$NAME" | tail -n +2 | awk '{print $9, $5}' | tr '\n' ' ')"
   done
 ) && log "DONE" || log "FAILED (see above)"
+ls "$OUT" | grep -q gguf && true
 # keep serving so the artifacts can be downloaded; the operator stops the rental
 wait

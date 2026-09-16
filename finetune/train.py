@@ -278,9 +278,15 @@ def load_model_and_tok(a):
 
 
 def wrap_lora(model, a):
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, get_peft_model
+    # Not prepare_model_for_kbit_training(): it upcasts every non-quantized
+    # parameter to float32, and on a MoE hybrid like granite tiny-h the routed
+    # experts are 3-D tensors bitsandbytes does not quantize - ~6B params that
+    # became 24 GB of fp32 and OOM-ed a 24 GB card before training started.
+    # Base weights are frozen by peft anyway; bf16 compute keeps the norms fine.
     if a.qlora:
-        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=a.grad_ckpt)
+        for p_ in model.parameters():
+            p_.requires_grad_(False)
     targets = a.target_modules.split(",") if a.target_modules else find_lora_targets(model)
     print(f"[lora] target modules: {targets}")
     cfg = LoraConfig(r=a.r, lora_alpha=a.alpha, lora_dropout=a.dropout, bias="none",

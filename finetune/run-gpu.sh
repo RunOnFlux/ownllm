@@ -19,7 +19,7 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r finetune/requirements.txt
 EXTRA=${QLORA:+--qlora}
-for BASE in ibm-granite/granite-4.0-h-tiny Qwen/Qwen3.5-2B; do
+for BASE in ibm-granite/granite-4.0-h-tiny; do
   NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-' )-v1
   echo "##### $(date) training $BASE -> runs/$NAME"
   python3 finetune/train.py --base "$BASE" --data finetune/data/train.jsonl --eval finetune/data/eval.jsonl \
