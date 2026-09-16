@@ -1,0 +1,74 @@
+# FluxEdge training job. See finetune/run-edge.sh for what runs inside.
+#
+# Rules learned from fluxedge-ollama: no hostNetwork; declare the port so an
+# HTTPS ingress is minted (that is how results come out - there is no shell);
+# explicit nameservers because cluster DNS does not resolve public names;
+# resource requests well under the machine's advertised specs or the pod
+# sits pending and is reaped after ~5 minutes with no error.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluxai-train
+  labels:
+    app: fluxai-train
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: fluxai-train
+  template:
+    metadata:
+      labels:
+        name: fluxai-train
+        app: fluxai-train
+    spec:
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8
+          - 1.1.1.1
+      containers:
+        - name: train
+          # CUDA 12.4 devel image with python + torch preinstalled; devel so
+          # llama.cpp's quantizer can be built for the conversion step.
+          image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
+              curl -fsSL "${SCRIPT_URL}" -o /run-edge.sh && bash /run-edge.sh
+          env:
+            - name: SCRIPT_URL
+              value: "https://raw.githubusercontent.com/RunOnFlux/ownllm/master/finetune/run-edge.sh"
+            - name: BASES
+              value: "ibm-granite/granite-4.0-h-tiny Qwen/Qwen3.5-2B"
+            - name: EPOCHS
+              value: "2"
+            - name: QLORA
+              value: ""          # set to "1" on a 24 GB card
+            - name: PORT
+              value: "8080"
+            - name: HF_HOME
+              value: "/work/hf"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              ephemeral-storage: "20Gi"
+            limits:
+              nvidia.com/gpu: 1
+              memory: "48Gi"
+              ephemeral-storage: "80Gi"
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: 150Gi

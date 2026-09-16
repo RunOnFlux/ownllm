@@ -29,3 +29,4 @@ ab-docsbot.json
 finetune/data/
 finetune/__pycache__/
 runs/
+finetune/.venv-mlx/

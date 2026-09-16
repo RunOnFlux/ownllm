@@ -31,6 +31,10 @@ echo "### tier: facts (generated from FluxOS source - the authoritative numbers)
 # calculation they get wrong into a lookup they get right.
 if [ -d "$R/flux/ZelBack" ]; then
   node tools/facts-from-source.js "$R/flux" > images/docsbot/docs/flux-facts.md
+  node tools/facts-api-from-source.js "$R/flux" > images/docsbot/docs/flux-api.md
+  # marketplace presets and the live catalog aggregate (finetune/gen-*.js write these)
+  node finetune/gen-marketplace.js --n 0 >/dev/null 2>&1 && cp finetune/data/marketplace-facts.md images/docsbot/docs/
+  node finetune/gen-catalog.js >/dev/null 2>&1 && cp finetune/data/catalog-facts.md images/docsbot/docs/
   node tools/ingest.js --out "$OUT" --append --tier facts --dir images/docsbot/docs
 else
   echo "  missing: $R/flux (FluxOS source) - fact sheet not regenerated"
@@ -41,7 +45,8 @@ echo "### tier: docs (authoritative, current)"
 node tools/ingest.js --out "$OUT" --append --tier docs \
   --dir "$R/flux-docs/docs" \
   --dir "$R/ssp-docs" \
-  --dir "$R/flux/docs"
+  --dir "$R/flux/docs" \
+  --dir "$R/zelcore-docs/docs"
 
 echo
 echo "### tier: whitepaper"

@@ -51,10 +51,37 @@ node finetune/gen-docs.js   --n 1500 --concurrency 12 --out finetune/data/docs.j
 node finetune/mix.js        # -> data/train.jsonl, data/eval.jsonl
 ```
 
-A stronger teacher (any OpenAI-compatible endpoint) improves the docs set;
-the deploy set does not depend on the teacher's judgement.
+The docs set can also be taught from inside Claude Code without any API
+key: `batch-chunks.js` samples chunks with their retrieved-style contexts
+into batch files, Claude (as subagents, in parallel) writes the questions
+and grounded answers into `data/batches-out/`, and `verify-docs.js` keeps
+only what verifies (citations exist, every number is in a cited chunk, no
+URLs, refusals exact). That is the route used for v1; the deploy set does
+not depend on the teacher's judgement either way.
 
-## Train, convert, serve
+## Train on this Mac (Apple Silicon, mlx-lm)
+
+Measured on an M3 Max with 36 GB: `Qwen3.5-2B` runs out of Metal memory at
+any useful sequence length (its linear-attention layers need ~15 GB at 1k
+tokens) and `granite-4.0-h-tiny` fails with a gather-VJP error (mlx-lm cannot
+differentiate through the MoE router). `granite-4.0-micro` (dense 3B, same
+family and tool template) trains at ~10 GB peak but only ~0.2 it/s, about
+thirteen hours per epoch over the 9.7k rendered pairs. Learning rate 2e-4
+diverged (loss 3 -> 23 in 20 iterations); 5e-5 is stable (validation loss
+1.97 -> 0.29 over 60 iterations), which is what train_mlx.sh uses. Use the Mac for smoke
+tests and small runs; the real runs go to a GPU (below).
+
+```
+python3 -m venv finetune/.venv-mlx && finetune/.venv-mlx/bin/pip install mlx-lm transformers
+sh finetune/train_mlx.sh Qwen/Qwen3.5-2B runs/qwen35-2b-v1 1200 2          # bf16, overnight on 36 GB
+QUANT=1 sh finetune/train_mlx.sh ibm-granite/granite-4.0-h-tiny runs/tinyh-v1 800 1   # LoRA on a 4-bit base
+```
+
+`render_mlx.py` turns each assistant turn into a prompt/completion pair so
+`--mask-prompt` gives assistant-only loss; `mlx_lm.fuse` writes a merged HF
+folder that the llama.cpp conversion below turns into a GGUF.
+
+## Train on a GPU (CUDA), convert, serve
 
 ```
 pip install -r finetune/requirements.txt
