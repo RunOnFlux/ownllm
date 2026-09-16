@@ -247,11 +247,20 @@ def find_lora_targets(model):
         linear_types = linear_types + (bnb.nn.Linear4bit, bnb.nn.Linear8bitLt)
     except Exception:
         pass
-    names = set()
-    for full, mod in model.named_modules():
-        if isinstance(mod, linear_types) and not any(s in full for s in skip):
-            names.add(full.split(".")[-1])
-    return sorted(names)
+    fulls = [full for full, mod in model.named_modules()
+             if isinstance(mod, linear_types) and not any(s in full for s in skip)]
+    leaves = sorted({f.split(".")[-1] for f in fulls})
+    # peft matches suffixes, and on granite's MoE hybrid the routed experts
+    # (GraniteMoeHybridParallelExperts, a 3-D parameter, not a Linear) are
+    # ALSO called input_linear/output_linear - a leaf-name list makes peft
+    # try to wrap them and fail. Only when such a clash exists, hand peft a
+    # regex of the exact full paths instead; otherwise keep the readable list.
+    clash = any(not isinstance(mod, linear_types) and full.split(".")[-1] in leaves
+                for full, mod in model.named_modules())
+    if clash:
+        import re
+        return "^(" + "|".join(re.escape(f) for f in fulls) + ")$"
+    return leaves
 
 
 def load_model_and_tok(a):
@@ -288,7 +297,7 @@ def wrap_lora(model, a):
         for p_ in model.parameters():
             p_.requires_grad_(False)
     targets = a.target_modules.split(",") if a.target_modules else find_lora_targets(model)
-    print(f"[lora] target modules: {targets}")
+    print(f"[lora] target modules: {targets if isinstance(targets, list) else f'regex over {targets.count("|") + 1} modules'}")
     cfg = LoraConfig(r=a.r, lora_alpha=a.alpha, lora_dropout=a.dropout, bias="none",
                      task_type="CAUSAL_LM", target_modules=targets)
     model = get_peft_model(model, cfg)
