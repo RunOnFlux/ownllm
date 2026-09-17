@@ -575,3 +575,49 @@ should anyway); (4) in plain generation without tools it can leak
 tools block, or strip tags at serving. Without retrieved context it answers
 "What is Flux?" as the Facebook framework: knowledge lives in retrieval by
 design, the fine-tune carries behaviour.
+
+## 9. Second fine-tune: fluxai-tinyh-v2 (2026-09-17)
+
+Goal set by the user: outperform gpt-oss:20b on the deploy-with-AI task at
+tiny-h speed. Data v2: 6,753 conversations (4,000 deploy dialogues generated on
+six system prompts and four tool-schema variants incl. the real MCP schemas,
+sizing from workload descriptions, error flows, yes-first and stale-quote
+confirmations, follow-ups; 600 marketplace presets; 2,153 docs Q&A), see
+`finetune/surfaces.js` and `finetune/gen-deploy.js`. The eval grew to 12 cases
+(`tools/deploy-agent-eval.js`).
+
+Trained twice from the same data:
+
+- **A100 80 GB on FluxEdge** (premium Hyperstack node, $1.63/h): bf16 LoRA,
+  rank 32 / alpha 64 on attention, Mamba and shared-MLP projections, seq 6144,
+  lr 5e-5, one epoch = 802 steps in 140 min, train loss 0.18, eval loss 0.116.
+  The Mamba-2 CUDA kernels are required at this sequence length (the fallback
+  path OOMs an 80 GB card at 6144); the working pairing on torch 2.5.1 is
+  `causal-conv1d==1.5.0.post8 mamba-ssm==2.2.4` installed with `--no-deps` plus
+  `einops`. The whole exercise, including five failed starts, cost about $6.75.
+- **M3 Max, 4-bit base** (mlx-lm): same rank, seq 6144, warmup + cosine
+  3e-5 -> 3e-6, gradient accumulation 4, 12k iterations (~23 h). Three earlier
+  attempts failed: seq 3072 truncated the MCP pairs to nothing (NaN loss), the
+  renderer put the assistant header in the completion (the model looped on
+  `<tool_call>assistant<tool_call>` once fused), and constant lr 5e-5 at batch 1
+  diverged at iteration 50.
+
+| 12-case deploy eval | fluxai-tinyh-v2 (A100) | fluxai-tinyh-v1 | gpt-oss:20b | granite4:tiny-h |
+|---|---|---|---|---|
+| Compact tools (trained surface) | 12/12 | 8/12 | 9/12 | - |
+| MCP core (5 real schemas, 3k tok) | 11/12* | 0/4 | 9/12 | 2/4 |
+| MCP full (15 real schemas, 4.9k tok) | 12/12 | - | - | - |
+| Grounding strict | 7/9 | 9/9 | 7/9 | 7/9 |
+
+\* the core set has no logs tool, so the logs case cannot pass there; the model
+should say so instead of replying empty (a v3 data item: "tool not available").
+
+Per-case latency was 5-39 s including 3 tool round-trips, measured on the Mac
+while another training run held the GPU; gpt-oss takes minutes per case on the
+Flux pool. Grounding fell back to the base level: the v2 mix leans on deploy
+behaviour and the docs batches were still at loss ~0.3 after one epoch, so v3
+should raise the docs share or run a second epoch on docs only.
+
+Files: `runs/tinyh-a100-v2/` (Q4_K_M GGUF 4.2 GB, adapter, loss history,
+Modelfile), local ollama model `fluxai-tinyh-v2-a100`. Serving on Flux still
+needs the GGUF hosted where the pools can pull it.

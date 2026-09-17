@@ -18,14 +18,25 @@ const D = path.join(__dirname, 'data');
 const DOCS = opt('docs', ['docs-v1-public.jsonl', 'docs-v2.jsonl'].map((f) => path.join(D, f)).join(','));
 const DEPLOY = opt('deploy', ['deploy-v2.jsonl', 'marketplace-deploy.jsonl'].map((f) => path.join(D, f)).join(','));
 const FRAC = Number(opt('eval-frac', 0.05));
+// Docs rows are repeated this many times in the train split (not in eval): one
+// epoch of the deploy data was enough for tool use, but docs grounding fell back
+// to the base level in v2, so v3 gives the docs a second pass.
+const DOCS_WEIGHT = Number(opt('docs-weight', 2));
 let seed = Number(opt('seed', 3));
 const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
 const read = (p) => fs.existsSync(p) ? fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
 const readAll = (csv) => csv.split(',').map((p) => p.trim()).filter(Boolean).flatMap((p) => { const rows = read(p); console.log(`${rows.length.toString().padStart(6)} ${path.basename(p)}`); return rows; });
-const rows = [...readAll(DOCS).map((r) => ({ messages: r.messages })), ...readAll(DEPLOY).map((r) => ({ messages: r.messages, tools: r.tools }))];
+// A third of the docs rows get a deploy-agent surface (system prompt + tools) in
+// front of them: in the Flux Cloud chat the tools are always present, and a
+// knowledge question must be answered without calling any.
+const surfaces = require('./surfaces');
+const withSurface = (r) => { if (rnd() >= 0.33) return { messages: r.messages }; const surf = surfaces.sample(rnd); return { messages: [{ role: 'system', content: surf.system }, ...r.messages.filter((m) => m.role !== 'system')], tools: surf.tools }; };
+const rows = [...readAll(DOCS).map(withSurface), ...readAll(DEPLOY).map((r) => ({ messages: r.messages, tools: r.tools }))];
 for (let i = rows.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd() * (i + 1)); [rows[i], rows[j]] = [rows[j], rows[i]]; }
 const nEval = Math.max(20, Math.round(rows.length * FRAC));
 fs.writeFileSync(path.join(D, 'eval.jsonl'), rows.slice(0, nEval).map((r) => JSON.stringify(r)).join('\n') + '\n');
-fs.writeFileSync(path.join(D, 'train.jsonl'), rows.slice(nEval).map((r) => JSON.stringify(r)).join('\n') + '\n');
+const train = rows.slice(nEval).flatMap((r) => (r.tools ? [r] : Array.from({ length: DOCS_WEIGHT }, () => r)));
+for (let i = train.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd() * (i + 1)); [train[i], train[j]] = [train[j], train[i]]; }
+fs.writeFileSync(path.join(D, 'train.jsonl'), train.map((r) => JSON.stringify(r)).join('\n') + '\n');
 const tools = rows.filter((r) => r.tools).length;
-console.log(`${rows.length} examples (${tools} with tools, ${rows.length - tools} docs) -> train ${rows.length - nEval}, eval ${nEval}`);
+console.log(`${rows.length} examples (${tools} with tools, ${rows.length - tools} docs, docs x${DOCS_WEIGHT} in train) -> train ${train.length}, eval ${nEval}`);

@@ -140,7 +140,8 @@ const vramOf = (g) => { for (const [k, v] of Object.entries(VRAM)) if (g.include
 async function download(url, dest) {
   const res = await fetch(url, { signal: AbortSignal.timeout(1800000) });
   if (!res.ok) { console.log(`skip ${url}: ${res.status}`); return; }
-  const buf = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(dest, buf);
-  console.log(`${dest} ${(buf.length / 1048576).toFixed(1)} MB`);
+  // stream to disk: a GGUF is > 2 GB, past Buffer's limit
+  const { Readable } = require('node:stream'); const { pipeline } = require('node:stream/promises');
+  await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(dest));
+  console.log(`${dest} ${(fs.statSync(dest).size / 1048576).toFixed(1)} MB`);
 }

@@ -4,7 +4,9 @@
 # HTTPS ingress is minted (that is how results come out - there is no shell);
 # explicit nameservers because cluster DNS does not resolve public names;
 # resource requests well under the machine's advertised specs or the pod
-# sits pending and is reaped after ~5 minutes with no error.
+# sits pending and is reaped after ~5 minutes with no error;
+# runtimeClassName nvidia + NVIDIA_VISIBLE_DEVICES, or premium (Hyperstack)
+# nodes start the pod with no GPU at all (job 16886: "gpu: none").
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +26,7 @@ spec:
         name: fluxai-train
         app: fluxai-train
     spec:
+      runtimeClassName: nvidia
       dnsPolicy: None
       dnsConfig:
         nameservers:
@@ -51,9 +54,18 @@ spec:
             - name: TRAIN_ARGS
               value: ""           # e.g. "--max-len 1536 --batch 1 --grad-accum 16"; empty = script default
             - name: PIP_EXTRA
-              value: ""           # e.g. "mamba-ssm causal-conv1d"
+              # the Mamba-2 CUDA kernels; without them the fallback path is
+              # quadratic in sequence length and OOMs an 80 GB card at 6144.
+              # --no-deps keeps the image's torch; these pins are the pairing
+              # with wheels for torch 2.5.1 (1.4.0 has none; 1.5.2+ changed the
+              # causal_conv1d_fwd signature that mamba-ssm 2.2.4 calls).
+              value: "--no-deps einops causal-conv1d==1.5.0.post8 mamba-ssm==2.2.4"
             - name: PORT
               value: "8080"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "compute,utility"
             - name: HF_HOME
               value: "/work/hf"
           ports:

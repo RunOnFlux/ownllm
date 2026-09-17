@@ -1,16 +1,49 @@
 [
  {
+  "name": "flux_get_identity",
+  "title": "Show the configured Flux identity and balance",
+  "description": "Returns the Flux ID (app owner address), the payment address and its spendable FLUX balance with its USD value. Explains what to configure if keys are missing. Never returns private keys.",
+  "inputSchema": {
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "flux_generate_keys",
+  "title": "Generate a new Flux ID and payment key pair",
+  "description": "Creates two fresh private keys (WIF): one for the Flux ID that will own apps, one for the address that pays. The response contains the secrets; store them in the MCP server environment as FLUX_ID_PRIVATE_KEY and FLUX_PAYMENT_PRIVATE_KEY, then restart the server. Nothing is stored or sent anywhere by this tool.",
+  "inputSchema": {
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
   "name": "flux_get_pricing",
+  "title": "Get the Flux Cloud rate card",
   "description": "Returns the current USD rate card, the live FLUX/USD rate, the pay-in-FLUX discount and instant USD estimates for a few reference sizes. Use flux_quote_app for the exact price of a specific app.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
    "type": "object",
    "properties": {},
    "required": []
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_build_spec",
+  "title": "Build a Flux app specification from a simple description",
   "description": "Turns images, ports, resources and a term into a complete, correctly formatted v8 specification, with public ports auto-picked and data replication enabled. Returns the spec plus local validation errors and warnings.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -181,10 +214,207 @@
     "name",
     "components"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "flux_validate_spec",
+  "title": "Validate a specification locally and on the network",
+  "description": "Runs the local rule checks, then asks a FluxOS node to verify the specification exactly as it would at registration (image reachable, architecture, ports, name availability). Returns the node-formatted spec on success.",
+  "inputSchema": {
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "type": "object",
+   "properties": {
+    "spec": {
+     "type": "object",
+     "properties": {
+      "version": {
+       "default": 8,
+       "type": "number",
+       "const": 8
+      },
+      "name": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 63
+      },
+      "description": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "owner": {
+       "description": "Flux ID. Defaults to the configured FLUX_ID_PRIVATE_KEY identity.",
+       "type": "string"
+      },
+      "compose": {
+       "minItems": 0,
+       "maxItems": 10,
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "description": "Component name. Defaults to the app name.",
+          "type": "string",
+          "maxLength": 63
+         },
+         "description": {
+          "type": "string",
+          "maxLength": 256
+         },
+         "repotag": {
+          "type": "string",
+          "description": "Docker image with an explicit tag, e.g. \"nginx:1.27-alpine\"."
+         },
+         "ports": {
+          "default": [],
+          "description": "Public ports. Prefer 31000-39999.",
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          }
+         },
+         "containerPorts": {
+          "default": [],
+          "description": "Ports the container listens on, parallel to ports.",
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          }
+         },
+         "domains": {
+          "default": [],
+          "description": "Custom domain per port, \"\" for none. Parallel to ports.",
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "environmentParameters": {
+          "default": [],
+          "description": "\"KEY=value\" strings, max 20.",
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "commands": {
+          "default": [],
+          "description": "Container Cmd, max 20 strings.",
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "containerData": {
+          "type": "string",
+          "description": "Persisted path, e.g. \"r:/data\" (r: = replicated across instances)."
+         },
+         "cpu": {
+          "type": "number",
+          "description": "Cores, 0.1 to 15 in 0.1 steps."
+         },
+         "ram": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "MB, 100 to 59000 in steps of 100."
+         },
+         "hdd": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "GB, 1 to 820."
+         },
+         "repoauth": {
+          "default": "",
+          "description": "\"user:token\" for a private registry, else \"\".",
+          "type": "string"
+         }
+        },
+        "required": [
+         "repotag",
+         "containerData",
+         "cpu",
+         "ram",
+         "hdd"
+        ]
+       }
+      },
+      "instances": {
+       "default": 3,
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100
+      },
+      "contacts": {
+       "default": [],
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "geolocation": {
+       "default": [],
+       "description": "e.g. [\"acEU\"] allow Europe, [\"a!cAS\"] deny Asia.",
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "expire": {
+       "default": 88000,
+       "description": "Term in blocks; 88000 = 1 month.",
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 1056000
+      },
+      "nodes": {
+       "default": [],
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "staticip": {
+       "default": false,
+       "type": "boolean"
+      },
+      "enterprise": {
+       "default": "",
+       "type": "string"
+      }
+     },
+     "required": [
+      "name",
+      "description",
+      "compose"
+     ]
+    },
+    "network": {
+     "default": true,
+     "description": "Also verify on a FluxOS node.",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "spec"
+   ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_quote_app",
+  "title": "Quote the price of an app in USD and FLUX",
   "description": "Returns the Flux Cloud price for registering the given specification, or for updating it if an app of that name already exists (the unused part of the current term is credited). Price is in USD with the FLUX amount at market rate.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -365,10 +595,14 @@
    "required": [
     "spec"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_deploy_app",
+  "title": "Deploy (register or update) an app and pay for it",
   "description": "Validates the specification on a node, quotes it, and with confirm=true signs it with the Flux ID, broadcasts it and pays the quoted FLUX from the payment address. Without confirm it only returns the plan (price, balance, warnings) and spends nothing. Registers a new name or updates an existing app of the same owner. Then call flux_wait_for_app with the returned txid.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -669,10 +903,14 @@
    "required": [
     "spec"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_wait_for_app",
+  "title": "Wait for a deployment to be accepted and its instances to run",
   "description": "Polls the network for up to timeoutSeconds (default 45 to fit hosts with a 60 s tool timeout, max 600). Returns payment confirmations, whether the spec was accepted, and the running instances with URLs. Safe to call repeatedly until done=true.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -699,10 +937,14 @@
    "required": [
     "name"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_get_app",
+  "title": "Get a deployed app: spec, status, instances, URLs",
   "description": "Looks up any app on the network by name and returns its published specification, expiry, running instances and URLs.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -715,10 +957,14 @@
    "required": [
     "name"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_list_my_apps",
+  "title": "List apps owned by the configured Flux ID",
   "description": "Lists every app registered by the owner (or a given Flux ID) with expiry and instance counts.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -734,10 +980,14 @@
     }
    },
    "required": []
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_get_app_logs",
+  "title": "Read container logs from a running instance",
   "description": "Fetches the last N log lines of an app (or one component of it) from one of the nodes running it. Requires the owner key.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -764,10 +1014,41 @@
    "required": [
     "name"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "flux_get_app_stats",
+  "title": "Get live resource usage of a running instance",
+  "description": "CPU, memory and network stats of the containers of an app on one node. Requires the owner key.",
+  "inputSchema": {
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "component": {
+     "description": "Component name for multi-component apps.",
+     "type": "string"
+    },
+    "nodeIp": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_control_app",
+  "title": "Restart, redeploy or remove app instances",
   "description": "restart: restarts containers. redeploy: pulls the image again and recreates containers (hard=true also wipes data). remove: uninstalls from nodes; the registration stays and the network re-spawns it elsewhere, so use flux_cancel_app to stop paying. Scope is one node (nodeIp) or every node running the app (global). Requires the owner key.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -806,10 +1087,14 @@
     "name",
     "action"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_cancel_app",
+  "title": "Cancel an app (stop it and stop paying)",
   "description": "Ends an app early by updating its term so it expires within about an hour. The network then uninstalls it everywhere. With confirm=true this signs and pays the (usually minimal) update; without it, returns the plan.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
@@ -826,16 +1111,23 @@
    "required": [
     "name"
    ]
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  },
  {
   "name": "flux_get_network_info",
+  "title": "Network overview",
   "description": "Node counts by tier, current block height, FLUX/USD rate and the deployment payment address.",
   "inputSchema": {
    "$schema": "http://json-schema.org/draft-07/schema#",
    "type": "object",
    "properties": {},
    "required": []
+  },
+  "execution": {
+   "taskSupport": "forbidden"
   }
  }
 ]

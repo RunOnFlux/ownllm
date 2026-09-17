@@ -100,6 +100,20 @@ it and, once fused onto the bf16 base, looped on `<tool_call>assistant<tool_call
 build next to a running job killed the trainer and left the ollama runner in
 an error state (empty responses until restarted).
 
+v3 data (`gen-deploy.js`, on top of v2): dialogues never call a tool the
+surface does not offer - when the request needs a missing tool the assistant
+says so and points at Flux Cloud; edits after a quote (instances, RAM, cores,
+disk, term, region, name, env, image tag, port) each rebuild and re-quote;
+docker-compose pastes become multi-component specs (host ports dropped,
+service hostnames rewritten to `flux<component>_<app>`, `build:` refused with
+instructions); GitHub URLs get the "push an image first" answer; resource
+stats via flux_get_app_stats; German, Spanish, French and Czech requests
+answered in kind; a quarter of openings pass through `noisy()` (typos, casing,
+unit slang). `tools.json` carries all 15 MCP tools. `mix.js --docs-weight 2`
+repeats the docs rows in the train split so one epoch gives docs two passes.
+The eval has 17 cases; case 13 expects different behaviour depending on
+whether the surface offers the stats tool.
+
 v2 run (`finetune/lora-v2.yaml`): rank 32, 24 layers, lr 5e-5, seq 6144, 12k
 iterations over 25.3k pairs from 6.7k conversations; the deploy dialogues are
 generated on six system prompts and four tool-schema variants (see
