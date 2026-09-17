@@ -81,6 +81,30 @@ QUANT=1 sh finetune/train_mlx.sh ibm-granite/granite-4.0-h-tiny runs/tinyh-v1 80
 `--mask-prompt` gives assistant-only loss; `mlx_lm.fuse` writes a merged HF
 folder that the llama.cpp conversion below turns into a GGUF.
 
+**Sequence length must cover the longest pair.** mlx-lm truncates from the end,
+so a pair longer than `--max-seq-length` loses its completion and the masked
+loss becomes 0/0 = NaN, which poisons the whole run from the first step (the
+first v2 attempt at 3072 tokens did exactly that: the MCP-surface prompts carry
+3.7-6.2k tokens of schema). `render_mlx.py --max-tokens` (default 6144) drops
+anything longer, and the v2 run trains at `--max-seq-length 6144`. tiny-h is
+36 Mamba-2 layers + 4 attention layers, so memory grows roughly linearly with
+sequence length and 6144 fits on 36 GB with `--grad-checkpoint`.
+
+**The prompt must end with the assistant header.** The renderer puts the
+generation prompt (`<|start_of_role|>assistant<|end_of_role|>`) at the end of the
+prompt and trains only on the turn body, exactly as the model is served. An
+earlier version put the header in the completion; the model learned to re-emit
+it and, once fused onto the bf16 base, looped on `<tool_call>assistant<tool_call>`.
+
+**Never fuse/convert while training.** Both share Metal memory; a checkpoint
+build next to a running job killed the trainer and left the ollama runner in
+an error state (empty responses until restarted).
+
+v2 run (`finetune/lora-v2.yaml`): rank 32, 24 layers, lr 5e-5, seq 6144, 12k
+iterations over 25.3k pairs from 6.7k conversations; the deploy dialogues are
+generated on six system prompts and four tool-schema variants (see
+`surfaces.js`) so the model no longer depends on one exact prompt.
+
 ## Train on a GPU (CUDA), convert, serve
 
 ```

@@ -51,14 +51,14 @@ EPOCHS=${EPOCHS:-2}
     NAME=fluxai-$(basename "$BASE" | tr 'A-Z.' 'a-z-')-v1
     # A 7B-total MoE on a 24 GB card: batch 1 with more accumulation and a
     # 3k cap. The dense 2B model can take the roomier settings.
-    case "$BASE" in *h-tiny*|*h-small*|*micro-h*) SHAPE="--max-len 3072 --batch 1 --grad-accum 16";; *) SHAPE="--max-len 4096 --batch 2 --grad-accum 8";; esac
+    case "$BASE" in *h-tiny*|*h-small*|*micro-h*) SHAPE="--max-len ${MAXLEN:-6144} --batch 1 --grad-accum 8";; *) SHAPE="--max-len 4096 --batch 2 --grad-accum 8";; esac
     # TRAIN_ARGS overrides the shape (and may add any train.py flag) without a
     # new image or a repo push: the manifest passes it as an env var.
     [ -n "${TRAIN_ARGS:-}" ] && SHAPE="$TRAIN_ARGS"
     nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader >>"$LOG" 2>&1 || true
     log "##### training $BASE -> runs/$NAME (epochs $EPOCHS${QLORA:+, qlora}; $SHAPE)"
     if ! python3 finetune/train.py --base "$BASE" --data finetune/data/train.jsonl --eval finetune/data/eval.jsonl \
-      --out "runs/$NAME" --epochs "$EPOCHS" --lr 1e-4 --r 16 --alpha 32 $SHAPE --bf16 --grad-ckpt ${QLORA:+--qlora} >>"$LOG" 2>&1; then
+      --out "runs/$NAME" --epochs "$EPOCHS" --lr ${LR:-5e-5} --r ${RANK:-32} --alpha ${ALPHA:-64} $SHAPE --bf16 --grad-ckpt ${QLORA:+--qlora} >>"$LOG" 2>&1; then
       log "##### $NAME TRAINING FAILED: $(grep -E 'Error|error' "$LOG" | tail -1 | cut -c1-160)"; continue
     fi
     log "##### converting $NAME"

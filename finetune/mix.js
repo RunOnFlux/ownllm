@@ -16,7 +16,7 @@ const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.s
 const D = path.join(__dirname, 'data');
 // Comma-separated lists: every docs set and every deploy set that exists.
 const DOCS = opt('docs', ['docs-v1-public.jsonl', 'docs-v2.jsonl'].map((f) => path.join(D, f)).join(','));
-const DEPLOY = opt('deploy', ['deploy.jsonl', 'marketplace-deploy.jsonl'].map((f) => path.join(D, f)).join(','));
+const DEPLOY = opt('deploy', ['deploy-v2.jsonl', 'marketplace-deploy.jsonl'].map((f) => path.join(D, f)).join(','));
 const FRAC = Number(opt('eval-frac', 0.05));
 let seed = Number(opt('seed', 3));
 const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };

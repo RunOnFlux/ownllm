@@ -17,6 +17,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const TOOLS = require('./tools-compact');
+const surfaces = require('./surfaces');
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.splice(i, 2)[1] : d; };
 const SRC = opt('src', path.join(__dirname, 'data', 'sources', 'marketplace.json'));
@@ -69,7 +70,9 @@ function dialogue(a) {
   const comps = a.compose || [];
   const params = comps.flatMap((c) => (c.userEnvironmentParameters || []).map((p) => ({ ...p, comp: c.name })));
   const name = `${slug(a.name)}${Math.floor(rnd() * 90 + 10)}`;
-  const m = [{ role: 'system', content: SYSTEM }];
+  const surf = surfaces.sample(rnd);
+  const m = [{ role: 'system', content: surf.system }];
+  a.__surface = surf;
   const ask = pick([`Deploy ${a.name} from the marketplace.`, `I want the ${a.name} app.`, `Set up ${a.name} for me`, `Can I run ${a.name} on Flux?`, `${a.name} please, marketplace preset.`, `How much is ${a.name} and can you deploy it?`]);
   m.push({ role: 'user', content: ask });
   const values = {};
@@ -80,10 +83,10 @@ function dialogue(a) {
   }
   const build = {
     name, description: `${a.name} (marketplace)`, instances: a.instances || 3,
-    components: comps.map((c) => ({ name: c.name, image: c.repotag, ports: c.containerPorts || [], env: [...(c.environmentParameters || []), ...(c.userEnvironmentParameters || []).map((p) => `${p.name}=${values[p.name]}`)], cpu: c.cpu, ram: c.ram, hdd: c.hdd })),
+    components: comps.map((c) => ({ name: c.name, image: c.repotag, ports: surf.kind.startsWith('mcp') ? (c.containerPorts || []).map((p) => ({ containerPort: p })) : (c.containerPorts || []), env: [...(c.environmentParameters || []), ...(c.userEnvironmentParameters || []).map((p) => `${p.name}=${values[p.name]}`)], cpu: c.cpu, ram: c.ram, hdd: c.hdd })),
   };
   const c1 = tc('flux_build_spec', build); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
-  const spec = { version: 8, name, description: build.description, compose: build.components.map((c, i) => ({ name: c.name, repotag: c.image, ports: comps[i].ports || [], containerPorts: c.ports, domains: (c.ports || []).map(() => ''), environmentParameters: c.env, commands: comps[i].commands || [], containerData: comps[i].containerData || '/data', cpu: c.cpu, ram: c.ram, hdd: c.hdd })), instances: build.instances, expire: 88000 };
+  const spec = { version: 8, name, description: build.description, compose: build.components.map((c, i) => ({ name: c.name, repotag: c.image, ports: comps[i].ports || [], containerPorts: (c.ports || []).map((p) => (typeof p === 'object' ? p.containerPort : p)), domains: (c.ports || []).map(() => ''), environmentParameters: c.env, commands: comps[i].commands || [], containerData: comps[i].containerData || '/data', cpu: c.cpu, ram: c.ram, hdd: c.hdd })), instances: build.instances, expire: 88000 };
   m.push(toolMsg(c1.id, { spec }));
   const c2 = tc('flux_quote_app', { spec }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
   const q = quoteFor(spec); m.push(toolMsg(c2.id, q));
@@ -105,6 +108,6 @@ function dialogue(a) {
 }
 const out = fs.createWriteStream(path.join(D, 'marketplace-deploy.jsonl'));
 let n = 0;
-while (n < N) { const a = pick(apps); if (!(a.compose || []).length) continue; out.write(`${JSON.stringify({ messages: dialogue(a), tools: TOOLS })}\n`); n += 1; }
+while (n < N) { const a = pick(apps); if (!(a.compose || []).length) continue; const messages = dialogue(a); out.write(`${JSON.stringify({ messages, tools: a.__surface.tools })}\n`); n += 1; }
 out.end();
 console.log(`${apps.length} marketplace apps -> ${path.join(D, 'marketplace-facts.md')} (${md.length} chars) and ${n} deploy dialogues in marketplace-deploy.jsonl`);

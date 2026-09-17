@@ -19,7 +19,8 @@ ap.add_argument('--base', required=True)
 ap.add_argument('--data', required=True)
 ap.add_argument('--eval', required=True)
 ap.add_argument('--out', required=True)
-ap.add_argument('--max-chars', type=int, default=24000)
+ap.add_argument('--max-chars', type=int, default=40000)
+ap.add_argument('--max-tokens', type=int, default=6144, help='drop pairs longer than this; a truncated pair loses its completion and the masked loss becomes NaN')
 a = ap.parse_args()
 
 tok = AutoTokenizer.from_pretrained(a.base, trust_remote_code=True)
@@ -42,8 +43,8 @@ def norm(messages):
         out.append(m)
     return out
 
-def render(messages, tools):
-    kw = {'tokenize': False}
+def render(messages, tools, gen=False):
+    kw = {'tokenize': False, 'add_generation_prompt': gen}
     if tools: kw['tools'] = tools
     return tok.apply_chat_template(messages, **kw)
 
@@ -52,7 +53,11 @@ def pairs(row):
     res = []
     for i, m in enumerate(msgs):
         if m['role'] != 'assistant': continue
-        before = render(msgs[:i], tools)
+        # The prompt ends with the assistant header (generation prompt), exactly
+        # as it does at serving time, so the completion is the turn body only.
+        # Putting the header in the completion teaches the model to re-emit it
+        # (v2 attempt 2: '<tool_call>assistant<tool_call>' loops after fusing).
+        before = render(msgs[:i], tools, gen=True)
         upto = render(msgs[:i + 1], tools)
         if not upto.startswith(before):
             # template not prefix-monotonic for this turn; skip rather than mislabel
@@ -74,6 +79,7 @@ def convert(src, dst):
             if not ps: skipped += 1
             for p in ps:
                 if len(p['prompt']) + len(p['completion']) > a.max_chars: skipped += 1; continue
+                if len(tok(p['prompt'] + p['completion']).input_ids) > a.max_tokens: skipped += 1; continue
                 o.write(json.dumps(p) + '\n'); n += 1
     return n, skipped
 

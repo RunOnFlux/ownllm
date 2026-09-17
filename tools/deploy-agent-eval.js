@@ -21,7 +21,7 @@ const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.s
 const BASE = opt('base', 'https://llm.runonflux.com/v1').replace(/\/$/, '');
 const MODEL = opt('model', 'granite4:tiny-h');
 const TOOLSET = opt('tools', 'core');
-const CASES = (opt('case', '1,2,3,4')).split(',').map(Number);
+const CASES = (opt('case', '1,2,3,4,5,6,7,8,9,10,11,12')).split(',').map(Number);
 const TOOLS_FILE = opt('tools-file', '/tmp/mcp-tools.json');
 // The hosted MCP takes the two private keys as tool arguments. Inside Flux
 // Cloud the app holds the keys and injects them server-side, so the model
@@ -63,6 +63,8 @@ const SPEC = { version: 8, name: 'nginxdemo', description: 'nginx', owner: 'FLUX
 function mock(name, a) {
   if (name === 'flux_get_pricing') return { usdPerMonth: { cpuCore: 0.9, ramGB: 0.75, hddGB: 0.12, minimum: 0.99 }, fluxUsd: 0.21, payInFluxDiscount: 0.1 };
   if (name === 'flux_build_spec') {
+    const ramGiven = a.components?.[0]?.ram ?? a.components?.[0]?.resources?.ram ?? a.ram;
+    if (ramGiven !== undefined && Number(ramGiven) % 100 !== 0 && Number(ramGiven) > 64) return { error: `ram must be a multiple of 100 MB (got ${ramGiven})` };
     // Models shape the component many ways (flat, nested resources, "4Gi",
     // MB vs GB). Read what they meant so the quote reflects their numbers.
     const c = a.components?.[0] || a;
@@ -73,7 +75,10 @@ function mock(name, a) {
     return { spec: { ...SPEC, name: a.name || SPEC.name, instances: Number(a.instances) || SPEC.instances, compose: [{ ...SPEC.compose[0], repotag: c.image || c.repotag || SPEC.compose[0].repotag, cpu: num(r.cpu ?? a.cpu) ?? 1, ram: ram ?? 1000, hdd: hdd ?? 10 }] } };
   }
   if (name === 'flux_quote_app') { const sp = a.spec || a; const c = (typeof sp.compose === 'string' ? JSON.parse(sp.compose) : sp.compose)?.[0] || SPEC.compose[0]; const inst = Number(sp.instances) || SPEC.instances; const usd = Math.max(0.99, (c.cpu * 0.9 + (c.ram / 1000) * 0.75 + c.hdd * 0.12) * inst); return { usdPerMonth: Number(usd.toFixed(2)), flux: Number((usd / 0.21 * 0.9).toFixed(2)), instances: inst, period: '1 month' }; }
-  if (name === 'flux_deploy_app') return a.confirm ? { status: 'broadcast', txid: 'MOCKTX', name: a.spec?.name || SPEC.name } : { status: 'dry-run', quote: mock('flux_quote_app', a) };
+  if (name === 'flux_deploy_app') {
+    if (a.confirm && (a.spec?.name || '') === 'takenapp') return { error: 'an application named "takenapp" is already registered' };
+    return a.confirm ? { status: 'broadcast', txid: 'MOCKTX', name: a.spec?.name || SPEC.name } : { status: 'dry-run', quote: mock('flux_quote_app', a) };
+  }
   if (name === 'flux_wait_for_app') return { running: true, instances: [{ ip: '1.2.3.4' }], url: `https://${a.name || SPEC.name}.app.runonflux.io` };
   if (name === 'flux_get_network_info') return { nodes: { cumulus: 4200, nimbus: 1500, stratus: 677 }, height: 2951900, fluxUsd: 0.21 };
   if (name === 'flux_get_identity') return { fluxId: 'FLUXID', paymentAddress: 'tADDR', balanceFlux: 120 };
@@ -88,6 +93,15 @@ const CASE_LIST = [
   { id: 2, user: 'Deploy nginx:latest on port 80, 1 core, 1 GB RAM, 10 GB disk, 3 instances for a month. My app name is nginxdemo.', want: { firstTool: ['flux_build_spec', 'flux_quote_app', 'flux_get_pricing'], mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
   { id: 3, user: 'Yes, go ahead and deploy it.', pre: 2, want: { mustCall: ['flux_deploy_app:confirm'] } },
   { id: 4, user: 'A Minecraft server for 20 players in Europe, how much would that be per month?', want: { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app'] } },
+  // v2 cases: the failure modes the second model was trained against
+  { id: 5, user: 'Deploy a WordPress blog, production size, 2 instances, call it blog7. Yes, deploy it right away, I agree.', want: { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
+  { id: 6, user: 'Run redis:7 with 1 core, 1250 MB RAM, 5 GB disk, 1 instance. Name it cache3.', want: { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'], argCheck: (calls) => calls.some((c) => c.tag === 'flux_build_spec' && JSON.stringify(c.args).includes('1300')) } },
+  { id: 7, user: 'Deploy nginx:latest 0.5 cores 500 MB 5 GB, 3 instances, name takenapp.', want: { mustCall: ['flux_quote_app'] } },
+  { id: 8, user: 'Yes go ahead.', pre: 7, want: { mustCall: ['flux_deploy_app:confirm'], saidMatch: /taken|already|another name|instead/i } },
+  { id: 9, user: 'Show me the logs of mysite, it seems down.', want: { mustCall: ['flux_get_app_logs'], mustNot: ['flux_deploy_app'] } },
+  { id: 10, user: 'Deploy postgres:16, 2 cores, 4 GB RAM, 40 GB, 1 instance, name pgtest.', want: { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
+  { id: 11, user: 'Make it 2 instances and then deploy.', pre: 10, want: { mustCall: ['flux_quote_app'], firstTool: ['flux_build_spec', 'flux_quote_app'] } },
+  { id: 12, user: 'hello, what can you do?', want: { mustNot: ['flux_deploy_app', 'flux_build_spec', 'flux_quote_app'] } },
 ];
 
 async function chat(messages) {
@@ -140,8 +154,10 @@ async function runCase(c, history) {
   const okFirst = !w.firstTool || (tags.length && w.firstTool.includes(tags[0].split(':')[0]));
   const okMust = (w.mustCall || []).every(t => tags.includes(t));
   const okNot = !(w.mustNot || []).some(t => tags.includes(t));
-  const pass = okFirst && okMust && okNot;
-  console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
+  const okArgs = !w.argCheck || w.argCheck(called);
+  const okSaid = !w.saidMatch || w.saidMatch.test(text) || w.saidMatch.test(messages.filter(x => x.role === 'assistant').map(x => x.content || '').join(' '));
+  const pass = okFirst && okMust && okNot && okArgs && okSaid;
+  console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}${!okArgs ? ' (args)' : ''}${!okSaid ? ' (wording)' : ''}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
   console.log(`  tools: ${tags.join(' -> ') || '(none)'}`);
   for (const x of called) if (['flux_build_spec', 'flux_quote_app', 'flux_deploy_app'].includes(x.tag.split(':')[0])) console.log(`  ${x.tag} args: ${JSON.stringify(x.args).slice(0, 220)}`);
   console.log(`  said: ${text.replace(/\s+/g, ' ').slice(0, 300)}`);
