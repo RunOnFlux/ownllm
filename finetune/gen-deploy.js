@@ -99,7 +99,9 @@ function scenario() {
   s.flow = pick(['estimate', 'estimate', 'deploy', 'deploy', 'deploy', 'deploy-followup', 'deploy-change', 'stale-quote', 'yes-first', 'vague', 'skipquote', 'error', 'error', 'manage', 'manage', 'offtopic', 'decline', 'unclear',
     // v3
     'edit', 'edit', 'edit', 'compose', 'compose', 'missing-tool', 'missing-tool', 'github', 'stats', 'lang', 'lang', 'spec', 'spec', 'spec',
-    'update', 'update', 'update', 'update', 'inject', 'secret', 'abuse', 'bigspend', 'pricing', 'ambiguous', 'retry']);
+    'update', 'update', 'update', 'update', 'inject', 'secret', 'abuse', 'bigspend', 'pricing', 'ambiguous', 'retry',
+    // v4
+    'session', 'session', 'session', 'slotfill', 'slotfill', 'slotfill', 'limits', 'limits', 'enterprise', 'domains', 'domains', 'multiapp', 'duplicate']);
   return s;
 }
 
@@ -339,11 +341,207 @@ const LANGS = {
     quote: (spec, q) => `**${spec.name}**: ${spec.compose[0].cpu} jádra, ${spec.compose[0].ram / 1000} GB RAM, ${spec.compose[0].hdd} GB disk, ${spec.instances} instance - **${money(q.usdTotal)}** měsíčně (≈ ${q.flux} FLUX). Mám to nasadit?`, yes: ['Ano, prosím.', 'ano', 'Jo, nasaď to.'], no: ['Ne, díky.', 'Zatím ne.'], nodeploy: 'Dobře, nic jsem nenasadil.', done: (spec, q) => `Hotovo. **${spec.name}** běží na ${spec.instances} nodech: https://${spec.name}.app.runonflux.io. Zaplaceno ${q.flux} FLUX.` },
 };
 
+
+/**
+ * Never let an assistant message carry prose AND a tool call.
+ *
+ * ollama's parser only recognises a tool call when the reply starts with
+ * <tool_call> (tools/template.go); text in front of it makes the whole reply
+ * content and the call disappears. v3's first model produced exactly the right
+ * "rounding 1250 up to 1300" + build_spec, and the harness saw nothing. So the
+ * prose moves to the next assistant message, after the tool result.
+ */
+function fixToolProse(messages) {
+  for (let i = 0; i < messages.length; i += 1) {
+    const m = messages[i];
+    if (m.role !== 'assistant' || !m.tool_calls || !m.content) continue;
+    const prose = m.content; m.content = '';
+    const next = messages.slice(i + 1).find((x) => x.role === 'assistant' && !x.tool_calls);
+    if (next) next.content = `${prose} ${next.content}`.trim();
+  }
+  return messages;
+}
+
 // --- flows -------------------------------------------------------------------------
 function build(s) {
   callN = 0;
   const m = [{ role: 'system', content: s.surface.system }];
   const F = s.flow;
+  if (F === 'slotfill') {
+    // real chat: the details arrive over several turns, and nothing is invented
+    const wants = [];
+    m.push({ role: 'user', content: pick(['I want to deploy something', 'can you host an app for me?', 'deploy an app please', 'I need to run a container on flux']) });
+    m.push({ role: 'assistant', content: pick(['Sure. Which image or app should I run, and what does it need to do?', 'Happy to. What image (or which app) do you want, and roughly what load?', 'Which app or Docker image? I can size it from a description if you are not sure.']) });
+    m.push({ role: 'user', content: pick([`${s.preset.key === 'custom' ? s.image : appWords(s)}`, `${s.preset.key === 'custom' ? s.image : appWords(s)} please`]) });
+    if (s.preset.key === 'custom') {
+      m.push({ role: 'assistant', content: `Got it, **${s.image}**. Which port does it listen on inside the container?` });
+      m.push({ role: 'user', content: pick([`${s.ports[0]}`, `port ${s.ports[0]}`, `it listens on ${s.ports[0]}`]) });
+      wants.push('port');
+    }
+    m.push({ role: 'assistant', content: pick([`And the size - cores, RAM, disk? I can pick sensible defaults if you prefer.`, `What size should it have? Say the word and I will use a sensible default.`]) });
+    if (chance(0.4)) {
+      m.push({ role: 'user', content: pick(['use defaults', 'you decide', 'whatever is sensible', 'default is fine']) });
+      s.mode = 'default'; Object.assign(s, s.preset.size);
+    } else {
+      m.push({ role: 'user', content: resWords({ ...s, mode: 'explicit', unitTrap: false, ramGB: s.ram / 1000 }) || `${s.cpu} cores, ${s.ram} MB, ${s.hdd} GB` });
+    }
+    m.push({ role: 'assistant', content: pick(['Last thing: what should the app be called?', 'What name do you want for it?']) });
+    m.push({ role: 'user', content: pick([s.name, `call it ${s.name}`, `name: ${s.name}`]) });
+    const { spec, q } = quoteFlow(m, s);
+    if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+    return m;
+  }
+  if (F === 'session') {
+    // a long session on one app: deploy, check, read logs, diagnose, resize, renew
+    m.push({ role: 'user', content: userOpening(s) });
+    const { spec, q } = quoteFlow(m, s);
+    m.push({ role: 'user', content: pick(YES) });
+    if (!deployFlow(m, s, spec, q)) return m;
+    const name = spec.name;
+    if (has(s, 'flux_get_app') && chance(0.8)) {
+      m.push({ role: 'user', content: pick([`is ${name} up?`, 'is it running yet?', 'status?']) });
+      const c = tc('flux_get_app', { name }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { name, running: spec.instances, instances: spec.instances, expiresInDays: 29, url: `https://${name}.app.runonflux.io` }));
+      m.push({ role: 'assistant', content: `Running on ${spec.instances} of ${spec.instances} ${spec.instances === 1 ? 'node' : 'nodes'} at https://${name}.app.runonflux.io, ${29} days left on the term.` });
+    }
+    if (has(s, 'flux_get_app_logs') && has(s, 'flux_quote_app')) {
+      // something is wrong -> logs -> out of memory -> resize -> re-quote -> apply
+      m.push({ role: 'user', content: pick([`${name} keeps restarting`, `${name} died again`, `something is wrong with ${name}, it drops out`]) });
+      const c = tc('flux_get_app_logs', { name, lines: 50 }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { lines: ['starting', 'Killed', 'fatal: out of memory', 'exited with code 137'] }));
+      const bigger = roundRam(Math.max(s.ram * 2, s.ram + 1000));
+      m.push({ role: 'assistant', content: `It is being killed for running out of memory (exit 137) - ${s.ram} MB is not enough for this workload. I can raise it to ${bigger} MB and quote the update; the app keeps its name and data. Shall I?` });
+      m.push({ role: 'user', content: pick(YES) });
+      const next = JSON.parse(JSON.stringify(spec)); next.compose[0].ram = bigger;
+      const c2 = tc('flux_quote_app', { spec: next }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      const q2 = quoteFor(next, s.pricing); const credit = +(q2.usdPerMonth * 0.6).toFixed(2); const due = Math.max(0.99, +(q2.usdTotal - credit).toFixed(2));
+      m.push(toolMsg(c2.id, { ...q2, update: true, creditUsd: credit, usdDue: due, fluxDue: +(due / s.pricing.fluxUsd * 0.9).toFixed(2) }));
+      m.push({ role: 'assistant', content: `Update to ${bigger} MB: ${money(q2.usdTotal)} per month, minus ${money(credit)} credit for the rest of the current term = **${money(due)}** now. Apply it?` });
+      m.push({ role: 'user', content: pick(YES) });
+      const c3 = tc('flux_deploy_app', { spec: next, confirm: true }); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      m.push(toolMsg(c3.id, { status: 'broadcast', txid: Array.from({ length: 64 }, () => '0123456789abcdef'[ri(0, 15)]).join(''), name, update: true }));
+      m.push({ role: 'assistant', content: `Done - **${name}** now has ${bigger} MB of RAM. Give the nodes a minute or two to pick up the new spec.` });
+    }
+    const end = rnd();
+    if (end < 0.35 && has(s, 'flux_quote_app') && has(s, 'flux_deploy_app')) {
+      const months = pick([3, 6, 12]);
+      m.push({ role: 'user', content: pick([`extend it for ${months} months`, `renew ${name} for ${months} months`]) });
+      const ren = JSON.parse(JSON.stringify(spec)); ren.expire = months * 88000;
+      const c = tc('flux_quote_app', { spec: ren }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      const qr = quoteFor(ren, s.pricing); m.push(toolMsg(c.id, qr));
+      m.push({ role: 'assistant', content: `${months} months for **${name}**: **${money(qr.usdTotal)}** (≈ ${qr.flux} FLUX). Renew it?` });
+      m.push({ role: 'user', content: pick(YES) });
+      const c2 = tc('flux_deploy_app', { spec: ren, confirm: true }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      m.push(toolMsg(c2.id, { status: 'broadcast', txid: 'renewtx', name, paidFlux: qr.flux }));
+      m.push({ role: 'assistant', content: `Renewed - **${name}** now runs for ${months} more months. Paid ${qr.flux} FLUX.` });
+    } else if (end < 0.5 && has(s, 'flux_cancel_app')) {
+      m.push({ role: 'user', content: pick([`ok cancel ${name}, I am done`, `remove ${name}`]) });
+      m.push({ role: 'assistant', content: `Cancelling **${name}** ends it early and the rest of the term is not refunded. Cancel it?` });
+      m.push({ role: 'user', content: pick(YES) });
+      const c = tc('flux_cancel_app', { name, confirm: true }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { ok: true, name, expiresInMinutes: 60 }));
+      m.push({ role: 'assistant', content: `Done. **${name}** stops within the hour.` });
+    } else {
+      m.push({ role: 'user', content: pick(['thanks!', 'perfect, thanks', 'great']) });
+      m.push({ role: 'assistant', content: pick(['Any time - ask me for status, logs or a resize whenever you need.', 'You are welcome. I am here if it needs more resources or a renewal.']) });
+    }
+    return m;
+  }
+  if (F === 'limits') {
+    // what Flux Cloud does not do; answer honestly and point at the right product
+    const [ask, say] = pick([
+      [pick(['Can I get a GPU for my app?', 'I need CUDA for inference, can Flux run that?', 'deploy my LLM on an A100']),
+        'Flux Cloud applications run as Docker containers on the network\'s CPU nodes, so there is no GPU for them. GPUs are rented separately on FluxEdge (edge.runonflux.com), which is where the A100 and H100 machines live. I can still deploy a CPU app here if that helps.'],
+      [pick(['Can I ssh into my app?', 'I need root access on the node', 'give me shell access to the container']),
+        'No shell or root access: the network runs your image as a container and you interact with it over the ports it publishes. Anything you need at runtime has to be in the image or come from environment variables. I can redeploy it with changes any time.'],
+      [pick(['Can I run a Kubernetes cluster on it?', 'Does Flux support helm charts?']),
+        'Not directly - the unit here is a Docker application with one or more components, not a Kubernetes cluster, so there is no helm or operator support. Multi-component apps cover most of what a small chart does. Tell me the images and I will build the spec.'],
+      [pick(['Can my app keep the same IP forever?', 'I need a fixed IP address']),
+        'You can ask for a static IP in the specification, and the app then runs on nodes with one. It is a flag on the app, not an address you choose. Want me to build it with a static IP and quote that?'],
+      [pick(['Is my data backed up?', 'what happens to my data if a node goes down?']),
+        'Each instance has its own volume at the size you request, and the network replicates your app across instances, but there is no managed backup: if a node drops, that instance is rescheduled with an empty volume. Keep state in a database component or an external store, and back it up yourself.'],
+      [pick(['Can I run Windows containers?', 'my image is arm64, is that ok?']),
+        'Only linux/amd64 images run on the network - no Windows containers, and an arm64-only image will not start. Build a multi-arch or amd64 image and I will deploy it.'],
+    ]);
+    m.push({ role: 'user', content: ask });
+    m.push({ role: 'assistant', content: say });
+    if (chance(0.4)) {
+      const s2 = { ...scenario(), flow: 'deploy', surface: s.surface, pricing: s.pricing };
+      m.push({ role: 'user', content: userOpening(s2, pick(['ok then', 'fine, instead', 'alright,'])) });
+      const { spec, q } = quoteFlow(m, s2);
+      if (chance(0.5)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s2, spec, q); }
+    }
+    return m;
+  }
+  if (F === 'enterprise') {
+    const img = pick(['registry.mycorp.com/team/api:2.1', 'ghcr.io/acme/private-svc:1.0', 'myprivate.registry.io/app:prod']);
+    m.push({ role: 'user', content: pick([`Deploy ${img}, it is in our private registry`, `I need to run ${img} - the registry needs a login`, `can you deploy a private image? ${img}`]) });
+    m.push({ role: 'assistant', content: `A private image needs an enterprise application: the compose section is encrypted and it runs only on ArcaneOS nodes, which is how the registry credentials stay secret. Set the registry username and token in Flux Cloud under the app's enterprise settings, then I can build and quote it. Size and ports as usual - what does it need?` });
+    m.push({ role: 'user', content: pick(['done, credentials are in. 1 core 2 GB 20 GB, port 8080, name privapi', '1 core, 2 GB RAM, 20 GB, port 8080, call it privapi']) });
+    const s2 = { ...s, image: img, ports: [8080], mode: 'explicit', unitTrap: false, cpu: 1, ram: 2000, hdd: 20, instances: 3, months: 1, region: null, name: 'privapi', env: [], preset: PRESETS.find((p) => p.key === 'custom') };
+    const a = buildArgs(s2, 'privapi'); a.enterprise = true;
+    const c1 = tc('flux_build_spec', a); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const spec = specFrom(a); spec.enterprise = true; m.push(toolMsg(c1.id, { spec }));
+    const c2 = tc('flux_quote_app', { spec }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    const q = quoteFor(spec, s.pricing); m.push(toolMsg(c2.id, q));
+    m.push({ role: 'assistant', content: `**privapi** as an enterprise app: 1 core, 2 GB RAM, 20 GB, 3 instances - **${money(q.usdTotal)}** per month (≈ ${q.flux} FLUX). It runs on ArcaneOS nodes only, so the pool is smaller than for a public image. ${askDeploy()}` });
+    if (chance(0.6)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s2, spec, q); }
+    return m;
+  }
+  if (F === 'domains') {
+    const name = pick(['mysite', 'shop1', 'blog2', 'api7']);
+    const port = pick([80, 3000, 8080]);
+    const kind = pick(['url', 'custom', 'ssl']);
+    if (kind === 'url') {
+      m.push({ role: 'user', content: pick([`What is the URL of ${name}?`, `how do I reach ${name} once it is deployed?`, `where do I open ${name}?`]) });
+      m.push({ role: 'assistant', content: `**${name}** is reachable at https://${name}.app.runonflux.io, which load-balances across its instances. A component's other published port is at https://${name}_<port>.app.runonflux.io, for example https://${name}_${port}.app.runonflux.io. Both get HTTPS automatically.` });
+    } else if (kind === 'custom') {
+      const dom = pick(['shop.example.com', 'app.mycompany.io', 'www.example.org']);
+      m.push({ role: 'user', content: pick([`Can I use my own domain ${dom} for ${name}?`, `point ${dom} at ${name}`, `I want ${dom} instead of the runonflux URL`]) });
+      m.push({ role: 'assistant', content: `Yes. Put **${dom}** in the app's domains field for the port it should serve, and create a CNAME from ${dom} to ${name}.app.runonflux.io at your DNS provider. The Flux domain manager then routes and issues the certificate. I can update the spec with that domain and quote the change - want me to?` });
+      if (chance(0.5)) { m.push({ role: 'user', content: pick(YES) }); m.push({ role: 'assistant', content: `I need the current spec to change it - one moment.` }); }
+    } else {
+      m.push({ role: 'user', content: pick(['do I need to set up SSL myself?', 'is https included?', 'how do certificates work here?']) });
+      m.push({ role: 'assistant', content: 'No setup needed: the .app.runonflux.io address is served over HTTPS with a certificate the network manages, and a custom domain gets one too once its CNAME points at the app. Your container only serves plain HTTP on its port.' });
+    }
+    return m;
+  }
+  if (F === 'multiapp') {
+    const s2 = { ...scenario(), surface: s.surface, pricing: s.pricing };
+    while (s2.preset.key === s.preset.key) Object.assign(s2, scenario(), { surface: s.surface, pricing: s.pricing });
+    m.push({ role: 'user', content: `${pick(['I need two things:', 'Deploy two apps:', 'Set up both of these:'])} ${appWords(s)} and ${appWords(s2)}.` });
+    m.push({ role: 'assistant', content: `Two separate applications then - they are priced and deployed one by one. Starting with ${appWords(s)}.` });
+    const r1 = quoteFlow(m, s);
+    m.push({ role: 'user', content: pick(YES) });
+    deployFlow(m, s, r1.spec, r1.q);
+    m.push({ role: 'user', content: pick(['now the other one', 'good, the second one please', 'and the second']) });
+    const r2 = quoteFlow(m, s2);
+    if (chance(0.7)) {
+      m.push({ role: 'user', content: pick(YES) });
+      deployFlow(m, s2, r2.spec, r2.q);
+      m.push({ role: 'assistant', content: `Both are up: **${r1.spec.name}** and **${r2.spec.name}**, ${money(r1.q.usdTotal + r2.q.usdTotal)} per month together.` });
+    }
+    return m;
+  }
+  if (F === 'duplicate') {
+    if (!has(s, 'flux_get_app')) { s.flow = 'deploy'; return build(s); }
+    m.push({ role: 'user', content: userOpening(s) });
+    const c = tc('flux_get_app', { name: s.name }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    const cur = specFrom(buildArgs(s)); cur.compose[0].ram = roundRam(s.ram / 2);
+    m.push(toolMsg(c.id, { name: s.name, spec: cur, running: s.instances, instances: s.instances, expiresInDays: ri(5, 25) }));
+    m.push({ role: 'assistant', content: `You already have an app called **${s.name}**, running with ${cur.compose[0].ram} MB of RAM. Deploying the same name updates that app rather than creating a second one. Do you want to update it to the new size, or use a different name for a separate app?` });
+    if (chance(0.6)) {
+      m.push({ role: 'user', content: pick(['update it', 'yes update the existing one', 'update please']) });
+      const { spec, q } = quoteFlow(m, s);
+      if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+    } else {
+      const alt = `${s.name}${ri(2, 9)}`;
+      m.push({ role: 'user', content: pick([`a separate one, call it ${alt}`, `new app: ${alt}`]) });
+      const { spec, q } = quoteFlow(m, s, alt);
+      if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+    }
+    return m;
+  }
   if (F === 'missing-tool') {
     // the request needs a tool the surface does not offer: say so, call nothing
     const kind = pick(['logs', 'stats', 'restart', 'cancel', 'status', 'list', 'network']);
@@ -667,10 +865,41 @@ function build(s) {
     m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); return m;
   }
   if (F === 'error') {
-    const kind = pick(['name-taken', 'name-flux', 'ram-step', 'balance', 'image']);
+    const kind = pick(['name-taken', 'name-flux', 'ram-step', 'balance', 'image', 'name-chars', 'name-long', 'hdd-small', 'arch', 'no-tag']);
     if (kind === 'name-flux') { s.name = pick(['fluxsite', 'flux-blog', 'zelnode1', 'fluxapp2']); m[1].content = userOpening(s); }
     if (kind === 'ram-step') { s.mode = 'explicit'; s.cpu = 1; s.ramGB = 1.25; s.hdd = 10; s.unitTrap = false; s.ram = 1250; m[1].content = userOpening(s).replace(/1\.25 GB RAM/, '1250 MB RAM'); }
+    if (kind === 'name-chars') { s.name = pick(['my site', 'shop_1', 'app.demo']); m[1].content = userOpening(s); }
+    if (kind === 'name-long') { s.name = 'averyverylongapplicationnamethatwillnotfit'; m[1].content = userOpening(s); }
+    if (kind === 'hdd-small') { s.mode = 'explicit'; s.unitTrap = false; s.hdd = 0; s.ramGB = s.ram / 1000; m[1].content = userOpening(s).replace(/0 GB disk/, 'no disk'); }
+    if (kind === 'no-tag') { s.image = s.image.split(':')[0]; m[1].content = userOpening(s); }
     const a = buildArgs(s); const c1 = tc('flux_build_spec', a); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    if (['name-chars', 'name-long', 'hdd-small', 'no-tag'].includes(kind)) {
+      const fix = { 'name-chars': [`invalid name "${s.name}": only letters and digits are allowed`, s.name.replace(/[^a-z0-9]/gi, '').toLowerCase(), (v) => { s.name = v; }, `App names take letters and digits only - no spaces, dots or underscores. I will use **${s.name.replace(/[^a-z0-9]/gi, '').toLowerCase()}**.`],
+        'name-long': ['invalid name: maximum length is 32 characters', 'averyverylongapplication', (v) => { s.name = v; }, 'That name is over the 32-character limit, so I shortened it to **averyverylongapplication**.'],
+        'hdd-small': ['hdd must be at least 1 GB', null, () => { s.hdd = 1; }, 'Every component needs at least 1 GB of disk, so I set it to 1 GB.'],
+        'no-tag': [`image ${s.image} has no tag; specify one like ${s.image}:latest`, null, () => { s.image = `${s.image}:latest`; }, `The image needs an explicit tag, so I am using **${s.image}:latest**.`] }[kind];
+      m.push(toolMsg(c1.id, { error: fix[0] }));
+      fix[2](fix[1]);
+      const a2 = buildArgs(s); const spec2 = specFrom(a2);
+      const c2 = tc('flux_build_spec', a2); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      m.push(toolMsg(c2.id, { spec: spec2 }));
+      const c3 = tc('flux_quote_app', { spec: spec2 }); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      const q2 = quoteFor(spec2, s.pricing); m.push(toolMsg(c3.id, q2));
+      m.push({ role: 'assistant', content: `${fix[3]} ${quoteLine(s, q2, spec2)} ${askDeploy()}` });
+      if (chance(0.6)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec2, q2); }
+      return m;
+    }
+    if (kind === 'arch') {
+      const spec0 = specFrom(a); m.push(toolMsg(c1.id, { spec: spec0 }));
+      const c2 = tc('flux_quote_app', { spec: spec0 }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      const q0 = quoteFor(spec0, s.pricing); m.push(toolMsg(c2.id, q0));
+      m.push({ role: 'assistant', content: `${quoteLine(s, q0, spec0)} ${askDeploy()}` });
+      m.push({ role: 'user', content: pick(YES) });
+      const c3 = tc('flux_deploy_app', { spec: spec0, confirm: true }); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      m.push(toolMsg(c3.id, { error: `image ${spec0.compose[0].repotag} is arm64 only; nodes run linux/amd64` }));
+      m.push({ role: 'assistant', content: `Not deployed: **${spec0.compose[0].repotag}** is published for arm64 only and the nodes run linux/amd64. Nothing was charged. Build a multi-arch or amd64 image, then give me the tag and I will re-quote.` });
+      return m;
+    }
     if (kind === 'name-flux') {
       m.push(toolMsg(c1.id, { error: `invalid name "${s.name}": app names must not start with flux or zel` }));
       const alt = s.name.replace(/^(flux-?|zel)/i, 'my');
@@ -764,7 +993,7 @@ async function paraphrase(text) {
     while (jobs.length) {
       jobs.pop();
       const s = scenario();
-      const messages = build(s);
+      const messages = fixToolProse(build(s));
       stats.flows[s.flow] = (stats.flows[s.flow] || 0) + 1; stats.surfaces[s.surface.kind] = (stats.surfaces[s.surface.kind] || 0) + 1;
       const first = messages.find((x) => x.role === 'user');
       if (first && !['compose', 'lang', 'github', 'spec', 'secret', 'inject', 'abuse'].includes(s.flow) && chance(0.25)) first.content = noisy(first.content);

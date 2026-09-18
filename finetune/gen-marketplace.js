@@ -108,6 +108,16 @@ function dialogue(a) {
 }
 const out = fs.createWriteStream(path.join(D, 'marketplace-deploy.jsonl'));
 let n = 0;
-while (n < N) { const a = pick(apps); if (!(a.compose || []).length) continue; const messages = dialogue(a); out.write(`${JSON.stringify({ messages, tools: a.__surface.tools })}\n`); n += 1; }
+function fixToolProse(messages) {   // see gen-deploy.js: prose before a tool call hides the call
+  for (let i = 0; i < messages.length; i += 1) {
+    const m = messages[i];
+    if (m.role !== 'assistant' || !m.tool_calls || !m.content) continue;
+    const prose = m.content; m.content = '';
+    const next = messages.slice(i + 1).find((x) => x.role === 'assistant' && !x.tool_calls);
+    if (next) next.content = `${prose} ${next.content}`.trim();
+  }
+  return messages;
+}
+while (n < N) { const a = pick(apps); if (!(a.compose || []).length) continue; const messages = fixToolProse(dialogue(a)); out.write(`${JSON.stringify({ messages, tools: a.__surface.tools })}\n`); n += 1; }
 out.end();
 console.log(`${apps.length} marketplace apps -> ${path.join(D, 'marketplace-facts.md')} (${md.length} chars) and ${n} deploy dialogues in marketplace-deploy.jsonl`);

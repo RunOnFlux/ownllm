@@ -119,6 +119,32 @@ iterations over 25.3k pairs from 6.7k conversations; the deploy dialogues are
 generated on six system prompts and four tool-schema variants (see
 `surfaces.js`) so the model no longer depends on one exact prompt.
 
+## Train on a rented GPU
+
+FluxEdge premium (Hyperstack) nodes currently come up **cordoned**: the pod
+never schedules and the deployment is reaped after ~5 minutes with no error.
+Only the FluxEdge team can uncordon (Rancher > Cluster > Nodes > Uncordon, or
+`kubectl uncordon <node>`), so `tools/vast.js` is the working path. It runs the
+same `run-edge.sh` job and publishes the log and artifacts on the instance's
+mapped port 8080.
+
+```
+python3 -m venv finetune/.venv-vast && finetune/.venv-vast/bin/pip install vastai
+echo "<api key>" > ~/.vast.key && chmod 600 ~/.vast.key
+node tools/vast.js offers --gpu A100_SXM4 --max-price 1.5
+node tools/vast.js rent                 # cheapest A100 80 GB, MAXLEN 8192, 1 epoch
+node tools/vast.js log --lines 30       # GPU, kernels, [data], losses
+node tools/vast.js fetch runs/vast-v3   # adapter + GGUF + Modelfile (streamed)
+node tools/vast.js stop                 # bills until destroyed
+```
+
+**Sequence length on the GPU path is 8192, not 6144.** With all 15 MCP tools in
+the schema every full-surface example is longer than 6144 tokens, and `train.py`
+drops what does not fit rather than mislabel it: a 6144 run silently trained on
+zero full-surface examples (`dropped={'assistant tokens truncated away': 991}`).
+At 8192 nothing is dropped (longest 8,153) and an 80 GB A100 holds it at batch 1
+with grad-accum 8, about 10 s/step.
+
 ## Train on a GPU (CUDA), convert, serve
 
 ```

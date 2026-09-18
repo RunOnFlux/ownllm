@@ -621,3 +621,51 @@ should raise the docs share or run a second epoch on docs only.
 Files: `runs/tinyh-a100-v2/` (Q4_K_M GGUF 4.2 GB, adapter, loss history,
 Modelfile), local ollama model `fluxai-tinyh-v2-a100`. Serving on Flux still
 needs the GGUF hosted where the pools can pull it.
+
+## 10. Third fine-tune: fluxai-tinyh-v3 (2026-09-18)
+
+Production round. Data v3 adds, on top of v2: app updates (fetch the running
+spec, modify, quote the update with the unused-term credit, apply on yes),
+pasted Flux specifications (quote exactly as given, v7 accepted, a rejected RAM
+value corrected, "is this valid?"), docker-compose pastes turned into
+multi-component specs (host ports dropped, service hostnames rewritten to
+`flux<component>_<app>`, `build:` refused with instructions), GitHub URLs
+answered with "push an image first", honesty when the surface lacks the tool the
+request needs, edits after a quote, prompt injection inside tool output ignored,
+pasted private keys refused and never echoed, abuse declined, large spends
+spelled out with the exact FLUX total, the rate card explained, ambiguous
+targets disambiguated, transient tool failures retried once, four languages, and
+noisy input (typos, casing, unit slang). The eval grew to 22 cases; `mix.js`
+repeats docs rows twice in the train split and gives a third of them a tool
+surface.
+
+Trained on a **vast.ai A100 SXM4 80 GB** ($1.08/h): bf16 LoRA rank 32 / alpha
+64, **seq 8192**, lr 5e-5, one epoch = 1,207 steps in 197 min, train loss 0.165,
+eval loss 0.104 (v2: 0.182 / 0.116). Cost about $3.70. FluxEdge premium was
+unusable: its nodes come up cordoned, so every deployment is reaped in ~5
+minutes (see `tools/vast.js` and the README).
+
+| 22-case deploy eval | fluxai-tinyh-v3 | fluxai-tinyh-v2 | gpt-oss:20b |
+|---|---|---|---|
+| Compact tools (trained surface) | 20/22 | 12/12 old set, 2/5 new | 9/12 old set |
+| MCP full (15 real schemas) | 20/22 | 12/12 old set, 2/5 new | - |
+| MCP core (5 schemas) | 20/22 | 11/12 old set | 9/12 old set |
+| Grounding strict | 7/9 | 7/9 | 7/9 |
+
+Latency 1-6 s per case including three tool round-trips, against minutes for
+gpt-oss.
+
+**The two remaining failures are a serving-layer bug, not the model.** Both
+cases need the assistant to explain something *and* call a tool in the same
+turn ("RAM has to be a multiple of 100 MB; rounding 1250 up to 1300" then
+`flux_build_spec`; the compose note then the two-component build). Generated
+raw, the model does exactly that, correctly. But ollama only parses a tool call
+when the reply *starts* with `<tool_call>` (tools/template.go), so prose in
+front of the call makes the whole reply content and the call disappears. Since
+production serving is ollama on the Flux pools, the fix belongs in the data:
+`fixToolProse()` in both generators now moves any such prose into the next
+assistant message, after the tool result, which reads the same to the user and
+keeps every call parseable. v3 was retrained on that corrected set.
+
+Files: `runs/tinyh-vast-v3/` (Q4_K_M GGUF 4.0 GB, adapter, loss history,
+Modelfile), ollama model `fluxai-tinyh-v3`.

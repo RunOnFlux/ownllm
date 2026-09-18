@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.splice(i, 2)[1] : d; };
 const D = path.join(__dirname, 'data');
 // Comma-separated lists: every docs set and every deploy set that exists.
-const DOCS = opt('docs', ['docs-v1-public.jsonl', 'docs-v2.jsonl'].map((f) => path.join(D, f)).join(','));
+const DOCS = opt('docs', ['docs-v1-public.jsonl', 'docs-v2.jsonl', 'docs-math.jsonl'].map((f) => path.join(D, f)).join(','));
 const DEPLOY = opt('deploy', ['deploy-v2.jsonl', 'marketplace-deploy.jsonl'].map((f) => path.join(D, f)).join(','));
 const FRAC = Number(opt('eval-frac', 0.05));
 // Docs rows are repeated this many times in the train split (not in eval): one
