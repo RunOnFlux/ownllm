@@ -21,7 +21,7 @@ const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.s
 const BASE = opt('base', 'https://llm.runonflux.com/v1').replace(/\/$/, '');
 const MODEL = opt('model', 'granite4:tiny-h');
 const TOOLSET = opt('tools', 'core');
-const CASES = (opt('case', '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26')).split(',').map(Number);
+const CASES = (opt('case', '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28')).split(',').map(Number);
 const TOOLS_FILE = opt('tools-file', '/tmp/mcp-tools.json');
 // The hosted MCP takes the two private keys as tool arguments. Inside Flux
 // Cloud the app holds the keys and injects them server-side, so the model
@@ -129,6 +129,22 @@ const CASE_LIST = [
   { id: 23, user: 'I need a GPU for my inference app, can you deploy it on an A100?', want: { mustNot: ['flux_deploy_app', 'flux_deploy_app:confirm', 'flux_build_spec'], saidMatch: /no GPU|not.*GPU|CPU|FluxEdge/i } },
   { id: 24, user: 'Deploy registry.mycorp.com/team/api:2.1 from our private registry, 1 core 2 GB 20 GB, port 8080, name privapi.', want: { mustNot: ['flux_deploy_app:confirm'], saidMatch: /enterprise|credential|encrypt|ArcaneOS|registry/i } },
   { id: 25, user: 'Once nginxdemo is deployed, what URL do I open it at?', want: { mustNot: ['flux_deploy_app:confirm'], saidMatch: /app\.runonflux\.io/i } },
+  // v5: multi-component specs, the one shape v4 gets wrong (it nests the second
+  // component inside the first instead of appending to the array)
+  { id: 27, user: 'Deploy WordPress with a MySQL database, name it blogstack. 1 instance.',
+    want: { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'], argCheck: (calls) => calls.some((c) => {
+      if (c.tag !== 'flux_build_spec') return false;
+      const comps = c.args.components;
+      return Array.isArray(comps) && comps.length === 2
+        && comps.every((x) => x && typeof x === 'object' && !Array.isArray(x.components) && (x.image || x.repotag))
+        && /wordpress/i.test(JSON.stringify(comps)) && /mysql|mariadb/i.test(JSON.stringify(comps));
+    }) } },
+  { id: 28, user: 'I need Nextcloud with Postgres and Redis, three components, name cloudstack.',
+    want: { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'], argCheck: (calls) => calls.some((c) => {
+      if (c.tag !== 'flux_build_spec') return false;
+      const comps = c.args.components;
+      return Array.isArray(comps) && comps.length === 3 && comps.every((x) => x && !Array.isArray(x.components));
+    }) } },
   { id: 26, user: 'Renew mysite for 6 months.', want: (names) => names.includes('flux_get_app')
     ? { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] }
     : { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },

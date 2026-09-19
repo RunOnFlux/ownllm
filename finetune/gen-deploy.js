@@ -101,7 +101,20 @@ function scenario() {
     'edit', 'edit', 'edit', 'compose', 'compose', 'missing-tool', 'missing-tool', 'github', 'stats', 'lang', 'lang', 'spec', 'spec', 'spec',
     'update', 'update', 'update', 'update', 'inject', 'secret', 'abuse', 'bigspend', 'pricing', 'ambiguous', 'retry',
     // v4
-    'session', 'session', 'session', 'slotfill', 'slotfill', 'slotfill', 'limits', 'limits', 'enterprise', 'domains', 'domains', 'multiapp', 'duplicate']);
+    'session', 'session', 'session', 'slotfill', 'slotfill', 'slotfill', 'limits', 'limits', 'enterprise', 'domains', 'domains', 'multiapp', 'duplicate',
+    // v5: multi-component specs. One in five build_spec calls should carry
+    // more than one component; v4 had 3.4% and nested the second inside the
+    // first when asked for a stack.
+    'stack', 'stack', 'stack', 'stack', 'stack', 'stack-edit', 'stack-edit', 'compose', 'compose', 'compose',
+    // many components: 3 to 8 parts, edits that add/remove/resize one of them,
+    // and the 10-component ceiling
+    'bigstack', 'bigstack', 'bigstack', 'bigstack', 'bigstack', 'bigstack-edit', 'bigstack-edit', 'bigstack-edit', 'toomany',
+    // the assistant inside the FluxCloud web UI: navigation, prefilling the
+    // deploy form instead of deploying, and the limits of what it may do
+    'uinav', 'uinav', 'uinav', 'uideploy', 'uideploy', 'uideploy', 'uiask', 'uiask',
+    // thin or missing system prompt, no tools: the model must still know what
+    // Flux is instead of confabulating
+    'bare', 'bare', 'bare', 'bare']);
   return s;
 }
 
@@ -114,7 +127,37 @@ function resWords(s) {
   const hdd = s.unitTrap ? `${s.hdd}GB SSD` : `${s.hdd} GB disk`;
   return `${cpu}, ${ram}, ${hdd}`;
 }
+// Phrasing banks written by Claude (finetune/phrasings.json): templates with
+// {what}/{name}/{cpu}/{ram}/{hdd} placeholders rather than rewritten sentences,
+// so every number, image and app name survives exactly while the wording
+// varies. This replaced a per-line paraphrase through a hosted teacher, which
+// was slow (37 dialogues/min over the network) and occasionally mangled a
+// figure the generator then had to detect and discard.
+const PHRASINGS = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'phrasings.json'), 'utf8')); } catch { return null; } })();
+const ramWords = (mb) => (mb >= 1000 && mb % 1000 === 0 ? `${mb / 1000} GB` : `${mb} MB`);
+/** A varied opening built from the banks; falls back to the hand-written forms. */
+function bankOpening(s) {
+  if (!PHRASINGS || chance(0.35)) return null;
+  const what = appWords(s);
+  let line = pick(PHRASINGS.lead).replace('{what}', what);
+  const parts = [];
+  if (s.mode === 'explicit') {
+    parts.push(pick(PHRASINGS.sizing)
+      .replace('{cpu}', String(roundCpu(s.cpu)))
+      .replace('{ram}', ramWords(roundRam(s.ram)))
+      .replace('{hdd}', `${s.hdd} GB`));
+  } else if (s.mode === 'tier') parts.push(s.tier);
+  if (s.instancesStated) parts.push(`${s.instances} ${s.instances === 1 ? 'instance' : 'instances'}`);
+  if (s.region) parts.push(`in ${s.region[0]}`);
+  if (s.months !== 1) parts.push(`for ${term(s.months)}`);
+  if (s.preset.key === 'custom' && chance(0.6)) parts.push(`port ${s.ports[0]}`);
+  if (parts.length) line += `${/[.?!]$/.test(line) ? '' : ','} ${parts.join(', ')}`;
+  if (!/[.?!]$/.test(line)) line += s.flow === 'estimate' ? '?' : '.';
+  if (chance(0.85)) line += ` ${pick(PHRASINGS.naming).replace('{name}', s.name)}`;
+  return line;
+}
 function userOpening(s, verb) {
+  if (!verb) { const b = bankOpening(s); if (b) return b; }
   const what = appWords(s);
   const lead = verb ? `${verb} ${what}` : s.flow === 'estimate' ? pick([`How much would ${what} cost`, `Estimate the cost of ${what}`, `What does it cost to run ${what}`, `Price for ${what}`, `Give me a quote for ${what}`, `how much for ${what}`])
     : s.flow === 'skipquote' ? pick([`Deploy ${what} right now, skip the quote`, `Just deploy ${what}, I don't need the price`, `Launch ${what} immediately`])
@@ -362,6 +405,164 @@ function fixToolProse(messages) {
   return messages;
 }
 
+// --- v5: application stacks (two or three components in one app) -------------------
+// The component hostname inside an app is flux<component>_<appname>, so a web
+// component reaches its database there and never at "localhost" or the bare
+// service name. Every stack below wires that correctly by construction.
+const STACKS = [
+  { key: 'wordpress+mysql', ask: ['WordPress with a MySQL database', 'a WordPress site and its database', 'WordPress + MySQL'],
+    comps: (pw) => [
+      { name: 'web', image: 'wordpress:latest', ports: [80], cpu: 1, ram: 1000, hdd: 20, env: (app) => [`WORDPRESS_DB_HOST=fluxdb_${app}`, 'WORDPRESS_DB_USER=wordpress', `WORDPRESS_DB_PASSWORD=${pw}`, 'WORDPRESS_DB_NAME=wordpress'] },
+      { name: 'db', image: 'mysql:8', ports: [3306], cpu: 1, ram: 2000, hdd: 20, env: () => [`MYSQL_ROOT_PASSWORD=${pw}`, 'MYSQL_DATABASE=wordpress', 'MYSQL_USER=wordpress', `MYSQL_PASSWORD=${pw}`] }] },
+  { key: 'ghost+mysql', ask: ['a Ghost blog with its database', 'Ghost plus MySQL'],
+    comps: (pw) => [
+      { name: 'ghost', image: 'ghost:5', ports: [2368], cpu: 1, ram: 1000, hdd: 10, env: (app) => [`database__connection__host=fluxdb_${app}`, 'database__client=mysql', 'database__connection__user=ghost', `database__connection__password=${pw}`, 'database__connection__database=ghost'] },
+      { name: 'db', image: 'mysql:8', ports: [3306], cpu: 0.7, ram: 1000, hdd: 10, env: () => [`MYSQL_ROOT_PASSWORD=${pw}`, 'MYSQL_DATABASE=ghost', 'MYSQL_USER=ghost', `MYSQL_PASSWORD=${pw}`] }] },
+  { key: 'n8n+postgres', ask: ['n8n with a Postgres database', 'n8n and postgres'],
+    comps: (pw) => [
+      { name: 'n8n', image: 'n8nio/n8n:latest', ports: [5678], cpu: 1, ram: 1000, hdd: 10, env: (app) => ['DB_TYPE=postgresdb', `DB_POSTGRESDB_HOST=fluxdb_${app}`, 'DB_POSTGRESDB_USER=n8n', `DB_POSTGRESDB_PASSWORD=${pw}`] },
+      { name: 'db', image: 'postgres:16', ports: [5432], cpu: 1, ram: 2000, hdd: 20, env: () => ['POSTGRES_USER=n8n', `POSTGRES_PASSWORD=${pw}`, 'POSTGRES_DB=n8n'] }] },
+  { key: 'gitea+postgres', ask: ['Gitea with Postgres', 'a self-hosted git server with its database'],
+    comps: (pw) => [
+      { name: 'gitea', image: 'gitea/gitea:1', ports: [3000], cpu: 1, ram: 1000, hdd: 40, env: (app) => ['GITEA__database__DB_TYPE=postgres', `GITEA__database__HOST=fluxdb_${app}:5432`, 'GITEA__database__USER=gitea', `GITEA__database__PASSWD=${pw}`] },
+      { name: 'db', image: 'postgres:16', ports: [5432], cpu: 0.7, ram: 1000, hdd: 20, env: () => ['POSTGRES_USER=gitea', `POSTGRES_PASSWORD=${pw}`, 'POSTGRES_DB=gitea'] }] },
+  { key: 'api+redis', ask: ['my API with a Redis cache', 'an api and redis'],
+    comps: (pw, img, port) => [
+      { name: 'api', image: img, ports: [port], cpu: 1, ram: 1000, hdd: 10, env: (app) => [`REDIS_URL=redis://fluxcache_${app}:6379`, 'NODE_ENV=production'] },
+      { name: 'cache', image: 'redis:7', ports: [6379], cpu: 0.5, ram: 500, hdd: 5, env: () => [] }] },
+  { key: 'nextcloud+postgres+redis', ask: ['Nextcloud with Postgres and Redis', 'a full Nextcloud stack'],
+    comps: (pw) => [
+      { name: 'web', image: 'nextcloud:latest', ports: [80], cpu: 2, ram: 4000, hdd: 100, env: (app) => [`POSTGRES_HOST=fluxdb_${app}`, 'POSTGRES_USER=nextcloud', `POSTGRES_PASSWORD=${pw}`, 'POSTGRES_DB=nextcloud', `REDIS_HOST=fluxcache_${app}`] },
+      { name: 'db', image: 'postgres:16', ports: [5432], cpu: 1, ram: 2000, hdd: 40, env: () => ['POSTGRES_USER=nextcloud', `POSTGRES_PASSWORD=${pw}`, 'POSTGRES_DB=nextcloud'] },
+      { name: 'cache', image: 'redis:7', ports: [6379], cpu: 0.5, ram: 500, hdd: 5, env: () => [] }] },
+  { key: 'matomo+mariadb', ask: ['Matomo analytics with its database', 'Matomo + MariaDB'],
+    comps: (pw) => [
+      { name: 'web', image: 'matomo:latest', ports: [80], cpu: 1, ram: 2000, hdd: 20, env: (app) => [`MATOMO_DATABASE_HOST=fluxdb_${app}`, 'MATOMO_DATABASE_USERNAME=matomo', `MATOMO_DATABASE_PASSWORD=${pw}`, 'MATOMO_DATABASE_DBNAME=matomo'] },
+      { name: 'db', image: 'mariadb:11', ports: [3306], cpu: 1, ram: 2000, hdd: 30, env: () => [`MARIADB_ROOT_PASSWORD=${pw}`, 'MARIADB_DATABASE=matomo', 'MARIADB_USER=matomo', `MARIADB_PASSWORD=${pw}`] }] },
+];
+const stackArgs = (s2, comps, name) => ({
+  name,
+  description: s2.stackKey.replace(/\+/g, ' + '),
+  components: comps.map((c) => {
+    const o = { name: c.name, image: c.image, cpu: c.cpu, ram: c.ram, hdd: c.hdd };
+    o.ports = isMcp(s2) ? c.ports.map((p) => ({ containerPort: p })) : c.ports;
+    const env = c.env(name);
+    if (env.length) o.env = env;
+    return o;
+  }),
+  instances: s2.instances,
+});
+function stackSpec(a) {
+  return { version: 8, name: a.name, description: a.description, instances: a.instances || 3, expire: 88000,
+    compose: a.components.map((c) => {
+      const ports = c.ports.map((p) => (typeof p === 'object' ? p.containerPort : p));
+      return { name: c.name, repotag: c.image, ports: ports.map((p) => 31000 + (p % 9000)), containerPorts: ports,
+        domains: ports.map(() => ''), environmentParameters: c.env || [], commands: [], containerData: '/data',
+        cpu: c.cpu, ram: c.ram, hdd: c.hdd };
+    }) };
+}
+// --- v5: apps with many components ------------------------------------------------
+// FluxOS caps an application at 10 components (appValidator.js maxComponents),
+// component names must be unique, letters and digits only, and may not start
+// with flux or zel; the 15-core / 59000 MB / 820 GB maximums apply to the SUM
+// across components, not to each one. Everything below respects that, so a
+// six-component app is sized to fit rather than merely invented.
+const BIG_PARTS = {
+  web: { image: () => pick(['nginx:1.27', 'caddy:2', 'traefik:v3']), ports: [80], cpu: 0.5, ram: 500, hdd: 5, role: 'reverse proxy' },
+  app: { image: () => pick(['ghcr.io/acme/api:1.4.2', 'myorg/backend:2.0', 'node:22-alpine', 'python:3.12-slim']), ports: [8080], cpu: 1, ram: 1000, hdd: 10, role: 'application' },
+  worker: { image: () => pick(['ghcr.io/acme/worker:1.4.2', 'myorg/worker:2.0']), ports: [], cpu: 1, ram: 1000, hdd: 5, role: 'background worker' },
+  db: { image: () => pick(['postgres:16', 'mysql:8', 'mariadb:11']), ports: [5432], cpu: 1, ram: 2000, hdd: 40, role: 'database' },
+  cache: { image: () => 'redis:7', ports: [6379], cpu: 0.5, ram: 500, hdd: 5, role: 'cache' },
+  queue: { image: () => pick(['rabbitmq:3-management', 'nats:2']), ports: [5672], cpu: 0.5, ram: 1000, hdd: 5, role: 'message queue' },
+  search: { image: () => pick(['opensearchproject/opensearch:2', 'typesense/typesense:27.1']), ports: [9200], cpu: 1, ram: 2000, hdd: 20, role: 'search index' },
+  storage: { image: () => 'minio/minio:latest', ports: [9000], cpu: 0.5, ram: 1000, hdd: 100, role: 'object storage' },
+  metrics: { image: () => 'prom/prometheus:v2', ports: [9090], cpu: 0.5, ram: 1000, hdd: 20, role: 'metrics' },
+  dashboard: { image: () => 'grafana/grafana:11', ports: [3000], cpu: 0.5, ram: 500, hdd: 5, role: 'dashboards' },
+};
+const BIG_SETS = [
+  ['web', 'app', 'db'],
+  ['web', 'app', 'db', 'cache'],
+  ['app', 'worker', 'db', 'cache'],
+  ['web', 'app', 'worker', 'db', 'cache'],
+  ['app', 'worker', 'db', 'cache', 'queue'],
+  ['web', 'app', 'db', 'cache', 'search'],
+  ['web', 'app', 'worker', 'db', 'cache', 'queue'],
+  ['app', 'db', 'cache', 'storage', 'metrics', 'dashboard'],
+  ['web', 'app', 'worker', 'db', 'cache', 'queue', 'search'],
+  ['web', 'app', 'worker', 'db', 'cache', 'queue', 'search', 'storage'],
+];
+const LIMITS = { cpu: 15, ram: 59000, hdd: 820 };
+/** Wire a set of parts into components: hostnames, env, sizes that fit the app maximums. */
+function bigComponents(keys, app) {
+  const comps = keys.map((k) => {
+    const P0 = BIG_PARTS[k];
+    return { key: k, name: k, image: P0.image(), ports: P0.ports.slice(), cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd, role: P0.role, env: [] };
+  });
+  const host = (k) => `flux${k}_${app}`;
+  const byKey = Object.fromEntries(comps.map((c) => [c.key, c]));
+  for (const c of comps) {
+    if (c.key === 'web' && byKey.app) c.env.push(`UPSTREAM=http://${host('app')}:${byKey.app.ports[0]}`);
+    if (c.key === 'app' || c.key === 'worker') {
+      if (byKey.db) c.env.push(`DATABASE_URL=postgres://app:s3cr3t@${host('db')}:5432/app`);
+      if (byKey.cache) c.env.push(`REDIS_URL=redis://${host('cache')}:6379`);
+      if (byKey.queue) c.env.push(`QUEUE_URL=amqp://${host('queue')}:5672`);
+      if (byKey.search) c.env.push(`SEARCH_URL=http://${host('search')}:9200`);
+      if (byKey.storage) c.env.push(`S3_ENDPOINT=http://${host('storage')}:9000`);
+    }
+    if (c.key === 'db') c.env.push('POSTGRES_USER=app', 'POSTGRES_PASSWORD=s3cr3t', 'POSTGRES_DB=app');
+    if (c.key === 'storage') c.env.push('MINIO_ROOT_USER=admin', 'MINIO_ROOT_PASSWORD=s3cr3t-minio');
+    if (c.key === 'dashboard' && byKey.metrics) c.env.push(`GF_DATASOURCE_URL=http://${host('metrics')}:9090`);
+  }
+  // keep the SUM inside the per-application maximums
+  const sum = (f) => comps.reduce((t, c) => t + c[f], 0);
+  while (sum('cpu') > LIMITS.cpu || sum('ram') > LIMITS.ram || sum('hdd') > LIMITS.hdd) {
+    const worst = comps.slice().sort((a, b) => b.ram - a.ram)[0];
+    worst.cpu = roundCpu(Math.max(0.1, worst.cpu / 2));
+    worst.ram = roundRam(Math.max(100, worst.ram / 2));
+    worst.hdd = Math.max(1, Math.round(worst.hdd / 2));
+  }
+  return comps;
+}
+const bigArgs = (s2, comps, name) => ({
+  name,
+  description: `${comps.length}-component stack`,
+  components: comps.map((c) => {
+    const o = { name: c.name, image: c.image, cpu: c.cpu, ram: c.ram, hdd: c.hdd };
+    o.ports = isMcp(s2) ? c.ports.map((p) => ({ containerPort: p })) : c.ports;
+    if (c.env.length) o.env = c.env;
+    return o;
+  }),
+  instances: s2.instances,
+});
+const totals = (comps) => comps.reduce((t, c) => ({ cpu: +(t.cpu + c.cpu).toFixed(1), ram: t.ram + c.ram, hdd: t.hdd + c.hdd }), { cpu: 0, ram: 0, hdd: 0 });
+// --- v5: the assistant inside the FluxCloud web UI --------------------------------
+// Different surface, different rules: the page can navigate itself, and the UI
+// owns signing ("the assistant can never sign", fluxcloud-web/CLAUDE.md), so
+// there is no deploy tool - the assistant prefills the deploy form and the
+// person confirms. Training this explicitly stops the model from reaching for
+// flux_deploy_app when it is not there, and teaches it the real routes.
+const UI_TOOLS = require('./tools-ui');
+const UI_ROUTES = UI_TOOLS.ROUTES;
+const UI_SYSTEM = [
+  'You are the assistant inside FluxCloud. You can move the user around the app, price things and look up their apps with the tools. '
+  + 'You never deploy or pay: build the specification, prefill the deploy form with ui_prefill_deploy, and the user reviews the quote and signs. Be brief.',
+  'FluxCloud in-app assistant. Use the tools to navigate, quote and inspect. Deployment and payment are the user\'s to confirm in the page - you prepare, they sign. Keep answers short.',
+  'You help people use FluxCloud from inside the web app. Navigate with ui_navigate, open their apps and templates, quote resources, and hand a ready specification to the deploy form. You cannot sign or spend; the app does that when the user agrees.',
+];
+const UI_PAGES = [
+  ['/deployments', ['my apps', 'where are my deployments', 'show my running apps', 'I want to see my apps']],
+  ['/balance', ['how much FLUX do I have', 'my balance', 'where do I top up']],
+  ['/cost-calculator', ['what would 4 cores cost', 'is there a price calculator', 'help me estimate a price']],
+  ['/templates', ['show me the templates', 'what one-click apps are there', 'marketplace please']],
+  ['/gpu', ['do you have GPUs', 'I need a GPU machine', 'where is FluxEdge']],
+  ['/node', ['I want to run a node', 'node dashboard', 'how do I operate a FluxNode']],
+  ['/governance', ['where do I vote', 'governance proposals']],
+  ['/drive', ['where are my files', 'flux drive']],
+  ['/storage', ['object storage', 'where do I put buckets']],
+  ['/account', ['my account settings', 'where do I change my email']],
+  ['/help', ['I need help', 'where are the docs', 'support please']],
+  ['/network', ['how big is the network', 'network status page']],
+];
 // --- flows -------------------------------------------------------------------------
 function build(s) {
   callN = 0;
@@ -539,6 +740,260 @@ function build(s) {
       m.push({ role: 'user', content: pick([`a separate one, call it ${alt}`, `new app: ${alt}`]) });
       const { spec, q } = quoteFlow(m, s, alt);
       if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+    }
+    return m;
+  }
+  if (F === 'bare') {
+    // No system prompt, or a one-liner, and no tools. v4 answers "what is Flux
+    // Cloud" correctly with the full trained prompt and invents things without
+    // it (Flow network, AWS, GraphQL), because every training row had the long
+    // prompt. These rows teach the same facts when the framing is thin.
+    s.surface = { kind: 'bare', system: '', tools: [] };
+    const lead = rnd();
+    if (lead < 0.45) m.length = 0;                                   // no system message at all
+    else m[0] = { role: 'system', content: pick(['You are Flux AI.', 'You are the Flux assistant.', 'Flux Cloud assistant.', 'You are a helpful assistant for Flux.']) };
+    const [q, a] = pick([
+      ['What is Flux Cloud?', 'Flux Cloud is a decentralized cloud: thousands of independently run nodes host Docker applications, paid monthly in FLUX from about $0.99. You give it an image, resources and an instance count, and the network runs it.'],
+      ['What is Flux?', 'Flux is a decentralized infrastructure network - a blockchain with its own coin, FLUX, and thousands of operator-run nodes that host Docker applications. Flux Cloud is the product for deploying those applications.'],
+      ['What is a FluxNode?', 'A FluxNode is a machine someone runs to host applications on the network, backed by locked FLUX collateral. There are three tiers - Cumulus, Nimbus and Stratus - offering progressively more cores, memory and disk to applications.'],
+      ['How much does it cost to run an app on Flux?', 'You pay per month for the resources the app declares - cores, RAM and disk - times the number of instances, with a minimum of about $0.99 per month. Paying in FLUX gets a discount.'],
+      ['What is FluxEdge?', 'FluxEdge is the GPU side of Flux: you rent machines with cards like the L40, A100 or H100 by the hour, rather than deploying a container to the CPU network.'],
+      ['Is Flux the same as the Flux JavaScript framework?', 'No. Flux here is a decentralized cloud network and its FLUX coin, not Facebook\'s old Flux pattern for React applications.'],
+      ['Does Flux run on AWS?', 'No - that is the point of it. Applications run on thousands of independently owned FluxNodes rather than in one company\'s data centres.'],
+      ['What can I run on Flux Cloud?', 'Any linux/amd64 Docker image: websites, game servers, databases, bots, APIs. One application can have up to 10 components, and it runs on several nodes at once for redundancy.'],
+      ['How do I deploy something?', 'Pick or describe the app, choose its resources and how many instances, get the price, and pay in FLUX. In Flux Cloud that is Register New App; I can also size and quote it for you if you tell me what to run.'],
+      ['Who runs the nodes?', 'Independent operators all over the world. They lock FLUX as collateral and are paid for hosting; no single company owns the capacity.'],
+      ['What is Zelcore?', 'Zelcore is the multi-platform self-custody wallet from the same ecosystem; among other things it holds FLUX and manages FluxNode collateral.'],
+      ['What is SSP Wallet?', 'SSP Wallet is the ecosystem\'s 2-of-2 multisignature wallet: a browser extension plus the SSP Key mobile app, and both have to approve a transaction.'],
+    ]);
+    m.push({ role: 'user', content: q });
+    m.push({ role: 'assistant', content: a });
+    if (chance(0.3)) {
+      const [q2, a2] = pick([
+        ['and how is it different from a normal VPS?', 'A VPS is one machine from one provider; a Flux application is a container the network schedules onto several independent nodes at once, paid monthly in FLUX, with no account at a single host to depend on.'],
+        ['can I get a refund?', 'No - a registration is paid on-chain for the term you chose, and cancelling early ends the app without refunding the remainder.'],
+        ['is my data private?', 'Your container and its volume live on the nodes that host it, so treat node operators as you would any host: encrypt anything sensitive and keep your own backups.'],
+      ]);
+      m.push({ role: 'user', content: q2 });
+      m.push({ role: 'assistant', content: a2 });
+    }
+    return m;
+  }
+  if (F === 'uinav' || F === 'uideploy' || F === 'uiask') {
+    // this dialogue replaces the sampled surface with the in-app one
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    if (F === 'uinav') {
+      const [route, asks] = pick(UI_PAGES);
+      m.push({ role: 'user', content: pick(asks) });
+      const c = tc('ui_navigate', { to: route }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { ok: true, at: route }));
+      m.push({ role: 'assistant', content: pick([`Opened ${route}.`, `Here you go - ${route}.`, `You are on ${route} now.`]) });
+      if (chance(0.35)) {
+        const name = pick(['mysite', 'appdb', 'craftworld', 'shop7']);
+        m.push({ role: 'user', content: pick([`open ${name}`, `show me ${name}`, `I want to look at ${name}`]) });
+        const c2 = tc('ui_open_app', { name }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+        m.push(toolMsg(c2.id, { ok: true, at: `/deployments/${name}` }));
+        m.push({ role: 'assistant', content: `**${name}** is open - its status, logs and resources are on that page.` });
+      }
+      return m;
+    }
+    if (F === 'uiask') {
+      // a question the surface cannot act on: answer, do not invent a tool
+      const [q, a] = pick([
+        ['can you deploy it for me and pay?', 'I can get everything ready, but I cannot sign or pay - that stays with you. I will fill in the deploy form and you confirm the quote in the page.'],
+        ['can you delete my app?', 'Not from here: cancelling an app spends a transaction, so it needs your signature. Open the app under Applications and cancel it there; I can show you the page.'],
+        ['can you change my password?', 'No - account security is outside what I can touch. Account settings are under /account.'],
+        ['can you move my app to another node?', 'There is no move: the network schedules instances itself. If you want it somewhere specific, redeploy with a geolocation restriction and I can prepare that.'],
+        ['can you sign this transaction?', 'I never sign. Everything that spends goes through the wallet you are signed in with, in the page itself.'],
+      ]);
+      m.push({ role: 'user', content: q });
+      m.push({ role: 'assistant', content: a });
+      return m;
+    }
+    // uideploy: describe an app -> spec -> quote -> prefill the form, never deploy
+    const multi = chance(0.45);
+    const name = `${pick(['site', 'shop', 'api', 'stack', 'app'])}${ri(1, 99)}`;
+    let comps; let words;
+    if (multi) {
+      const St = pick(STACKS); const pw = 's3cr3t';
+      comps = St.comps(pw, pick(CUSTOM_IMAGES), 8080).map((c) => ({ name: c.name, image: c.image, ports: c.ports, cpu: c.cpu, ram: c.ram, hdd: c.hdd, env: c.env(name) }));
+      words = pick(St.ask);
+    } else {
+      const P0 = pick(PRESETS.filter((x) => x.key !== 'custom'));
+      comps = [{ name: P0.key, image: P0.image, ports: P0.ports, cpu: P0.size.cpu, ram: P0.size.ram, hdd: P0.size.hdd, env: P0.env || [] }];
+      words = pick(P0.names).replace('{players}', 20);
+    }
+    const inst = chance(0.5) ? 3 : pick([1, 2]);
+    m.push({ role: 'user', content: pick([`I want ${words}`, `set up ${words}`, `deploy ${words}`, `${words} please`]) + (chance(0.7) ? ` Call it ${name}.` : '') });
+    const qa = { components: comps.map((c) => ({ name: c.name, image: c.image, ports: c.ports, cpu: c.cpu, ram: c.ram, hdd: c.hdd, ...(c.env && c.env.length ? { env: c.env } : {}) })), instances: inst };
+    const c1 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const spec = { compose: comps.map((c) => ({ cpu: c.cpu, ram: c.ram, hdd: c.hdd })), instances: inst, expire: 88000 };
+    const q = quoteFor(spec, s.pricing); m.push(toolMsg(c1.id, q));
+    const c2 = tc('ui_prefill_deploy', { name, description: words, ...qa }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    m.push(toolMsg(c2.id, { ok: true, at: '/deploy', prefilled: true }));
+    m.push({ role: 'assistant', content: `${comps.length > 1 ? `${comps.length} components` : `${comps[0].cpu} ${comps[0].cpu === 1 ? 'core' : 'cores'}, ${comps[0].ram >= 1000 ? `${+(comps[0].ram / 1000).toFixed(1)} GB` : `${comps[0].ram} MB`} RAM, ${comps[0].hdd} GB`}, ${inst} ${inst === 1 ? 'instance' : 'instances'} - about **${money(q.usdTotal)}** per month (≈ ${q.flux} FLUX). The deploy form is filled in as **${name}**; check it over and sign to launch it.${comps.length > 1 ? ` The ${comps[0].name} component reaches the others at flux<component>_${name}.` : ''}` });
+    if (chance(0.3)) {
+      m.push({ role: 'user', content: pick(['make it cheaper first', 'can we use fewer instances?', 'that is too much']) });
+      const inst2 = 1;
+      const qa2 = { ...qa, instances: inst2 };
+      const c3 = tc('flux_quote_app', qa2); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      const q2 = quoteFor({ ...spec, instances: inst2 }, s.pricing); m.push(toolMsg(c3.id, q2));
+      const c4 = tc('ui_prefill_deploy', { name, description: words, ...qa2 }); m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+      m.push(toolMsg(c4.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `One instance brings it to **${money(q2.usdTotal)}** per month (≈ ${q2.flux} FLUX) - ${money(q.usdTotal - q2.usdTotal)} less. The form is updated; sign when it looks right.` });
+    }
+    return m;
+  }
+  if (F === 'bigstack' || F === 'bigstack-edit' || F === 'toomany') {
+    const name = pick(['platform', 'stack', 'shop', 'saas', 'app', 'suite']) + ri(1, 99);
+    s.instances = chance(0.6) ? pick([1, 2]) : 3;
+    if (F === 'toomany') {
+      // the hard limit: 10 components per application
+      const want = ri(11, 14);
+      m.push({ role: 'user', content: `I want one app with ${want} components: ${pick(['a web tier, api, three workers, postgres, redis, rabbitmq, opensearch, minio, prometheus, grafana and a cron runner', 'frontend, api, auth, billing, notifications, search, db, cache, queue, storage, metrics, logs'])}. Name it ${name}.` });
+      m.push({ role: 'assistant', content: `A Flux application takes at most 10 components, and that is ${want}. Two ways round it: drop or merge ${want - 10} of them, or split the system into two applications that talk over their public URLs. Which do you prefer? If you merge, the usual candidates are the workers into one component with a higher instance count, and metrics plus dashboards into one.` });
+      m.push({ role: 'user', content: pick(['merge the workers then', 'ok merge them into 10', 'fine, keep it to 10']) });
+      const keys = ['web', 'app', 'worker', 'db', 'cache', 'queue', 'search', 'storage', 'metrics', 'dashboard'];
+      const comps = bigComponents(keys, name);
+      const a = bigArgs(s, comps, name);
+      const c1 = tc('flux_build_spec', a); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+      const spec = stackSpec(a); m.push(toolMsg(c1.id, { spec }));
+      const c2 = tc('flux_quote_app', { spec }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      const q = quoteFor(spec, s.pricing); m.push(toolMsg(c2.id, q));
+      const t = totals(comps);
+      m.push({ role: 'assistant', content: `**${name}**, 10 components (${comps.map((c) => c.name).join(', ')}): ${t.cpu} cores, ${t.ram} MB RAM, ${t.hdd} GB across the app, ${spec.instances} ${spec.instances === 1 ? 'instance' : 'instances'} - **${money(q.usdTotal)}** per month (≈ ${q.flux} FLUX). That is the maximum component count, and the totals are inside the 15-core / 59000 MB / 820 GB per-application limits. ${askDeploy()}` });
+      if (chance(0.6)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+      return m;
+    }
+    const keys = pick(BIG_SETS);
+    const comps = bigComponents(keys, name);
+    const t = totals(comps);
+    const words = comps.map((c) => c.role).join(', ');
+    m.push({ role: 'user', content: pick([
+      `Deploy my stack: ${words}. Call it ${name}.`,
+      `I need ${comps.length} components - ${words} - as one app named ${name}.`,
+      `Set up ${name}: ${words}.`,
+      `Can Flux run a ${comps.length}-component app? I need ${words}. Name ${name}.`]) });
+    const a = bigArgs(s, comps, name);
+    const c1 = tc('flux_build_spec', a); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const spec = stackSpec(a); m.push(toolMsg(c1.id, { spec }));
+    const c2 = tc('flux_quote_app', { spec }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    const q = quoteFor(spec, s.pricing); m.push(toolMsg(c2.id, q));
+    const wired = comps.filter((c) => c.env.some((e) => e.includes(`_${name}`))).map((c) => c.name);
+    m.push({ role: 'assistant', content: `**${name}**, ${comps.length} components (${comps.map((c) => `${c.name} ${c.cpu}/${c.ram >= 1000 ? `${+(c.ram / 1000).toFixed(1)} GB` : `${c.ram} MB`}/${c.hdd} GB`).join(', ')}): ${t.cpu} cores, ${t.ram} MB RAM, ${t.hdd} GB in total, ${spec.instances} ${spec.instances === 1 ? 'instance' : 'instances'} - **${money(q.usdTotal)}** per month (≈ ${q.flux} FLUX). ${wired.length ? `${wired.join(' and ')} address the others as flux<component>_${name}, so the connection strings point there rather than at localhost.` : ''} ${askDeploy()}` });
+    if (F === 'bigstack-edit') {
+      const kind = pick(['add', 'remove', 'resize']);
+      if (kind === 'add' && comps.length < 10) {
+        const spare = Object.keys(BIG_PARTS).filter((k) => !keys.includes(k));
+        const add = pick(spare);
+        m.push({ role: 'user', content: pick([`Add a ${BIG_PARTS[add].role} as well.`, `we also need ${add}`, `Can you add ${add} to it?`]) });
+        const comps2 = bigComponents([...keys, add], name);
+        const a2 = bigArgs(s, comps2, name);
+        const c3 = tc('flux_build_spec', a2); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+        const spec2 = stackSpec(a2); m.push(toolMsg(c3.id, { spec: spec2 }));
+        const c4 = tc('flux_quote_app', { spec: spec2 }); m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+        const q2 = quoteFor(spec2, s.pricing); m.push(toolMsg(c4.id, q2));
+        const t2 = totals(comps2);
+        m.push({ role: 'assistant', content: `Now ${comps2.length} components: ${t2.cpu} cores, ${t2.ram} MB, ${t2.hdd} GB - **${money(q2.usdTotal)}** per month, ${money(Math.abs(q2.usdTotal - q.usdTotal))} more. ${askDeploy()}` });
+        if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec2, q2); }
+        return m;
+      }
+      if (kind === 'remove' && comps.length > 2) {
+        const drop = pick(comps.filter((c) => !['app', 'db'].includes(c.key))).key;
+        m.push({ role: 'user', content: pick([`Drop the ${drop} component, we do not need it.`, `remove ${drop}`, `take ${drop} out`]) });
+        const rest = keys.filter((k) => k !== drop);
+        const comps2 = bigComponents(rest, name);
+        const a2 = bigArgs(s, comps2, name);
+        const c3 = tc('flux_build_spec', a2); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+        const spec2 = stackSpec(a2); m.push(toolMsg(c3.id, { spec: spec2 }));
+        const c4 = tc('flux_quote_app', { spec: spec2 }); m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+        const q2 = quoteFor(spec2, s.pricing); m.push(toolMsg(c4.id, q2));
+        m.push({ role: 'assistant', content: `Without ${drop} it is ${comps2.length} components - **${money(q2.usdTotal)}** per month, ${money(Math.abs(q.usdTotal - q2.usdTotal))} less. I also removed the ${drop} entries from the other components' environment. ${askDeploy()}` });
+        if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec2, q2); }
+        return m;
+      }
+      const which = pick(comps);
+      const bigger = pick([2000, 4000, 8000]);
+      m.push({ role: 'user', content: pick([`Give ${which.name} ${bigger / 1000} GB of RAM.`, `${which.name} needs ${bigger} MB`]) });
+      const comps2 = comps.map((c) => (c.name === which.name ? { ...c, ram: bigger } : c));
+      const t2 = totals(comps2);
+      if (t2.ram > LIMITS.ram) {
+        m.push({ role: 'assistant', content: `That would put the application at ${t2.ram} MB and the maximum for one app is ${LIMITS.ram} MB across all components. I can give ${which.name} ${LIMITS.ram - (t2.ram - bigger)} MB, or take memory off another component. Which?` });
+        return m;
+      }
+      const a2 = bigArgs(s, comps2, name);
+      const c3 = tc('flux_build_spec', a2); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      const spec2 = stackSpec(a2); m.push(toolMsg(c3.id, { spec: spec2 }));
+      const c4 = tc('flux_quote_app', { spec: spec2 }); m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+      const q2 = quoteFor(spec2, s.pricing); m.push(toolMsg(c4.id, q2));
+      m.push({ role: 'assistant', content: `${which.name} at ${bigger} MB puts the app at ${t2.cpu} cores, ${t2.ram} MB, ${t2.hdd} GB - **${money(q2.usdTotal)}** per month. ${askDeploy()}` });
+      if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec2, q2); }
+      return m;
+    }
+    const r = rnd();
+    if (r < 0.55) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+    else if (r < 0.7) { m.push({ role: 'user', content: pick(NO) }); m.push({ role: 'assistant', content: 'OK, nothing deployed.' }); }
+    else {
+      m.push({ role: 'user', content: pick(['do all the components run on the same node?', 'how do they find each other?', 'can I give each component a different number of replicas?']) });
+      m.push({ role: 'assistant', content: `All components of one application run together on each node that hosts it, on a private network where they resolve each other as flux<component>_${name}. The instance count applies to the whole application, so every instance runs the full set of ${comps.length}; if one part needs to scale separately it has to be its own application.` });
+    }
+    return m;
+  }
+  if (F === 'stack' || F === 'stack-edit') {
+    const S = pick(STACKS);
+    const pw = pick(['s3cr3t', 'changeme', 'hunter2x', 'Pa55word', 'db-pass-9']);
+    const img = pick(CUSTOM_IMAGES); const port = pick([3000, 8000, 8080]);
+    const name = pick(['shop', 'blog', 'stack', 'myapp', 'team', 'studio']) + ri(1, 99);
+    s.stackKey = S.key; s.instances = chance(0.5) ? 3 : pick([1, 2]);
+    const comps = S.comps(pw, img, port);
+    m.push({ role: 'user', content: pick([`Deploy ${pick(S.ask)}`, `I need ${pick(S.ask)}`, `Set up ${pick(S.ask)} please`, `Can you run ${pick(S.ask)} on Flux?`])
+      + `${s.instances !== 3 ? ` (${s.instances} ${s.instances === 1 ? 'instance' : 'instances'})` : ''}${chance(0.8) ? ` Call it ${name}.` : ''}` });
+    const a = stackArgs(s, comps, name);
+    const c1 = tc('flux_build_spec', a); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const spec = stackSpec(a); m.push(toolMsg(c1.id, { spec }));
+    const c2 = tc('flux_quote_app', { spec }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    const q = quoteFor(spec, s.pricing); m.push(toolMsg(c2.id, q));
+    const dbName = (comps[1] || comps[0]).name;
+    m.push({ role: 'assistant', content: `${multiQuoteLine(spec, q)} The ${comps[0].name} component reaches ${comps.length > 2 ? 'the others' : `the ${dbName}`} at **flux${dbName}_${name}** - that is the hostname inside the app, which is why the connection settings point there rather than at localhost. ${askDeploy()}` });
+    if (F === 'stack-edit') {
+      // add or resize a component of a multi-component app, and re-quote
+      const kind = pick(['add', 'resize', 'scale']);
+      if (kind === 'add' && comps.length < 3) {
+        m.push({ role: 'user', content: pick(['Add a Redis cache to it.', 'can you add redis as well?', 'I want a cache component too']) });
+        const withCache = [...comps, { name: 'cache', image: 'redis:7', ports: [6379], cpu: 0.5, ram: 500, hdd: 5, env: () => [] }];
+        withCache[0] = { ...withCache[0], env: (app) => [...comps[0].env(app), `REDIS_HOST=fluxcache_${app}`] };
+        const a2 = stackArgs(s, withCache, name);
+        const c3 = tc('flux_build_spec', a2); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+        const spec2 = stackSpec(a2); m.push(toolMsg(c3.id, { spec: spec2 }));
+        const c4 = tc('flux_quote_app', { spec: spec2 }); m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+        const q2 = quoteFor(spec2, s.pricing); m.push(toolMsg(c4.id, q2));
+        m.push({ role: 'assistant', content: `${multiQuoteLine(spec2, q2)} ${money(Math.abs(q2.usdTotal - q.usdTotal))} more than before; ${comps[0].name} now has REDIS_HOST=fluxcache_${name}. ${askDeploy()}` });
+        if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec2, q2); }
+        return m;
+      }
+      const which = pick(comps).name;
+      const bigger = pick([2000, 4000]);
+      m.push({ role: 'user', content: kind === 'scale' ? pick([`Make it ${pick([1, 2, 5])} instances instead.`, `run it on ${pick([1, 2, 5])} nodes`])
+        : pick([`Give the ${which} component ${bigger / 1000} GB of RAM.`, `${which} needs more memory, ${bigger} MB`]) });
+      const comps2 = comps.map((c) => (c.name === which && kind !== 'scale' ? { ...c, ram: bigger } : c));
+      const s3 = { ...s, instances: kind === 'scale' ? Number((m[m.length - 1].content.match(/(\d+)/) || [0, 2])[1]) : s.instances, stackKey: s.stackKey };
+      const a2 = stackArgs(s3, comps2, name);
+      const c3 = tc('flux_build_spec', a2); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      const spec2 = stackSpec(a2); m.push(toolMsg(c3.id, { spec: spec2 }));
+      const c4 = tc('flux_quote_app', { spec: spec2 }); m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+      const q2 = quoteFor(spec2, s3.pricing); m.push(toolMsg(c4.id, q2));
+      const d = q2.usdTotal - q.usdTotal;
+      m.push({ role: 'assistant', content: `${multiQuoteLine(spec2, q2)} ${money(Math.abs(d))} ${d < 0 ? 'less' : 'more'} than before. ${askDeploy()}` });
+      if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s3, spec2, q2); }
+      return m;
+    }
+    const r = rnd();
+    if (r < 0.6) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
+    else if (r < 0.75) { m.push({ role: 'user', content: pick(NO) }); m.push({ role: 'assistant', content: 'OK, nothing deployed.' }); }
+    else {
+      m.push({ role: 'user', content: pick(['why not localhost?', 'can the two components talk to each other?', 'is the database reachable from outside?']) });
+      m.push({ role: 'assistant', content: `Each component runs in its own container, so localhost inside ${comps[0].name} is only ${comps[0].name}. On the app's private network they resolve each other as flux<component>_${name}, which is what I set. Published ports are reachable from outside, so give the database no public port unless you want it exposed.` });
     }
     return m;
   }

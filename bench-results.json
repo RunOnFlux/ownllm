@@ -1,16 +1,6 @@
 [
   {
-    "model": "lfm2:24b-a2b",
-    "genTps": 7.666286002440718,
-    "preTps": 59.0336634317016,
-    "grounded": {
-      "pass": true,
-      "text": "The maximum container image size is 5 GB, and one month is 88000 blocks."
-    },
-    "refusal": {
-      "pass": true,
-      "text": "Not covered in the documentation."
-    },
-    "tweet": "Flux now runs private AI models on decentralized nodes."
+    "model": "granite4.2:30b",
+    "error": "fetch failed"
   }
 ]

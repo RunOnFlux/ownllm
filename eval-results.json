@@ -1,21 +1,21 @@
 [
   {
-    "model": "granite4:tiny-h",
+    "model": "fluxai-tinyh-v4",
     "tests": {
       "distractor-ram": {
         "pass": true,
-        "chars": 91,
-        "text": "According to the documentation, a NIMBUS node offers applications 28,000 MB (28 GB) of RAM."
+        "chars": 57,
+        "text": "A NIMBUS node offers applications 7.0 cores and 28000 MB."
       },
       "distractor-size": {
         "pass": true,
-        "chars": 57,
-        "text": "The maximum size of a container image is 5 GB or smaller."
+        "chars": 44,
+        "text": "The container image must be 5 GB or smaller."
       },
       "multi-hop": {
-        "pass": false,
-        "chars": 253,
-        "text": "Based on the documentation in section [C], the maximum expire value is 1056000 blocks. Since a block takes about 30 seconds, 1056000 blocks would be approximately one month. Therefore, deploying for t"
+        "pass": true,
+        "chars": 96,
+        "text": "The maximum expire is 1056000 blocks, and 88000 blocks is one month, so that is about 12 months."
       },
       "refusal-plausible": {
         "pass": true,
@@ -36,65 +36,114 @@
     "writing": {
       "tweet": {
         "ok": true,
-        "chars": 191,
-        "text": "Exciting news! Flux now enables private AI models to run on decentralized nodes. Enhance your data security while enjoying advanced AI capabilities. Discover the future of AI with Flux today!"
+        "chars": 79,
+        "text": "Flux now runs private AI models on decentralised nodes. Learn more at flux.dev."
       },
       "intro": {
         "ok": true,
-        "chars": 300,
-        "text": "In this blog post, we will explore the process of deploying a custom AI model using Flux, an open-source machine learning library. We'll cover the key steps involved in successfully integrating your model with Flux, enabling you to leverage the power of this robust framework in your own AI projects."
+        "chars": 335,
+        "text": "Deploying your own AI model on Flux is a straightforward process that involves a few key steps: first, package your model and code into a Docker container, then push that container to Flux's registry, and finally, use the Flux CLI to register and deploy your application. This guide will walk you through each of those steps in detail."
+      }
+    },
+    "score": 9,
+    "max": 9
+  },
+  {
+    "model": "granite4:tiny-h",
+    "tests": {
+      "distractor-ram": {
+        "pass": true,
+        "chars": 175,
+        "text": "According to the documentation, a NIMBUS node offers applications 7.0 cores and 28000 MB RAM. Therefore, an application can use up to 28000 MB (28 GB) of RAM on a NIMBUS node."
+      },
+      "distractor-size": {
+        "pass": true,
+        "chars": 89,
+        "text": "According to the documentation, the maximum size of a container image is 5 GB or smaller."
+      },
+      "multi-hop": {
+        "pass": false,
+        "chars": 247,
+        "text": "Based on the documentation in section [C], the maximum expire value is 1056000 blocks. Since a block takes about 30 seconds, 1056000 blocks is approximately one month. Therefore, deploying for the max"
+      },
+      "refusal-plausible": {
+        "pass": true,
+        "chars": 33,
+        "text": "Not covered in the documentation."
+      },
+      "refusal-adjacent": {
+        "pass": true,
+        "chars": 33,
+        "text": "Not covered in the documentation."
+      },
+      "no-overreach": {
+        "pass": true,
+        "chars": 52,
+        "text": "An application may have between 1 and 100 instances."
+      }
+    },
+    "writing": {
+      "tweet": {
+        "ok": false,
+        "chars": 189,
+        "text": "Exciting news! Flux is now enabling private AI models to run on decentralised nodes. Experience enhanced security and privacy like never before. #Innovation #Decentralisation #PrivacyFirst."
+      },
+      "intro": {
+        "ok": true,
+        "chars": 240,
+        "text": "Deploying an AI model on Flux can be a complex process, but with the right guidance, it can be accomplished efficiently and effectively. This blog post will walk you through the steps needed to successfully deploy your own AI model on Flux."
       }
     },
     "score": 7,
     "max": 9
   },
   {
-    "model": "granite4.2:3b",
+    "model": "fluxai-tinyh-v1",
     "tests": {
       "distractor-ram": {
-        "pass": false,
-        "chars": 884,
-        "text": "We need to answer strictly from the documentation. The question: \"How much RAM can an application use on a NIMBUS node?\" The documentation includes [A] Flux app resource limits: \"A NIMBUS node offers "
+        "pass": true,
+        "chars": 54,
+        "text": "<tool_call>assistant<tool_call>28000 MB (≈ 28 GB) [A]."
       },
       "distractor-size": {
         "pass": true,
-        "chars": 891,
-        "text": "We need to answer strictly from the documentation. The question: \"What is the maximum size of a container image?\" The documentation includes [B] Image and filesystem limits: \"The container image must "
+        "chars": 51,
+        "text": "<tool_call>assistant<tool_call>5 GB or smaller [B]."
       },
       "multi-hop": {
         "pass": true,
-        "chars": 713,
-        "text": "We need to answer strictly from the documentation. The question: \"If I deploy for the maximum allowed expire, roughly how many months is that?\" We have documentation: [C] Lifetime: Minimum expire is 1"
+        "chars": 166,
+        "text": "<tool_call>assistant<tool_call>One month is 88000 blocks, so 1056000 blocks is about 12 months (88000 blocks per month, so 1056000 blocks / 88000 blocks = 12 months)."
       },
       "refusal-plausible": {
         "pass": true,
-        "chars": 752,
-        "text": "We have a documentation that lists various sections: [A] Flux app resource limits, [B] Image and filesystem limits, [C] Lifetime, [D] Instances, [E] Enterprise.\n\nThe question: \"How much does a STRATUS"
+        "chars": 64,
+        "text": "<tool_call>assistant<tool_call>Not covered in the documentation."
       },
       "refusal-adjacent": {
         "pass": true,
-        "chars": 861,
-        "text": "We have a documentation that includes sections [A] Flux app resource limits, [B] Image and filesystem limits, [C] Lifetime, [D] Instances, [E] Enterprise.\n\nThe question: \"How many GPU cores does a NIM"
+        "chars": 64,
+        "text": "<tool_call>assistant<tool_call>Not covered in the documentation."
       },
       "no-overreach": {
         "pass": true,
-        "chars": 925,
-        "text": "We need to answer strictly from the documentation. The question: \"How many instances can an application have?\" The documentation includes [D] Instances: \"An application may have between 1 and 100 inst"
+        "chars": 63,
+        "text": "<tool_call>assistant<tool_call>Between 1 and 100 instances [E]."
       }
     },
     "writing": {
       "tweet": {
-        "ok": false,
-        "chars": 754,
-        "text": "Okay, the user wants a tweet under 280 characters announcing that Flux now runs private AI models on decentralized nodes. No hashtags, no emojis.\n\nI need to keep it concise. Focus on the key points: Flux, private AI models, decentralized nodes.\n\nAvoid hashtags and emojis as specified.\n\nMake sure it's under 280 characters.\n\nLet me draft a short, clear statement.\n\nExample: \"Flux now runs private AI models on decentralized nodes, giving you full control over your data and infrastructure.\"\n\nCount characters.\n\nLet's count: \n\"Flux now runs private AI models on decentralized nodes, giving you full control over your data and infrastructure.\"\n\nCharacters: \nF l u x (4) + space (1) =5\n\"now\" (3) -> total 8\nspace ->9\n\"runs\" (4) ->13\nspace ->14\n\"private\" (7)"
+        "ok": true,
+        "chars": 189,
+        "text": "Flux now runs private AI models on decentralised nodes, ensuring privacy and security. No data is centralized; every node holds a piece of the puzzle, making AI more secure and private [1]."
       },
       "intro": {
         "ok": false,
-        "chars": 935,
-        "text": "Okay, the user wants a two-sentence opening for a blog post about deploying an AI model on Flux. They specified it should be plain, concrete, and avoid marketing cliches.\n\nI need to focus on clear, actionable steps without hype. No fluff like \"unlock your potential\" or \"revolutionize your workflow.\" Just straightforward instructions.\n\nFirst sentence: Set the scene—maybe mention preparing the model and environment. Second sentence: Give a concrete next step like running the deployment command.\n\nMake sure it's exactly two sentences, no extra words. Keep language simple.\n\nExample: \"Start by packaging your trained model into a Flux container and push it to your Flux registry. Then, use the Flux CLI to deploy the container on your chosen environment.\"\n\nThat's two sentences, plain, concrete, no marketing. Good.\n</think>\nPackage your trained model into a Flux container and push it to your Flux registry. Then, use the Flux CLI to"
+        "chars": 344,
+        "text": "<tool_call>assistant<tool_call>1. Flux is a powerful, versatile platform for deploying AI models, and deploying your own AI model on Flux can be a rewarding experience.\n2. In this blog post, I will walk you through the steps of deploying your own AI model on Flux, starting with setting up your environment and ending with deploying your model."
       }
     },
-    "score": 8,
+    "score": 9,
     "max": 9
   }
 ]

@@ -669,3 +669,55 @@ keeps every call parseable. v3 was retrained on that corrected set.
 
 Files: `runs/tinyh-vast-v3/` (Q4_K_M GGUF 4.0 GB, adapter, loss history,
 Modelfile), ollama model `fluxai-tinyh-v3`.
+
+
+## 11. Fourth fine-tune: fluxai-tinyh-v4 (2026-09-18)
+
+v4 folded the v3 serving fix together with a capability round. Added to the
+data: long multi-turn sessions on one app (deploy, status, crash, logs,
+diagnose out-of-memory, resize, re-quote with the unused-term credit, apply,
+renew or cancel), incremental slot filling across turns, honest capability
+limits (no GPU on Flux Cloud and FluxEdge named instead, no shell or root, not
+Kubernetes, static IP as a spec flag, no managed backups, amd64 only),
+private-registry images as enterprise applications, domains and URLs, several
+apps in one request, duplicate names as updates, and five more validation
+errors (invalid characters, name too long, disk under 1 GB, missing tag, arm64
+image). A new generator, `gen-docs-math.js`, produces 900 documentation rows
+whose answers must be COMPUTED - blocks to months and days, price composition,
+FLUX with the discount, resources across instances, unit conversion, limit
+checks, headroom - with randomised figures so the procedure is learned rather
+than the number, plus refusals where the context is silent. Eval grew to 26
+cases. Dataset: 10,653 conversations, 12,041 train rows (docs doubled), 533 eval.
+
+Trained on a vast.ai A100 SXM4 80 GB at $1.06/h: 1,506 steps in 317 min, train
+loss 0.162, eval loss 0.084 (v3: 0.165 / 0.104). About $6.
+
+| Eval | v4 | v3 | v2 |
+|---|---|---|---|
+| 26 cases, compact tools | 24/26 | 20/22 | - |
+| 26 cases, MCP full (15 schemas) | 22/26 | 20/22 | - |
+| 26 cases, MCP core (5 schemas) | 20/26 | 20/22 | - |
+| Grounding strict | **9/9** | 7/9 | 7/9 |
+
+Grounding reached 9/9, the first time since v1, and the computed-answer rows are
+why: the only case v2 and v3 lost was dividing 1,056,000 blocks by 88,000 per
+month. The prose-before-tool-call fix also held - the RAM-rounding case, which
+v3 could not pass through ollama, now passes in four turns.
+
+What is left, and the cause is coverage rather than capability:
+
+- **Multi-component specs.** Only 3.4% of build_spec calls in the training data
+  have more than one component, and on the compose case the model nests the
+  second component inside the first instead of appending to the array. v5 needs
+  multi-component specs at maybe 20% of calls, from compose, marketplace and
+  plain "app plus database" requests.
+- **Enterprise / private registry (1.7% of dialogues)** and **capability limits
+  (1.5%)** are too thin to fire reliably: the private-registry case deploys as a
+  normal app without mentioning credentials, and the GPU question is answered
+  correctly on the compact surface but not on the larger ones.
+- Behaviour is weakest on the 5-tool core surface (20/26), which is the surface
+  furthest from production; the full 15-tool surface the Flux Cloud chat uses
+  scores 22/26 and the compact one 24/26.
+
+Files: `runs/tinyh-vast-v4/` (Q4_K_M GGUF 4.0 GB, adapter, loss history,
+Modelfile), ollama model `fluxai-tinyh-v4`.

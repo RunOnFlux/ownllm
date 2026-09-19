@@ -131,6 +131,20 @@ const PROFILES = {
   // ~1B active params and hybrid-Mamba layers, so it is neither bandwidth nor
   // KV-cache bound the way the dense and MoE transformers are.
   granite: { cpu: 6.4, ram: 8000, hdd: 15, threads: 6, models: 'granite4:tiny-h', loaded: 1, ctx: 16384 },
+  // The fine-tuned model (fluxai-tinyh-v4): same granite-4.0-h-tiny weights, so
+  // the same shape as `granite`, with the context raised to 16k because the
+  // deploy agent carries the 15-tool MCP schema (~4.9k tokens) before the first
+  // user turn and then a whole session of tool results on top.
+  // Our fine-tune. modelRelease: the GGUF is not in any model registry - the
+  // boot component fetches it from a GitHub release on this repository and
+  // installs it into the engine over the ollama API, with our chat template.
+  // See images/model-fluxai/load.sh and tools/publish-model.sh.
+  'pool-fluxai': {
+    cpu: 6.4, ram: 9000, hdd: 20, threads: 6, parallel: 1, loaded: 1, ctx: 16384, models: 'fluxai:tiny',
+    modelName: 'fluxai:tiny', bootHdd: 8,
+    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v4',
+    modelSha256: '4cc3ce77e188ac8888c41db326b54d5b151f0f6a0ba363a8af5b40ace68cd82b',
+  },
   // Docs bot: chat model AND embedding model must both stay resident. With
   // loaded: 1 they evict each other on every single query - embed the question,
   // which unloads the chat model, then generate, which unloads the embedder -
@@ -172,6 +186,15 @@ const PROFILES = {
   big: { cpu: 12, ram: 40000, hdd: 80, threads: 8, models: 'gpt-oss:20b qwen3-coder:30b qwen3:4b', loaded: 2, ctx: 32768 },
 };
 const P = PROFILES[PROFILE];
+// A model can be attached to any profile from the command line, so an existing
+// app (the docs bot, say) can serve our fine-tune without editing a profile.
+if (arg('loaded', '')) P.loaded = Number(arg('loaded', ''));
+if (arg('ram', '')) P.ram = Number(arg('ram', ''));
+if (arg('model-release', '')) {
+  P.modelRelease = arg('model-release', '');
+  P.modelSha256 = arg('model-sha256', '');
+  P.modelName = arg('model-name', 'fluxai:tiny');
+}
 if (!P) throw new Error(`Unknown profile ${PROFILE}. Use: ${Object.keys(PROFILES).join(', ')}`);
 
 // Nothing about the model list is baked into the images: it is the MODELS
@@ -196,12 +219,14 @@ if (arg('cpu', null)) {
 
 const MODEL_SIZES_GB = {
   'qwen3:4b': 2.6, 'qwen3:8b': 5.2, 'gpt-oss:20b': 13, 'qwen3-coder:30b': 18, 'qwen3:30b-a3b': 18,
+  'fluxai:tiny': 4.1,   // our fine-tune, Q4_K_M of granite-4.0-h-tiny
 };
 // Resident size once loaded, weights plus runtime. `ram` is a hard cgroup limit
 // with only 2 GB of swap (dockerService.js:963), so overshooting it is an
 // OOM-kill, not a slowdown - this is the check that matters most.
 const MODEL_RAM_GB = {
   'qwen3:4b': 4, 'qwen3:8b': 6, 'gpt-oss:20b': 14, 'qwen3-coder:30b': 19, 'qwen3:30b-a3b': 19,
+  'fluxai:tiny': 6,
 };
 
 // Internal DNS name of a component's container on fluxDockerNetwork_<app>
@@ -211,7 +236,18 @@ const ENGINE_URL = `http://${dns('engine')}:11434`;
 // Pull loop: idempotent (ollama pull is a no-op for an already-present digest),
 // waits for the engine, then parks so FluxOS does not see the container exit.
 // Each command string must stay under 400 chars (appValidator.js).
-const bootCmd = 'apk add -q --no-cache curl; U=' + ENGINE_URL
+// With profile.modelRelease the boot component fetches load.sh from our GitHub
+// release and that installs the GGUF into the engine through /api/blobs +
+// /api/create, so no model registry is involved. Command strings are capped at
+// 400 chars by appValidator.js, which is why the logic lives in load.sh.
+const bootCmd = P.modelRelease
+  // Any other model in MODELS still comes from the registry (the docs bot also
+  // needs its embedder); MODEL_NAME is the one that comes from our release.
+  ? 'apk add -q --no-cache curl; U=$ENGINE_URL; until curl -sf $U/api/tags >/dev/null 2>&1; do sleep 5; done'
+    + '; for m in $MODELS; do [ "$m" = "$MODEL_NAME" ] && continue; curl -s $U/api/pull -d \'{"model":"\'$m\'"}\' | tail -c 120; done'
+    + '; curl -sfL $MODEL_RELEASE/load.sh -o /tmp/l.sh && sh /tmp/l.sh || echo FAILEDINSTALL'
+    + '; while :; do sleep 3600; done'
+  : 'apk add -q --no-cache curl; U=' + ENGINE_URL
   + '; until curl -sf $U/api/tags >/dev/null 2>&1; do sleep 5; done'
   + '; for m in $MODELS; do echo "pulling $m"; curl -s $U/api/pull -d \'{"model":"\'$m\'"}\' | tail -c 300 | grep -o \'"error":"[^"]*"\' && echo "FAILED $m" || echo "done $m"; done'
   + '; while :; do sleep 3600; done';
@@ -281,19 +317,28 @@ if (TERNARY) {
 
 const boot = {
   name: 'boot',
-  description: 'One-shot model puller, then idles',
+  description: P.modelRelease ? 'Installs the released model into the engine, then idles' : 'One-shot model puller, then idles',
   repotag: 'alpine:3.20',
   ports: [],
   containerPorts: [],
   domains: [],
-  environmentParameters: [`MODELS=${P.models}`],
+  // MODELS stays in the env even for a baked model: the gate health-checks
+  // that exact list, and gen.js asserts the two agree.
+  environmentParameters: P.modelRelease
+    ? [`MODELS=${P.models}`, `ENGINE_URL=${ENGINE_URL}`, `MODEL_NAME=${P.modelName}`,
+      `MODEL_RELEASE=${P.modelRelease}`, `MODEL_SHA256=${P.modelSha256}`]
+    : [`MODELS=${P.models}`],
   // alpine has no ENTRYPOINT, so Cmd is the whole command line.
   commands: ['/bin/sh', '-c', bootCmd],
   containerData: '/tmp',
   repoauth: '',
   cpu: 0.1,
-  ram: 100,
-  hdd: 1,
+  // hashing and streaming a multi-GB GGUF needs more than the puller's 100 MB
+  ram: P.modelRelease ? 700 : 100,
+  // A released model is downloaded into this volume before it is uploaded to
+  // the engine, so 1 GB (fine for the registry puller, which streams) is not
+  // enough: the parts alone are 1.8 GB each.
+  hdd: P.bootHdd || (P.modelRelease ? 8 : 1),
 };
 
 // With more than one instance the UI's sqlite state has to be one dataset or a

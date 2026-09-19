@@ -29,6 +29,16 @@ const QUESTIONS = [
   'Can I deploy from a GitHub repository without a Docker image?',
   'What is the difference between Cumulus, Nimbus and Stratus?',
   'How do I update a running application?',
+  // The corpus is 41% Zelcore and SSP, so a Flux-only question set would miss a
+  // regression on the other two sites the bot is embedded on.
+  'What is SSP Wallet and how does it keep my funds safe?',
+  'How do I set up SSP Key on my phone?',
+  'Does SSP support Solana?',
+  'How do I recover my SSP wallet if I lose my phone?',
+  'What is Zelcore and which coins does it support?',
+  'How do I use the Zelcore built-in exchange?',
+  'What is chain abstraction in a wallet?',
+  'Can I run a FluxNode from Zelcore?',
 ];
 
 async function ask(url, question) {
