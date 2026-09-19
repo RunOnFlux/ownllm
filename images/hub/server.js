@@ -119,6 +119,44 @@ function keyName(token) {
   if (REVOKED.has(m[1])) return null;
   return m[1];
 }
+/**
+ * Scoped keys: "sk-fluxs-<payload>-<sig>", payload = base64url of
+ * {n:name, o:[origin hosts], m:[model ids], e:expiry unix seconds}, signed the
+ * same way. They exist so a key can be shipped in a browser bundle: it works
+ * only from the listed origins, only for the listed models, and only until it
+ * expires. Nothing is stored, so any instance verifies any key.
+ *
+ * Honest about the limit: a browser sends Origin and cannot forge it, so this
+ * stops another site from using a leaked key, but any server-side caller can
+ * set the header by hand. It narrows casual misuse; it is not a substitute for
+ * proxying through your own backend when the traffic must really be yours.
+ */
+function scopedKey(token) {
+  const m = /^sk-fluxs-([A-Za-z0-9_-]{8,512})-([A-Za-z0-9_-]{24})$/.exec(token || '');
+  if (!m) return null;
+  const expect = Buffer.from(sign(m[1]));
+  const given = Buffer.from(m[2]);
+  if (expect.length !== given.length || !crypto.timingSafeEqual(expect, given)) return null;
+  let claims;
+  try { claims = JSON.parse(Buffer.from(m[1], 'base64url').toString('utf8')); } catch { return null; }
+  if (!claims || typeof claims.n !== 'string') return null;
+  if (REVOKED.has(claims.n)) return null;
+  return claims;
+}
+/** null when allowed, else the reason to refuse. */
+function scopeDenied(claims, origin, modelId) {
+  if (claims.e && Date.now() / 1000 > claims.e) return 'API key has expired';
+  if (Array.isArray(claims.o) && claims.o.length) {
+    if (!origin) return 'this API key may only be used from a browser on an allowed origin';
+    let host;
+    try { host = new URL(origin).hostname.toLowerCase(); } catch { return 'bad Origin header'; }
+    if (!claims.o.some(h => host === h || host === `www.${h}`)) return `origin ${host} is not allowed for this API key`;
+  }
+  if (Array.isArray(claims.m) && claims.m.length && modelId && !claims.m.includes(modelId)) {
+    return `this API key may not use model ${modelId}`;
+  }
+  return null;
+}
 const ADMIN_KEY = process.env.ADMIN_KEY || `sk-flux-admin-${sign('admin')}`;
 const PUBLIC_KEY = process.env.PUBLIC_KEY_NAME ? `sk-flux-${process.env.PUBLIC_KEY_NAME}-${sign(process.env.PUBLIC_KEY_NAME)}` : '';
 // The front page: what this is, live model status, quick start, a try-it box.
@@ -354,8 +392,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   const name = keyName(token);
-  if (!name && !isAdmin(token)) return openaiError(res, 401, 'invalid API key', 'authentication_error', { 'WWW-Authenticate': 'Bearer' });
-  const keyId = name || 'admin';
+  const claims = name ? null : scopedKey(token);
+  if (!name && !claims && !isAdmin(token)) return openaiError(res, 401, 'invalid API key', 'authentication_error', { 'WWW-Authenticate': 'Bearer' });
+  // A scoped key carries its own origin/model/expiry limits; check origin now
+  // and the model once the body has been parsed.
+  if (claims) {
+    const why = scopeDenied(claims, origin, null);
+    if (why) return openaiError(res, 403, why, 'authentication_error');
+  }
+  const keyId = name || (claims && claims.n) || 'admin';
 
   if (path === '/v1/models' && req.method === 'GET') return json(res, 200, { object: 'list', data: modelList() });
   const mm = /^\/v1\/models\/(.+)$/.exec(path);
@@ -370,6 +415,10 @@ const server = http.createServer(async (req, res) => {
   let raw; let body;
   try { raw = await readBody(req); body = JSON.parse(raw.toString('utf8') || '{}'); } catch (err) { return openaiError(res, 400, `invalid JSON body: ${err.message}`); }
   const modelId = resolveModel(body.model);
+  if (claims) {
+    const why = scopeDenied(claims, origin, modelId || body.model);
+    if (why) return openaiError(res, 403, why, 'authentication_error');
+  }
   if (!modelId) return openaiError(res, 404, `model not found: ${body.model || '(none)'}. Available: ${[...models.keys()].join(', ')}`, 'invalid_request_error');
   const target = models.get(modelId);
   const pool = pools.get(target.app);

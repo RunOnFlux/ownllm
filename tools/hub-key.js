@@ -6,6 +6,12 @@
  * per application; revoke a name by adding it to the hub's REVOKED env.
  *
  *   node tools/hub-key.js <name> [<name> ...]
+ *   node tools/hub-key.js <name> --origins a.com,b.com [--models fluxai:tiny] [--days 365]
+ *       a SCOPED key ("sk-fluxs-..."): usable only from those origins, only for
+ *       those models, only until it expires. Safe(r) to ship in a browser
+ *       bundle - a browser cannot forge Origin - but any server-side caller
+ *       can set the header, so it limits casual misuse rather than replacing a
+ *       backend proxy.
  *   HUB_SECRET=... node tools/hub-key.js alice
  *
  * Without HUB_SECRET in the environment the secret is read from the hub's
@@ -18,6 +24,10 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 const ai = args.indexOf('--app');
 const APP = ai >= 0 ? args.splice(ai, 2)[1] : 'ownllmhub';
+const opt = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.splice(i, 2)[1] : null; };
+const ORIGINS = (opt('origins') || '').split(',').map(x => x.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean);
+const MODELS = (opt('models') || '').split(',').map(x => x.trim()).filter(Boolean);
+const DAYS = Number(opt('days') || 0);
 const names = args.filter(a => !a.startsWith('--'));
 if (!names.length) { console.error('usage: node tools/hub-key.js <name> [...]   (name: a-z, 0-9, -; max 32)'); process.exit(1); }
 
@@ -34,8 +44,21 @@ if (!secret) {
   if (!secret) { console.error(`no HUB_SECRET in the environment and none in ${file}`); process.exit(1); }
 }
 
+const sign = (payload) => crypto.createHmac('sha256', secret).update(payload).digest('base64url').slice(0, 24);
+
 for (const name of names) {
   if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name)) { console.error(`bad name "${name}": a-z, 0-9, -, max 32, must start alphanumeric`); process.exit(1); }
-  const sig = crypto.createHmac('sha256', secret).update(name).digest('base64url').slice(0, 24);
-  console.log(`sk-flux-${name}-${sig}`);
+  if (!ORIGINS.length && !MODELS.length && !DAYS) {
+    console.log(`sk-flux-${name}-${sign(name)}`);
+    continue;
+  }
+  // Scoped key: the limits travel inside the signed payload, so the hub needs
+  // no storage to enforce them and no redeploy to issue one.
+  const claims = { n: name };
+  if (ORIGINS.length) claims.o = ORIGINS;
+  if (MODELS.length) claims.m = MODELS;
+  if (DAYS) claims.e = Math.floor(Date.now() / 1000) + DAYS * 86400;
+  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  console.log(`sk-fluxs-${payload}-${sign(payload)}`);
+  console.error(`  scope: origins=${(claims.o || ['any']).join(' ')} models=${(claims.m || ['any']).join(' ')} expires=${claims.e ? new Date(claims.e * 1000).toISOString().slice(0, 10) : 'never'}`);
 }
