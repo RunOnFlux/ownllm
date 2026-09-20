@@ -30,3 +30,4 @@ finetune/data/
 finetune/__pycache__/
 runs/
 finetune/.venv-mlx/
+.DS_Store

@@ -187,7 +187,22 @@ function requiredPrice({ formatted, previous, priceTable, height }) {
   if (!node) throw new Error(`no usable ${isEnterprise ? 'ArcaneOS ' : ''}node among the probed ones; run again`);
   log(`using ${node.endpoint}, session opened`);
 
-  const previous = await node.appSpecification(spec.name);
+  let previous = await node.appSpecification(spec.name);
+  // One node's registry can be stale or incomplete. Believing it cost a real
+  // update once: the node said "not registered", so this deployed as a fresh
+  // registration - full price, 12.22 FLUX - and the network rejected it as a
+  // duplicate name, leaving the app on its old spec. Cross-check the global
+  // API before ever treating an existing app as new.
+  if (!previous) {
+    try {
+      const res = await fetch(`https://api.runonflux.io/apps/appspecifications/${encodeURIComponent(spec.name)}`, { signal: AbortSignal.timeout(20000) });
+      const body = await res.json();
+      if (body && body.status === 'success' && body.data && body.data.name === spec.name) {
+        previous = body.data;
+        log(`  ${node.endpoint} does not know ${spec.name}, but the global API does (height ${previous.height}) - treating as an update`);
+      }
+    } catch (err) { log(`  could not cross-check the global API (${err.message}); trusting the node`); }
+  }
   const isUpdate = !!previous;
   log(isUpdate
     ? `${spec.name} exists (height ${previous.height}, expire ${previous.expire}, hash ${String(previous.hash).slice(0, 12)}) - this is an update`

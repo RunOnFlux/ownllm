@@ -721,3 +721,51 @@ What is left, and the cause is coverage rather than capability:
 
 Files: `runs/tinyh-vast-v4/` (Q4_K_M GGUF 4.0 GB, adapter, loss history,
 Modelfile), ollama model `fluxai-tinyh-v4`.
+
+
+## 12. Fifth fine-tune: fluxai-tinyh-v5 (2026-09-19)
+
+The multi-component round. v4 built two-component specs by nesting the second
+component inside the first; the cause was coverage, 3.4% of spec calls. v5 adds
+seven realistic stacks (app+db, app+db+cache, and so on) and, beyond them,
+"many component" apps of three to ten parts - reverse proxy, application,
+worker, database, cache, queue, search, object storage, metrics, dashboards -
+each wired to the others by the real internal hostname `flux<component>_<app>`,
+sized so the SUM fits the per-application maximums, with flows that add, remove
+and resize one component of a large app and that refuse an eleventh
+(appValidator.js caps an application at 10). Multi-component calls went from
+3.4% to 38%.
+
+Also added: the in-app UI surface (`finetune/tools-ui.js`) for the assistant
+running inside fluxcloud-web - ui_navigate over the 26 real routes,
+ui_open_app, ui_open_template and ui_prefill_deploy, with NO deploy tool,
+because that app's rule is that the assistant can never sign; and tool-free
+knowledge rows with a one-line system prompt or none at all, because v4
+confabulated ("Flow network", "AWS") when the framing was thin.
+
+The per-line paraphrase teacher was replaced by phrasing banks Claude wrote as
+templates with `{what}`/`{name}`/`{cpu}` placeholders (`finetune/phrasings.json`).
+Generation went from four hours over the network to one second, every figure
+survives by construction, and 67.6% of first messages are distinct.
+
+Dataset: 12,853 conversations, 14,175 train rows, 643 eval. Trained on a vast.ai
+A100 SXM4 at $1.04/h: 1,772 steps in 260 min, train loss 0.155, eval loss 0.078
+(v4: 0.162 / 0.084). About $4.50, plus $0.45 wasted on a host that failed with
+"docker_build() error writing dockerfile".
+
+| Eval (28 cases) | v5 | v4 (26 cases) |
+|---|---|---|
+| Compact tools | **27/28** | 24/26 |
+| MCP full (15 schemas) | **24/28** | 22/26 |
+| Grounding strict | 9/9 | 9/9 |
+| Two-component spec (case 27) | **PASS** | FAIL (nested) |
+| Three-component spec (case 28) | **PASS** | PASS |
+
+Multi-component is fixed on both surfaces. What remains is the same pattern as
+before, and it is measurable: the behaviours with the thinnest coverage fail
+only on the 15-tool surface, where 4.9k tokens of schema dilute everything else.
+Private-registry/enterprise (1.7% of dialogues) fails on both surfaces - it
+quotes a private image as an ordinary app; the GPU-limits answer (1.5%) and the
+German reply hold on compact and fall back to a normal quote or to English on
+the full surface. v6 should raise those three to roughly the share
+multi-component now has.

@@ -30,6 +30,8 @@ let readyDetail = 'starting';
 // idle and all sent it a ten-minute prompt at once (OLLAMA_NUM_PARALLEL=1),
 // so the second and third queued behind the first.
 let inflight = 0;
+let digest = '';    // first 12 hex of the served model's blob digest
+let served = '';    // its tag, for readability
 
 // Readiness is "every required model is actually pulled", not "ollama answers".
 // Ollama replies 200 on /api/tags from the moment it boots, long before a 13 GB
@@ -40,6 +42,14 @@ async function pollReady() {
     if (!res.ok) throw new Error(`tags ${res.status}`);
     const { models = [] } = await res.json();
     const have = new Set(models.map((m) => m.name));
+    // Report the digest of the model we serve, so "which weights is this node
+    // running?" has an answer that cannot be forged by naming. A tag can be
+    // pointed anywhere - during the v5 rollout an alias created by hand made
+    // several nodes advertise "fluxai:tiny-v5" while still serving v4 - but the
+    // digest comes from the blob itself.
+    const first = models.find((m) => REQUIRED.length && m.name.split(':')[0] === REQUIRED[0].split(':')[0]) || models[0];
+    digest = first && first.digest ? String(first.digest).slice(0, 12) : '';
+    served = first ? first.name : '';
     const missing = REQUIRED.filter(
       (m) => !have.has(m) && !have.has(`${m}:latest`) && ![...have].some((h) => h.split(':')[0] === m.split(':')[0]),
     );
@@ -97,7 +107,7 @@ const server = http.createServer(async (req, res) => {
   // kept because things may already point at it.
   if (req.url === '/' || req.url === '/health' || req.url === '/healthz') {
     res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain', 'X-Inflight': String(inflight) });
-    res.end(ready ? `ok inflight=${inflight}` : readyDetail);
+    res.end(ready ? `ok inflight=${inflight}${served ? ` model=${served}` : ''}${digest ? ` digest=${digest}` : ''}` : readyDetail);
     return;
   }
 

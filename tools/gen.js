@@ -141,9 +141,14 @@ const PROFILES = {
   // See images/model-fluxai/load.sh and tools/publish-model.sh.
   'pool-fluxai': {
     cpu: 6.4, ram: 9000, hdd: 20, threads: 6, parallel: 1, loaded: 1, ctx: 16384, models: 'fluxai:tiny',
-    modelName: 'fluxai:tiny', bootHdd: 8,
-    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v4',
-    modelSha256: '4cc3ce77e188ac8888c41db326b54d5b151f0f6a0ba363a8af5b40ace68cd82b',
+    // Versioned tag, aliased by the hub so the public name stays "fluxai:tiny".
+    // Using one name for every release hid two upgrade failures in a day: the
+    // loader skipped installs because the name already existed, and a healthy
+    // pool told us nothing about which weights it served. The tag is now the
+    // answer to "what is running?" - visible in /api/tags on any node.
+    modelName: 'fluxai:tiny-v5', modelStableName: 'fluxai:tiny', bootHdd: 8,
+    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v5',
+    modelSha256: '5c32986f0af7605826ff6beb27478d81a54cc78b1a105dfd512a253079e7769f',
   },
   // Docs bot: chat model AND embedding model must both stay resident. With
   // loaded: 1 they evict each other on every single query - embed the question,
@@ -326,7 +331,8 @@ const boot = {
   // that exact list, and gen.js asserts the two agree.
   environmentParameters: P.modelRelease
     ? [`MODELS=${P.models}`, `ENGINE_URL=${ENGINE_URL}`, `MODEL_NAME=${P.modelName}`,
-      `MODEL_RELEASE=${P.modelRelease}`, `MODEL_SHA256=${P.modelSha256}`]
+      `MODEL_RELEASE=${P.modelRelease}`, `MODEL_SHA256=${P.modelSha256}`,
+      ...(P.modelStableName ? [`MODEL_STABLE_NAME=${P.modelStableName}`] : [])]
     : [`MODELS=${P.models}`],
   // alpine has no ENTRYPOINT, so Cmd is the whole command line.
   commands: ['/bin/sh', '-c', bootCmd],

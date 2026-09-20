@@ -1,6 +1,6 @@
 [
   {
-    "model": "fluxai-tinyh-v4",
+    "model": "fluxai-tinyh-v5",
     "tests": {
       "distractor-ram": {
         "pass": true,
@@ -29,118 +29,20 @@
       },
       "no-overreach": {
         "pass": true,
-        "chars": 52,
-        "text": "An application may have between 1 and 100 instances."
+        "chars": 28,
+        "text": "Between 1 and 100 instances."
       }
     },
     "writing": {
       "tweet": {
         "ok": true,
-        "chars": 79,
-        "text": "Flux now runs private AI models on decentralised nodes. Learn more at flux.dev."
+        "chars": 178,
+        "text": "Flux Cloud lets you run your own AI model on a network of rented nodes, paid monthly - no cloud contract, no CPU lock-in, no single point of failure. Get a node at fluxcloud.com."
       },
       "intro": {
         "ok": true,
-        "chars": 335,
-        "text": "Deploying your own AI model on Flux is a straightforward process that involves a few key steps: first, package your model and code into a Docker container, then push that container to Flux's registry, and finally, use the Flux CLI to register and deploy your application. This guide will walk you through each of those steps in detail."
-      }
-    },
-    "score": 9,
-    "max": 9
-  },
-  {
-    "model": "granite4:tiny-h",
-    "tests": {
-      "distractor-ram": {
-        "pass": true,
-        "chars": 175,
-        "text": "According to the documentation, a NIMBUS node offers applications 7.0 cores and 28000 MB RAM. Therefore, an application can use up to 28000 MB (28 GB) of RAM on a NIMBUS node."
-      },
-      "distractor-size": {
-        "pass": true,
-        "chars": 89,
-        "text": "According to the documentation, the maximum size of a container image is 5 GB or smaller."
-      },
-      "multi-hop": {
-        "pass": false,
-        "chars": 247,
-        "text": "Based on the documentation in section [C], the maximum expire value is 1056000 blocks. Since a block takes about 30 seconds, 1056000 blocks is approximately one month. Therefore, deploying for the max"
-      },
-      "refusal-plausible": {
-        "pass": true,
-        "chars": 33,
-        "text": "Not covered in the documentation."
-      },
-      "refusal-adjacent": {
-        "pass": true,
-        "chars": 33,
-        "text": "Not covered in the documentation."
-      },
-      "no-overreach": {
-        "pass": true,
-        "chars": 52,
-        "text": "An application may have between 1 and 100 instances."
-      }
-    },
-    "writing": {
-      "tweet": {
-        "ok": false,
-        "chars": 189,
-        "text": "Exciting news! Flux is now enabling private AI models to run on decentralised nodes. Experience enhanced security and privacy like never before. #Innovation #Decentralisation #PrivacyFirst."
-      },
-      "intro": {
-        "ok": true,
-        "chars": 240,
-        "text": "Deploying an AI model on Flux can be a complex process, but with the right guidance, it can be accomplished efficiently and effectively. This blog post will walk you through the steps needed to successfully deploy your own AI model on Flux."
-      }
-    },
-    "score": 7,
-    "max": 9
-  },
-  {
-    "model": "fluxai-tinyh-v1",
-    "tests": {
-      "distractor-ram": {
-        "pass": true,
-        "chars": 54,
-        "text": "<tool_call>assistant<tool_call>28000 MB (≈ 28 GB) [A]."
-      },
-      "distractor-size": {
-        "pass": true,
-        "chars": 51,
-        "text": "<tool_call>assistant<tool_call>5 GB or smaller [B]."
-      },
-      "multi-hop": {
-        "pass": true,
-        "chars": 166,
-        "text": "<tool_call>assistant<tool_call>One month is 88000 blocks, so 1056000 blocks is about 12 months (88000 blocks per month, so 1056000 blocks / 88000 blocks = 12 months)."
-      },
-      "refusal-plausible": {
-        "pass": true,
-        "chars": 64,
-        "text": "<tool_call>assistant<tool_call>Not covered in the documentation."
-      },
-      "refusal-adjacent": {
-        "pass": true,
-        "chars": 64,
-        "text": "<tool_call>assistant<tool_call>Not covered in the documentation."
-      },
-      "no-overreach": {
-        "pass": true,
-        "chars": 63,
-        "text": "<tool_call>assistant<tool_call>Between 1 and 100 instances [E]."
-      }
-    },
-    "writing": {
-      "tweet": {
-        "ok": true,
-        "chars": 189,
-        "text": "Flux now runs private AI models on decentralised nodes, ensuring privacy and security. No data is centralized; every node holds a piece of the puzzle, making AI more secure and private [1]."
-      },
-      "intro": {
-        "ok": false,
-        "chars": 344,
-        "text": "<tool_call>assistant<tool_call>1. Flux is a powerful, versatile platform for deploying AI models, and deploying your own AI model on Flux can be a rewarding experience.\n2. In this blog post, I will walk you through the steps of deploying your own AI model on Flux, starting with setting up your environment and ending with deploying your model."
+        "chars": 206,
+        "text": "Deploying your own AI model on Flux is straightforward: you pack it into a Docker container, describe the resources it needs in a Flux application, and pay per month in FLUX. I'll show you how in this post."
       }
     },
     "score": 9,

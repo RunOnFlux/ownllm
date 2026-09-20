@@ -21,8 +21,12 @@ GGUF=/tmp/model.gguf
 echo "waiting for engine at $U"
 until curl -sf "$U/api/tags" >/dev/null 2>&1; do sleep 5; done
 
-if curl -sf "$U/api/tags" | grep -q "\"$NAME\""; then
-  echo "$NAME already installed"
+# Idempotent AND version-aware: the model name stays the same across releases
+# (the hub routes to "fluxai:tiny"), so "is the name present?" would skip every
+# upgrade. The marker records which sha256 this volume last installed.
+MARKER=/tmp/installed.sha256
+if curl -sf "$U/api/tags" | grep -q "\"$NAME\"" && [ "$(cat "$MARKER" 2>/dev/null)" = "$WANT" ] && [ -n "$WANT" ]; then
+  echo "$NAME already installed at $WANT"
   exit 0
 fi
 
@@ -50,7 +54,21 @@ curl -sfL "$REL/create.json" -o /tmp/create.tmpl || { echo "FAILED fetching crea
 sed -e "s/DIGESTPLACEHOLDER/$GOT/" -e "s|MODELNAMEPLACEHOLDER|$NAME|" /tmp/create.tmpl > /tmp/create.json
 rm -f "$GGUF"   # the engine has its own copy now
 
+# Create the model twice from the same blob: the versioned tag, which answers
+# "what is running?" in /api/tags, and the stable name the hub routes to. They
+# share the blob, so the second costs no disk. Doing only the versioned name
+# broke live traffic during a rollout: the hub asked for a tag the un-upgraded
+# nodes did not have yet and returned 404s until they caught up.
 echo "creating $NAME"
 curl -s "$U/api/create" -d @/tmp/create.json | tail -c 300
 echo
-curl -sf "$U/api/tags" | grep -q "\"$NAME\"" && echo "installed $NAME" || { echo "FAILED create"; exit 1; }
+STABLE=${MODEL_STABLE_NAME:-}
+if [ -n "$STABLE" ] && [ "$STABLE" != "$NAME" ]; then
+  echo "creating $STABLE (same weights)"
+  sed -e "s/DIGESTPLACEHOLDER/$GOT/" -e "s|MODELNAMEPLACEHOLDER|$STABLE|" /tmp/create.tmpl > /tmp/create-stable.json
+  curl -s "$U/api/create" -d @/tmp/create-stable.json | tail -c 120
+  echo
+fi
+curl -sf "$U/api/tags" | grep -q "\"$NAME\"" || { echo "FAILED create"; exit 1; }
+printf '%s' "$GOT" > "$MARKER"
+echo "installed $NAME at $GOT"
