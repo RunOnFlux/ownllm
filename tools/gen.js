@@ -140,7 +140,12 @@ const PROFILES = {
   // installs it into the engine over the ollama API, with our chat template.
   // See images/model-fluxai/load.sh and tools/publish-model.sh.
   'pool-fluxai': {
-    cpu: 6.4, ram: 9000, hdd: 20, threads: 6, parallel: 1, loaded: 1, ctx: 16384, models: 'fluxai:tiny',
+    // 12 cores because prefill, not generation, is the cost: a 1k-token tool
+    // schema takes 10-14 s at 6.4 cores and prefill scales with them, while
+    // generation (18 tok/s) is memory-bound and barely moves. parallel: 2 gives
+    // llama.cpp two KV slots, so a node keeps two conversations warm instead of
+    // evicting one for the other; ram covers both slots' cache at 16k.
+    cpu: 12.0, ram: 14000, hdd: 20, threads: 12, parallel: 2, loaded: 1, ctx: 16384, models: 'fluxai:tiny',
     // Versioned tag, aliased by the hub so the public name stays "fluxai:tiny".
     // Using one name for every release hid two upgrade failures in a day: the
     // loader skipped installs because the name already existed, and a healthy
@@ -148,6 +153,7 @@ const PROFILES = {
     // answer to "what is running?" - visible in /api/tags on any node.
     modelName: 'fluxai:tiny-v5', modelStableName: 'fluxai:tiny', bootHdd: 8,
     modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v5',
+    warmUrl: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v5/warm.json',
     modelSha256: '5c32986f0af7605826ff6beb27478d81a54cc78b1a105dfd512a253079e7769f',
   },
   // Docs bot: chat model AND embedding model must both stay resident. With
@@ -375,6 +381,7 @@ const gate = {
     // The gate reports 503 until every one of these is pulled, so FDM keeps a
     // freshly-migrated instance out of rotation while it downloads.
     `MODELS=${P.models}`,
+    ...(P.warmUrl ? [`WARM_URL=${P.warmUrl}`] : []),
   ],
   commands: [],
   // Stateless: the shared key comes from the spec, so every instance answers

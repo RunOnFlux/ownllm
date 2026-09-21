@@ -277,15 +277,58 @@ async function probe() {
 // Busy-ness as this hub sees it: its own in-flight count, or the gate's
 // reported one when that is higher (requests from the other hub instances).
 const load = (p) => Math.max(p.inflight, p.remoteInflight || 0);
+// How busy a sticky instance may be before we give up its warm cache. 0 was
+// too strict once conversations (not API keys) became the sticky unit: a node
+// serving one other turn still answers far faster than a cold node re-reading
+// a 1k-token tool schema, which costs 10-14 s on a CPU node.
+const STICKY_MAX_LOAD = Number(process.env.STICKY_MAX_LOAD || 1);
 function pick(pool, exclude, prefer) {
   if (prefer && prefer !== exclude) {
     const p = pool.peers.get(prefer);
-    if (p && p.healthy && load(p) === 0) return prefer;
+    if (p && p.healthy && load(p) <= STICKY_MAX_LOAD) return prefer;
   }
   const healthy = [...pool.peers.entries()].filter(([ip, p]) => p.healthy && ip !== exclude);
   if (!healthy.length) return null;
   healthy.sort(([, a], [, b]) => (load(a) - load(b)) || (a.latencyMs - b.latencyMs));
   return healthy[0][0];
+}
+
+/**
+ * Which conversation a request belongs to, for prompt-cache stickiness.
+ *
+ * Stickiness used to be per API key, which is right for one user with one key
+ * and wrong for a UI where every visitor shares one key: all of them pinned to
+ * one instance, and each turn evicted the previous conversation's cache. The
+ * unit that matters is the conversation, because that is what shares a prefix.
+ *
+ * `user` is the OpenAI-standard field and the best signal when the client sets
+ * it. Otherwise the system message plus the first user turn identify a
+ * conversation and stay identical as it grows.
+ */
+function conversationKey(body) {
+  if (body && typeof body.user === 'string' && body.user) return `u:${body.user}`;
+  const msgs = Array.isArray(body && body.messages) ? body.messages : [];
+  const sys = msgs.find((m) => m && m.role === 'system');
+  const first = msgs.find((m) => m && m.role === 'user');
+  const basis = `${(sys && typeof sys.content === 'string' ? sys.content : '').slice(0, 200)}|${(first && typeof first.content === 'string' ? first.content : '').slice(0, 200)}`;
+  return basis.trim() ? `c:${crypto.createHash('sha256').update(basis).digest('base64url').slice(0, 16)}` : '';
+}
+/** Per-account conversation -> instance, capped so a busy key cannot grow it without bound. */
+const STICKY_MAX = Number(process.env.STICKY_MAX || 500);
+function stickyGet(acct, app, conv) {
+  const m = acct.sticky[app];
+  if (!m || !conv) return undefined;
+  const hit = m.get(conv);
+  if (!hit) return undefined;
+  m.delete(conv); m.set(conv, hit);   // LRU touch
+  return hit;
+}
+function stickySet(acct, app, conv, ip) {
+  if (!conv) return;
+  if (!(acct.sticky[app] instanceof Map)) acct.sticky[app] = new Map();
+  const m = acct.sticky[app];
+  m.delete(conv); m.set(conv, ip);
+  while (m.size > STICKY_MAX) m.delete(m.keys().next().value);
 }
 
 /** Exact, then case-insensitive, then "-" for ":" (OpenAI clients that reject colons). */
@@ -415,6 +458,7 @@ const server = http.createServer(async (req, res) => {
   let raw; let body;
   try { raw = await readBody(req); body = JSON.parse(raw.toString('utf8') || '{}'); } catch (err) { return openaiError(res, 400, `invalid JSON body: ${err.message}`); }
   const modelId = resolveModel(body.model);
+  const convKey = conversationKey(body);   // prompt-cache stickiness, see conversationKey()
   if (claims) {
     const why = scopeDenied(claims, origin, modelId || body.model);
     if (why) return openaiError(res, 403, why, 'authentication_error');
@@ -484,12 +528,12 @@ const server = http.createServer(async (req, res) => {
   heartbeat = setInterval(() => { if (!res.writableEnded) res.write(filler); }, 10000);
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const ip = pick(pool, tried, acct.sticky[target.app]);
+      const ip = pick(pool, tried, stickyGet(acct, target.app, convKey));
       if (!ip) {
         acct.errors += 1;
         return streamError(503, `no healthy instance for ${modelId} (${target.app})`);
       }
-      acct.sticky[target.app] = ip;
+      stickySet(acct, target.app, convKey, ip);
       const peer = pool.peers.get(ip);
       peer.inflight += 1;
       const started = Date.now();

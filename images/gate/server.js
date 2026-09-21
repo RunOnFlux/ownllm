@@ -33,6 +33,43 @@ let inflight = 0;
 let digest = '';    // first 12 hex of the served model's blob digest
 let served = '';    // its tag, for readability
 
+/**
+ * Keep the common prompt prefix warm in the engine's KV cache.
+ *
+ * Every request from the Flux Cloud UI starts with the same ~1k tokens of
+ * system prompt and tool schema, and on a CPU node that prefix costs 10-14 s
+ * to read. llama.cpp reuses a slot's cache for any request sharing its prefix,
+ * so if one slot always holds that prefix, a new conversation pays only for
+ * its own words - measured here as 13 s falling to 3 s.
+ *
+ * WARM_URL points at a JSON body ({model, messages, tools}); the gate replays
+ * it with one predicted token every WARM_MS. The first replay after a restart
+ * pays the full prefill, the rest are ~0.1 s.
+ */
+const WARM_URL = process.env.WARM_URL || '';
+const WARM_MS = Number(process.env.WARM_MS || 120000);
+let warmBody = null;
+let warmState = 'off';
+async function warmOnce() {
+  if (!WARM_URL || inflight > 0) return;              // never compete with a real request
+  try {
+    if (!warmBody) {
+      const r = await fetch(WARM_URL, { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error(`warm payload ${r.status}`);
+      warmBody = await r.json();
+    }
+    const body = { ...warmBody, stream: false, options: { ...(warmBody.options || {}), num_predict: 1 } };
+    const t0 = Date.now();
+    const res = await fetch(`${UPSTREAM}/api/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(300000),
+    });
+    warmState = res.ok ? `warm ${Date.now() - t0}ms` : `warm failed ${res.status}`;
+  } catch (err) {
+    warmState = `warm error: ${String(err.message).slice(0, 60)}`;
+  }
+}
+
 // Readiness is "every required model is actually pulled", not "ollama answers".
 // Ollama replies 200 on /api/tags from the moment it boots, long before a 13 GB
 // download finishes, so tags-is-up would put a useless instance into rotation.
@@ -62,6 +99,11 @@ async function pollReady() {
 }
 pollReady();
 setInterval(pollReady, READY_POLL_MS).unref();
+if (WARM_URL) {
+  // only once the model is actually present, or the first warm wastes a pull wait
+  const kick = setInterval(() => { if (ready) warmOnce(); }, WARM_MS);
+  kick.unref();
+}
 
 // Constant-time compare so the key cannot be recovered by timing the response.
 function authorized(req) {
@@ -107,7 +149,7 @@ const server = http.createServer(async (req, res) => {
   // kept because things may already point at it.
   if (req.url === '/' || req.url === '/health' || req.url === '/healthz') {
     res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain', 'X-Inflight': String(inflight) });
-    res.end(ready ? `ok inflight=${inflight}${served ? ` model=${served}` : ''}${digest ? ` digest=${digest}` : ''}` : readyDetail);
+    res.end(ready ? `ok inflight=${inflight}${served ? ` model=${served}` : ''}${digest ? ` digest=${digest}` : ''}${WARM_URL ? ` ${warmState}` : ''}` : readyDetail);
     return;
   }
 
