@@ -249,13 +249,23 @@ async function probe() {
       const res = await fetch(`http://${ip}:${pool.port}/health`, { signal: AbortSignal.timeout(8000) });
       const text = await res.text();
       const rtt = Date.now() - started;
-      p.latencyMs = p.latencyMs ? p.latencyMs * (1 - EWMA) + rtt * EWMA : rtt;
+      // Network round trip only. This used to share one field with real request
+      // timings, and since probes are frequent and fast they kept pulling a slow
+      // node's average back down - a node taking 230 s to answer still looked
+      // like a 300 ms node, so routing kept choosing it.
+      p.probeMs = p.probeMs ? p.probeMs * (1 - EWMA) + rtt * EWMA : rtt;
+      p.latencyMs = p.probeMs;
       p.healthy = res.status === 200;
       p.detail = text.slice(0, 60);
       // The gate reports its own in-flight count (1.4.31+): load from every
       // hub instance, not just this one. Unknown on older gates.
       const m = /inflight=(\d+)/.exec(text);
       p.remoteInflight = m ? Number(m[1]) : undefined;
+      // The gate benchmarks its own node hourly with a cache-defeating prompt
+      // and publishes the prefill rate (gate 1.4.35+). This is the only signal
+      // that reaches an idle node before a user does.
+      const b = /bench=(\d+)/.exec(text);
+      p.benchTps = b ? Number(b[1]) : p.benchTps;
     } catch (err) {
       p.healthy = false;
       p.detail = err.message.slice(0, 60);
@@ -289,7 +299,18 @@ function pick(pool, exclude, prefer) {
   }
   const healthy = [...pool.peers.entries()].filter(([ip, p]) => p.healthy && ip !== exclude);
   if (!healthy.length) return null;
-  healthy.sort(([, a], [, b]) => (load(a) - load(b)) || (a.latencyMs - b.latencyMs));
+  // Speed as measured by real requests, not by pings. Nodes vary by 20x on this
+  // pool - the same 1k-token prompt took 12 s on one and 230 s on another - and
+  // an unmeasured node is given the median so it gets tried without being
+  // preferred blindly.
+  const seen = healthy.map(([, p]) => p.serveMs).filter((v) => v > 0).sort((a, b) => a - b);
+  const median = seen.length ? seen[Math.floor(seen.length / 2)] : 0;
+  // Prefer what real requests measured; for a node nothing has been sent to,
+  // fall back to its self-benchmark (tokens/s, so invert into ms-per-1k) before
+  // resorting to the median. That way a slow idle node is avoided from the
+  // start rather than after it has spoiled someone's first impression.
+  const speed = (p) => p.serveMs || (p.benchTps ? 1000000 / p.benchTps : 0) || median || p.probeMs || 0;
+  healthy.sort(([, a], [, b]) => (load(a) - load(b)) || (speed(a) - speed(b)));
   return healthy[0][0];
 }
 
@@ -574,7 +595,15 @@ const server = http.createServer(async (req, res) => {
         res.end();
         if (!tail.trim()) console.log(`${modelId} ${ip}: upstream ${upstream.status} ended with an empty body after ${Date.now() - started} ms`);
         countUsage(tail, acct, per);
-        peer.latencyMs = peer.latencyMs * (1 - EWMA) + (Date.now() - started) * EWMA;
+        // How fast this node actually serves, normalised per 1k prompt tokens so
+        // a long conversation does not look like a slow machine. Measured only
+        // from real requests; the health probe cannot see inference speed.
+        {
+          const ms = Date.now() - started;
+          const kTok = Math.max(0.25, (per.lastPromptTokens || 1000) / 1000);
+          const perK = ms / kTok;
+          peer.serveMs = peer.serveMs ? peer.serveMs * (1 - EWMA) + perK * EWMA : perK;
+        }
         if (upstream.status >= 400) acct.errors += 1;
         return;
       } catch (err) {
@@ -609,6 +638,7 @@ function countUsage(tail, acct, per) {
   }
   acct.promptTokens += prompt; acct.completionTokens += completion;
   per.promptTokens += prompt; per.completionTokens += completion;
+  per.lastPromptTokens = prompt || per.lastPromptTokens;   // normalises the speed measure in pick()
 }
 
 server.headersTimeout = 1800000;

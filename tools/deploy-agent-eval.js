@@ -166,11 +166,28 @@ async function chat(messages) {
     if (j.message.tool_calls && j.message.tool_calls.length) msg.tool_calls = j.message.tool_calls.map((c, i) => ({ id: c.id || `call_${i}`, type: 'function', function: { name: c.function.name, arguments: typeof c.function.arguments === 'string' ? c.function.arguments : JSON.stringify(c.function.arguments) } }));
     return { msg, usage: { prompt_tokens: j.prompt_eval_count, completion_tokens: j.eval_count }, ms: Date.now() - t0 };
   }
-  const res = await fetch(`${BASE}/chat/completions`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
-    body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto', max_tokens: 800, temperature: 0.1 }),
-    signal: AbortSignal.timeout(1800000),
-  });
+  // Hosted endpoints drop connections now and then; a transport failure is not
+  // a model failure, and counting it as one would flatter whichever model is
+  // served over the shortest wire.
+  let res; let lastErr;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      res = await fetch(`${BASE}/chat/completions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
+        // --no-think disables a reasoning model's internal monologue (GLM burned
+        // 799 of 800 output tokens thinking and returned nothing); --max-tokens
+        // raises the budget instead, when the thinking is what you want to measure.
+        body: JSON.stringify({
+          model: MODEL, messages, tools, tool_choice: 'auto',
+          max_tokens: Number(opt('max-tokens', 800)), temperature: 0.1,
+          ...(args.includes('--no-think') ? { thinking: { type: 'disabled' } } : {}),
+        }),
+        signal: AbortSignal.timeout(1800000),
+      });
+      break;
+    } catch (err) { lastErr = err; await new Promise((r) => setTimeout(r, 2000 * (attempt + 1))); }
+  }
+  if (!res) throw lastErr;
   const text = await res.text();
   if (!res.ok) throw new Error(`${res.status} ${text.slice(0, 200)}`);
   const j = JSON.parse(text.trim());

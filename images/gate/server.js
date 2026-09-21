@@ -48,8 +48,16 @@ let served = '';    // its tag, for readability
  */
 const WARM_URL = process.env.WARM_URL || '';
 const WARM_MS = Number(process.env.WARM_MS || 120000);
+// Periodic self-benchmark. Warming measures a cache HIT (~100 ms) and so says
+// nothing about how fast this node actually reads a fresh prompt; nodes on this
+// pool differ by 20x there. Once an hour the gate sends the same prefix with a
+// nonce appended, which defeats the cache, and publishes the resulting prefill
+// rate on the health line so the hub can route away from slow machines before a
+// user meets one. Costs one ~1k-token prefill per hour.
+const BENCH_MS = Number(process.env.BENCH_MS || 3600000);
 let warmBody = null;
 let warmState = 'off';
+let benchTps = 0;
 async function warmOnce() {
   if (!WARM_URL || inflight > 0) return;              // never compete with a real request
   try {
@@ -68,6 +76,26 @@ async function warmOnce() {
   } catch (err) {
     warmState = `warm error: ${String(err.message).slice(0, 60)}`;
   }
+}
+
+async function benchOnce() {
+  if (!WARM_URL || !warmBody || inflight > 0) return;
+  try {
+    const msgs = JSON.parse(JSON.stringify(warmBody.messages || []));
+    const last = msgs[msgs.length - 1];
+    if (!last) return;
+    last.content = `${last.content} [bench ${Date.now()}-${Math.random().toString(36).slice(2, 8)}]`;
+    const res = await fetch(`${UPSTREAM}/api/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...warmBody, messages: msgs, stream: false, options: { num_predict: 4 } }),
+      signal: AbortSignal.timeout(600000),
+    });
+    if (!res.ok) return;
+    const d = await res.json();
+    const tok = Number(d.prompt_eval_count || 0);
+    const sec = Number(d.prompt_eval_duration || 0) / 1e9;
+    if (tok > 0 && sec > 0) benchTps = Math.round(tok / sec);
+  } catch { /* leave the previous figure standing */ }
 }
 
 // Readiness is "every required model is actually pulled", not "ollama answers".
@@ -103,6 +131,11 @@ if (WARM_URL) {
   // only once the model is actually present, or the first warm wastes a pull wait
   const kick = setInterval(() => { if (ready) warmOnce(); }, WARM_MS);
   kick.unref();
+  // stagger the first benchmark so twenty nodes do not all run one at once
+  setTimeout(() => {
+    if (ready) benchOnce();
+    setInterval(() => { if (ready) benchOnce(); }, BENCH_MS).unref();
+  }, 60000 + Math.floor(Math.random() * 120000)).unref();
 }
 
 // Constant-time compare so the key cannot be recovered by timing the response.
@@ -149,7 +182,7 @@ const server = http.createServer(async (req, res) => {
   // kept because things may already point at it.
   if (req.url === '/' || req.url === '/health' || req.url === '/healthz') {
     res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain', 'X-Inflight': String(inflight) });
-    res.end(ready ? `ok inflight=${inflight}${served ? ` model=${served}` : ''}${digest ? ` digest=${digest}` : ''}${WARM_URL ? ` ${warmState}` : ''}` : readyDetail);
+    res.end(ready ? `ok inflight=${inflight}${served ? ` model=${served}` : ''}${digest ? ` digest=${digest}` : ''}${WARM_URL ? ` ${warmState}` : ''}${benchTps ? ` bench=${benchTps}` : ''}` : readyDetail);
     return;
   }
 
