@@ -111,7 +111,9 @@ const PROFILES = {
   // Small models share one pool: three resident at once is ~7 GB of weights.
   // parallel: 2 so two clients of the same instance do not queue; each slot
   // gets half the context, which at 16k is still 8k per request.
-  'pool-small': { cpu: 8, ram: 16000, hdd: 20, threads: 8, parallel: 2, loaded: 3, ctx: 16384, models: 'qwen3.5:0.8b qwen3.5:2b granite4.2:3b' },
+  // ctx is divided between parallel slots, so 16384/2 gave each conversation
+  // only 8k and silently truncated longer ones. 32768 restores a real 16k.
+  'pool-small': { cpu: 8, ram: 20000, hdd: 20, threads: 8, parallel: 2, loaded: 3, ctx: 32768, models: 'qwen3.5:0.8b qwen3.5:2b granite4.2:3b' },
   // Mid: two ~8-12B models resident (5.2 + 7.6 GB weights plus KV). 32k
   // context because agent harnesses carry 10k of system prompt and tools
   // before the first turn; q8 KV at 32k is ~2.5 GB per model, inside ram.
@@ -145,7 +147,12 @@ const PROFILES = {
     // generation (18 tok/s) is memory-bound and barely moves. parallel: 2 gives
     // llama.cpp two KV slots, so a node keeps two conversations warm instead of
     // evicting one for the other; ram covers both slots' cache at 16k.
-    cpu: 12.0, ram: 14000, hdd: 20, threads: 12, parallel: 2, loaded: 1, ctx: 16384, models: 'fluxai:tiny',
+    // ctx 32768 with parallel 2 gives each conversation a real 16k: ollama divides
+    // the context between slots, so 16384/2 silently truncated anything longer
+    // than 8k - a 12.4k-token conversation arrived as 8.2k and lost its middle.
+    // Granite 4 is hybrid Mamba, only 4 of 40 layers keep a KV cache, so the
+    // extra context costs little memory.
+    cpu: 12.0, ram: 24000, hdd: 20, threads: 12, parallel: 2, loaded: 1, ctx: 65536, models: 'fluxai:tiny',
     // Versioned tag, aliased by the hub so the public name stays "fluxai:tiny".
     // Using one name for every release hid two upgrade failures in a day: the
     // loader skipped installs because the name already existed, and a healthy

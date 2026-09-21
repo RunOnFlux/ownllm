@@ -184,6 +184,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
     'gemma4:12b': { size: '12B', best: 'Best writing quality here; slower' },
     'gpt-oss:20b': { size: '21B MoE, 3.6B active', best: 'Reasoning and tool use; coding agents' },
     'bitnet-2b-4t': { size: '2B ternary (1.58-bit)', best: 'Research: Microsoft BitNet on CPU' },
+    'fluxai:tiny': { size: '7B MoE, 1B active (fine-tuned)', best: 'Deploying on Flux: sizing, quoting and building app specs with tools' },
   };
   document.getElementById('base-url').textContent = base + '/v1';
   document.getElementById('demo-key').textContent = demoKey || '(ask for a key)';

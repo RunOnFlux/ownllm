@@ -114,7 +114,16 @@ function scenario() {
     'uinav', 'uinav', 'uinav', 'uideploy', 'uideploy', 'uideploy', 'uiask', 'uiask',
     // thin or missing system prompt, no tools: the model must still know what
     // Flux is instead of confabulating
-    'bare', 'bare', 'bare', 'bare']);
+    'bare', 'bare', 'bare', 'bare',
+    // v6: Deploy with Git via Orbit (the most deployed image on the network,
+    // which v5 refused), grounded answers through the docs tool, web lookups,
+    // and copying or exporting an existing app's specification
+    'orbit', 'orbit', 'orbit', 'orbit', 'docsask', 'docsask', 'docsask', 'docsask', 'websearch', 'websearch', 'speccopy', 'speccopy', 'speccopy',
+    // answer the question, then offer the page - v5 navigated instead
+    'answerfirst', 'answerfirst', 'answerfirst', 'answerfirst', 'answerfirst', 'smalltalk', 'smalltalk', 'smalltalk', 'noroute', 'noroute',
+    // act on every qualifier, ask for a name instead of inventing one, and give
+    // a long answer when a long answer is what was asked for
+    'qualifiers', 'qualifiers', 'qualifiers', 'needname', 'needname', 'needname', 'longform', 'longform', 'longform']);
   return s;
 }
 
@@ -563,6 +572,63 @@ const UI_PAGES = [
   ['/help', ['I need help', 'where are the docs', 'support please']],
   ['/network', ['how big is the network', 'network status page']],
 ];
+// --- v6: Orbit (Deploy with Git), docs search, spec clone/export ------------------
+// Orbit (runonflux/orbit) is the most deployed image on the network - 240 apps -
+// and v5 actively told people it was impossible: asked to deploy a repo it
+// refused and invented "myhuman.ai credentials". It is the engine behind Deploy
+// with Git: clone a repo, detect the framework, install, build, run, no
+// Dockerfile. Env and sizes below are taken from the live deployments (214 of
+// 240 run 0.5 core / 1000 MB / 5 GB) and the ports from their specs.
+const ORBIT_IMAGE = 'runonflux/orbit:latest';
+const ORBIT_PORTS = [3333, 9001];
+const ORBIT_FRAMEWORKS = [
+  ['Node.js', ['React', 'Next.js', 'Vue', 'Nuxt', 'Express', 'Fastify']],
+  ['Python', ['Django', 'Flask', 'FastAPI', 'Streamlit']],
+  ['Ruby', ['Rails', 'Sinatra']],
+  ['Go', ['any Go application']],
+  ['Rust', ['Cargo projects']],
+  ['PHP', ['Laravel', 'Symfony']],
+  ['.NET', ['ASP.NET']],
+  ['Java', ['Spring Boot']],
+  ['Bun', ['Bun apps']],
+];
+const REPOS = [
+  ['https://github.com/acme/my-next-app', 'Next.js', 3000],
+  ['https://github.com/janedoe/flask-api', 'Flask', 5000],
+  ['https://github.com/myorg/rails-shop', 'Rails', 3000],
+  ['https://github.com/example/go-service', 'Go', 8080],
+  ['https://github.com/team/express-bot', 'Express', 3333],
+  ['https://github.com/dev/streamlit-dash', 'Streamlit', 8501],
+];
+const orbitComponent = (repo, branch, appPort, sub) => ({
+  name: 'app', image: ORBIT_IMAGE, ports: ORBIT_PORTS, cpu: 0.5, ram: 1000, hdd: 5,
+  env: [`GIT_REPO_URL=${repo}`, `GIT_BRANCH=${branch}`, ...(sub ? [`PROJECT_PATH=${sub}`] : []), `APP_PORT=${appPort}`, 'POLLING_INTERVAL=86400'],
+});
+
+// The apps people actually run here, with the images they actually use, counted
+// from the network: palworld 230, minecraft 54, presearch 62, vpn 23, blockbook
+// 18, ethereum nodes and the shared-db/wp-nginx pair from the team's own apps.
+const REAL_APPS = {
+  palworld: { image: 'runonflux/palworld-server-flux:latest', ports: [8211, 27015], cpu: 4, ram: 16000, hdd: 40, words: ['a Palworld server', 'Palworld for our group'] },
+  minecraft: { image: 'itzg/minecraft-server:latest', ports: [25565], cpu: 3, ram: 8000, hdd: 30, words: ['a Minecraft server', 'Minecraft for my friends'] },
+  presearch: { image: 'presearch/node:latest', ports: [], cpu: 0.3, ram: 300, hdd: 2, words: ['a Presearch node'] },
+  vpn: { image: 'ghcr.io/runonflux/cumulusvpn-gateway:latest', ports: [51820], cpu: 0.5, ram: 500, hdd: 5, words: ['a VPN gateway', 'my own VPN'] },
+  explorer: { image: 'runonflux/blockbook-docker:latest', ports: [9130], cpu: 2, ram: 8000, hdd: 200, words: ['a block explorer', 'Blockbook'] },
+  ethereum: { image: 'ethereum/client-go:stable', ports: [8545, 30303], cpu: 4, ram: 16000, hdd: 600, words: ['an Ethereum node', 'geth'] },
+  wordpress: { image: 'runonflux/wp-nginx:latest', ports: [80], cpu: 1, ram: 1000, hdd: 20, words: ['WordPress'] },
+};
+
+// Short, sourced answers for the questions the model currently invents.
+const DOC_ANSWERS = [
+  ['what is orbit', 'Orbit is the engine behind Deploy with Git: point it at a repository and it detects the framework, installs the runtime and dependencies, builds and runs your app - no Dockerfile [1]. It is the most used image on the network.'],
+  ['what is fluxdrive', 'FluxDrive is decentralized storage on IPFS, part of Flux Cloud: store, manage and share files with global distribution and unlimited bandwidth, through the web UI or its API, on a subscription paid in FLUX or by card [1].'],
+  ['what are the node tiers', 'Three: Cumulus, Nimbus and Stratus. They offer applications 3, 7 and 15 cores and 5000, 28000 and 59000 MB respectively [1].'],
+  ['what is fluxedge', 'FluxEdge is the GPU side of Flux: machines with cards such as the L40, A100 and H100 rented by the hour, separate from the CPU network that runs Flux Cloud applications [1].'],
+  ['how long can an app run', 'Up to 1,056,000 blocks, and since 88,000 blocks is about a month that is roughly 12 months; the minimum is 1 block [1].'],
+  ['what is a fluxnode', 'A machine an operator runs to host applications, backed by locked FLUX collateral, in one of three tiers [1].'],
+  ['can i deploy from github', 'Yes - Deploy with Git takes a repository, detects the framework and builds it for you, with no Dockerfile needed [1].'],
+  ['what is arcaneos', 'ArcaneOS is the node operating system that can decrypt and run enterprise applications, whose compose section is encrypted [1].'],
+];
 // --- flows -------------------------------------------------------------------------
 function build(s) {
   callN = 0;
@@ -741,6 +807,259 @@ function build(s) {
       const { spec, q } = quoteFlow(m, s, alt);
       if (chance(0.7)) { m.push({ role: 'user', content: pick(YES) }); deployFlow(m, s, spec, q); }
     }
+    return m;
+  }
+  if (F === 'qualifiers' || F === 'needname' || F === 'longform') {
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    if (F === 'longform') {
+      // v5 answers everything in two lines and gets SHORTER when asked for detail,
+      // because every trained answer was terse. These are the long ones.
+      const [q, a] = pick([
+        ['explain how deploying actually works under the hood, i want the detail',
+          'Four stages.\n\n**You describe the app as a specification.** Images, ports, CPU, memory and disk for each component, how many instances, and how long to run. Up to 10 components in one application, and the limits apply to their sum: 15 cores, 59,000 MB and 820 GB.\n\n**It is priced and paid on-chain.** The price comes from those resources and the term. You sign the specification with your Flux ID and pay in FLUX; the registration is a transaction, which is why it cannot be refunded once broadcast.\n\n**The network schedules it.** Independent operators pick the app up, pull the images and run them. Every instance runs the whole set of components together, so the instance count belongs to the application rather than to one part of it.\n\n**It is reachable and replaceable.** You get `<name>.app.runonflux.io`, load balanced across instances with HTTPS handled for you, and components reach each other privately as `flux<component>_<appname>`. Updating means signing a new specification, and you are credited for the part of the term you have not used.'],
+        ['what should i think about before putting a production app here, give me the full picture',
+          'Five things, in the order they usually bite.\n\n**Redundancy is the default and it is per application.** Three instances is normal; each runs every component. If one part needs to scale on its own it has to become its own application.\n\n**Storage is local to an instance.** Each gets the disk you asked for, and a rescheduled instance starts with an empty volume. Anything that must survive belongs in a database component or in FluxDrive, and backups are yours to arrange.\n\n**The term is prepaid.** You choose how long, up to about twelve months, and cancelling early does not refund the rest. Renewals credit what you have not used.\n\n**Networking is simple on purpose.** Published ports get a public URL with a certificate; anything you do not publish stays private to the app. Keep databases unpublished.\n\n**Images must be linux/amd64** and reachable by the nodes. A private registry means an enterprise application, where the compose section is encrypted and only ArcaneOS nodes can run it.'],
+        ['tell me everything about the node tiers and which one my app lands on',
+          'Three tiers, and the one you land on is decided by what your application asks for rather than by choice.\n\n**Cumulus** offers an application 3 cores and 5,000 MB. **Nimbus** offers 7 cores and 28,000 MB. **Stratus** offers 15 cores and 59,000 MB, which is also the ceiling for any single application.\n\nYour app runs wherever it fits, so asking for more than 7 cores or 28,000 MB restricts it to Stratus nodes only. That is worth knowing because it shrinks the pool of machines that can host you, which matters more for redundancy than for price.\n\nThe practical advice: size for what the app needs rather than rounding up. An app that fits Cumulus can run almost anywhere on the network.'],
+      ]);
+      m.push({ role: 'user', content: q });
+      m.push({ role: 'assistant', content: a });
+      if (chance(0.4)) {
+        m.push({ role: 'user', content: pick(['and briefly - whats the single most important bit?', 'ok summarise that in one line']) });
+        m.push({ role: 'assistant', content: pick(['Size it for what it needs, and keep anything you cannot lose in a database or FluxDrive.', 'The term is prepaid and not refundable, so start with a month.']) });
+      }
+      return m;
+    }
+    if (F === 'needname') {
+      // v5 invents names - it called a Minecraft server "shopserver". Ask instead.
+      const P0 = pick(Object.values(REAL_APPS));
+      m.push({ role: 'user', content: pick([`deploy ${pick(P0.words)}`, `I want ${pick(P0.words)}`, `set up ${pick(P0.words)} please`]) });
+      const qa = { components: [{ name: 'app', image: P0.image, ports: P0.ports, cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd }], instances: 1 };
+      const c1 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+      const q1 = quoteFor({ compose: [{ cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd }], instances: 1, expire: 88000 }, s.pricing);
+      m.push(toolMsg(c1.id, q1));
+      m.push({ role: 'assistant', content: `That sizes to ${P0.cpu} ${P0.cpu === 1 ? 'core' : 'cores'}, ${ramWords(P0.ram)} and ${P0.hdd} GB - **${money(q1.usdTotal)}** a month (≈ ${q1.flux} FLUX) on one instance. What should the app be called? Names take letters and digits, and cannot start with flux or zel.` });
+      const nm = pick(['craftworld', 'palserver', 'mynode', 'homevpn', 'chainview']) + (chance(0.5) ? String(ri(1, 99)) : '');
+      m.push({ role: 'user', content: pick([nm, `call it ${nm}`, `${nm} please`]) });
+      const c2 = tc('ui_prefill_deploy', { name: nm, description: pick(P0.words), ...qa }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      m.push(toolMsg(c2.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `**${nm}** is filled in - check it and sign to launch.` });
+      return m;
+    }
+    // qualifiers: every detail in the request must be acted on or answered
+    const players = pick([8, 10, 12, 20, 30]);
+    const region = pick([['Europe', 'acEU'], ['North America', 'acNA'], ['Asia', 'acAS']]);
+    const game = chance(0.5) ? 'minecraft' : 'palworld';
+    const P0 = REAL_APPS[game];
+    const cpu = players >= 20 ? P0.cpu : Math.max(1, P0.cpu - 1);
+    const ram = players >= 20 ? P0.ram : roundRam(P0.ram * 0.6);
+    m.push({ role: 'user', content: `${game === 'minecraft' ? 'A Minecraft server' : 'A Palworld server'} for ${players} friends in ${region[0]}, with nightly backups` });
+    m.push({ role: 'assistant', content: `Three things in there. For ${players} players I would use ${cpu} cores and ${ramWords(ram)} with ${P0.hdd} GB of disk; I will pin it to ${region[0]} so latency is low. On backups: Flux does not back apps up for you, but FluxDrive can hold them and the app's Backup/Restore tab writes there on a schedule, so we set that up once it is running.\n\nWhat should it be called, and do you want a custom domain or is the \`<name>.app.runonflux.io\` address fine?` });
+    const nm = pick(['craftworld', 'palworld', 'ourserver']) + String(ri(1, 99));
+    const dom = chance(0.5) ? pick(['mc.example.com', 'play.example.org', 'game.mysite.io']) : null;
+    m.push({ role: 'user', content: dom ? `call it ${nm}, and yes - ${dom}` : `${nm}, the default address is fine` });
+    const qa = { components: [{ name: game, image: P0.image, ports: P0.ports, cpu, ram, hdd: P0.hdd }], instances: 1, geolocation: [region[1]] };
+    const c1 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const q1 = quoteFor({ compose: [{ cpu, ram, hdd: P0.hdd }], instances: 1, expire: 88000 }, s.pricing);
+    m.push(toolMsg(c1.id, q1));
+    const c2 = tc('ui_prefill_deploy', { name: nm, description: `${game} for ${players}`, ...qa }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    m.push(toolMsg(c2.id, { ok: true, at: '/deploy', prefilled: true }));
+    m.push({ role: 'assistant', content: `**${nm}**: ${P0.image}, ${cpu} cores, ${ramWords(ram)}, ${P0.hdd} GB, one instance in ${region[0]}, port ${P0.ports[0]}${dom ? `, domain ${dom}` : ''} - **${money(q1.usdTotal)}** per month (≈ ${q1.flux} FLUX). The form is filled in; check it and sign.\n\nAfterwards: ${dom ? `point ${dom} at ${nm}.app.runonflux.io with a CNAME, then ` : ''}open the Backup/Restore tab and set FluxDrive as the nightly target.` });
+    return m;
+  }
+  if (F === 'answerfirst' || F === 'smalltalk' || F === 'noroute') {
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    if (F === 'smalltalk') {
+      // "Not applicable - I am here whenever you need me" is what v5 says. People
+      // open with a greeting; answer like a person and steer gently.
+      const [q, a] = pick([
+        ['how are you today', pick(['Good, thanks - ready when you are. Deploying something, or just looking around?', 'All well here. What are you working on?'])],
+        ['hi', pick(['Hi! What would you like to run?', 'Hello - tell me what you want to deploy and I will size and price it.'])],
+        ['hey whats up', 'Not much - waiting for something to deploy. What have you got?'],
+        ['are you an ai', 'Yes, I am the assistant built into Flux Cloud. I size, price and prepare deployments, and I can explain how any of this works.'],
+        ['thanks!', pick(['Any time.', 'You are welcome - shout if you need anything else.'])],
+        ['who made you', 'I am Flux AI, built by the Flux team and running on the Flux network itself rather than someone else\'s cloud.'],
+        ['what can you do', 'I can size and price an app and fill in the deploy form for you to sign, look up your apps and their logs, search the docs for how something works, and move you around the app. I never sign or pay - that stays with you.'],
+        ['good morning', 'Morning! What are we deploying today?'],
+      ]);
+      m.push({ role: 'user', content: q });
+      m.push({ role: 'assistant', content: a });
+      if (chance(0.4)) {
+        const s2 = { ...scenario(), surface: s.surface, pricing: s.pricing };
+        m.push({ role: 'user', content: pick(['actually yes', 'well since you ask']) + ' - ' + userOpening(s2).toLowerCase() });
+        const comps = [{ name: s2.preset.key === 'custom' ? 'app' : s2.preset.key, image: s2.image, ports: s2.ports, cpu: roundCpu(s2.cpu), ram: roundRam(s2.ram), hdd: s2.hdd }];
+        const qa = { components: comps, instances: s2.instances };
+        const c1 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+        const q1 = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: s2.instances, expire: 88000 }, s.pricing);
+        m.push(toolMsg(c1.id, q1));
+        m.push({ role: 'assistant', content: `${comps[0].cpu} ${comps[0].cpu === 1 ? 'core' : 'cores'}, ${ramWords(comps[0].ram)}, ${comps[0].hdd} GB on ${s2.instances} ${s2.instances === 1 ? 'instance' : 'instances'} - **${money(q1.usdTotal)}** a month (≈ ${q1.flux} FLUX). Want me to fill in the form? I need a name for it.` });
+      }
+      return m;
+    }
+    if (F === 'noroute') {
+      // v5 invented /search and /app/nginx. If no page fits, say so.
+      const [ask, reply] = pick([
+        ['take me to the billing history', 'There is no billing history page. The closest is **Balance**, which shows your FLUX and what you have spent. Want that?'],
+        ['open the search page', 'There is no search page in the app. Tell me what you are looking for and I will find it or take you to the right place.'],
+        ['go to settings for my dns', 'Domains are set per app rather than in a settings page: open the app and its domains live on the spec. Which app?'],
+        ['show me the nginx page', 'There is no page for an image. If nginx is one of your apps I can open it, or I can open the templates if you want to deploy one.'],
+        ['take me to support chat', 'There is no live chat here. The **Help** page has the documentation and the ways to reach the team - shall I open it?'],
+      ]);
+      m.push({ role: 'user', content: ask });
+      m.push({ role: 'assistant', content: reply });
+      if (chance(0.5)) {
+        m.push({ role: 'user', content: pick(['yes please', 'ok do that', 'sure']) });
+        const route = /Balance/.test(reply) ? '/balance' : /Help/.test(reply) ? '/help' : '/templates';
+        const c = tc('ui_navigate', { to: route }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+        m.push(toolMsg(c.id, { ok: true, at: route }));
+        m.push({ role: 'assistant', content: `Opened ${route}.` });
+      }
+      return m;
+    }
+    // answerfirst: a question with a real answer behind a tool. Answer it, then
+    // OFFER the page. v5 navigated instead, which is the complaint that started this.
+    const kind = pick(['apps', 'apps', 'network', 'logs', 'balance']);
+    if (kind === 'apps') {
+      m.push({ role: 'user', content: pick(['how many applications do i have running', 'what am I running right now?', 'do I have anything deployed?', 'list my apps']) });
+      const c = tc('flux_list_my_apps', {}); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      const apps = [{ name: 'mysite', instances: 3, expiresInDays: ri(8, 26) }, { name: 'appdb', instances: 1, expiresInDays: ri(8, 26) }, { name: 'craftworld', instances: 3, expiresInDays: ri(2, 5) }].slice(0, ri(2, 3));
+      m.push(toolMsg(c.id, { apps }));
+      const soon = apps.filter((a) => a.expiresInDays <= 5);
+      m.push({ role: 'assistant', content: `${apps.length === 1 ? 'One' : apps.length === 2 ? 'Two' : 'Three'}: ${apps.map((a) => `**${a.name}** (${a.instances} ${a.instances === 1 ? 'instance' : 'instances'}, ${a.expiresInDays} days left)`).join(', ')}.${soon.length ? ` ${soon[0].name} expires in ${soon[0].expiresInDays} days - want me to quote a renewal?` : ' Want me to open any of them?'}` });
+      if (chance(0.5)) {
+        const t = pick(apps).name;
+        m.push({ role: 'user', content: pick([`open ${t}`, `show me ${t}`, `yes, ${t}`]) });
+        const c2 = tc('ui_open_app', { name: t }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+        m.push(toolMsg(c2.id, { ok: true, at: `/deployments/${t}` }));
+        m.push({ role: 'assistant', content: `Here it is.` });
+      }
+      return m;
+    }
+    if (kind === 'network') {
+      m.push({ role: 'user', content: pick(['how many nodes are on the network', 'how big is flux?', 'whats the network size', 'how many machines are running flux']) });
+      const c = tc('flux_get_network_info', {}); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      const info = { nodes: { cumulus: ri(3000, 3400), nimbus: ri(1500, 1700), stratus: ri(1450, 1650) }, height: ri(2965000, 2975000), fluxUsd: s.pricing.fluxUsd };
+      m.push(toolMsg(c.id, info));
+      const tot = info.nodes.cumulus + info.nodes.nimbus + info.nodes.stratus;
+      m.push({ role: 'assistant', content: `${tot.toLocaleString('en-US')} nodes right now: ${info.nodes.cumulus.toLocaleString('en-US')} Cumulus, ${info.nodes.nimbus.toLocaleString('en-US')} Nimbus and ${info.nodes.stratus.toLocaleString('en-US')} Stratus. FLUX is at $${info.fluxUsd}. The network page has the live map if you want it.` });
+      return m;
+    }
+    if (kind === 'balance') {
+      m.push({ role: 'user', content: pick(['how much flux do i have', 'whats my balance', 'can I afford another app?']) });
+      m.push({ role: 'assistant', content: 'I cannot read your wallet balance from here - it is on the **Balance** page, which also shows what you have spent. Want me to open it? If you tell me what you want to deploy I can price it so you know what you need.' });
+      return m;
+    }
+    const name = pick(['mysite', 'craftworld', 'appdb']);
+    m.push({ role: 'user', content: pick([`is ${name} healthy?`, `check on ${name}`, `whats ${name} doing`]) });
+    const c = tc('flux_get_app_logs', { name, lines: 50 }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { lines: ['listening on port 80', 'GET /health 200 1ms', 'GET / 200 8ms'] }));
+    m.push({ role: 'assistant', content: `**${name}** looks fine - it is listening and serving requests, last health check 200. Want me to open its page?` });
+    return m;
+  }
+  if (F === 'orbit') {
+    // Deploy with Git. v5 refused these outright, which was wrong.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const [repo, fw, port] = pick(REPOS);
+    const name = `${repo.split('/').pop().replace(/[^a-z0-9]/gi, '').slice(0, 12)}${ri(1, 99)}`;
+    m.push({ role: 'user', content: pick([`deploy ${repo}`, `can you run ${repo} on flux?`, `I want to host my repo ${repo}`, `${repo} - deploy it please`]) });
+    if (chance(0.5)) {
+      const c0 = tc('flux_search_docs', { query: 'deploy from git repository' }); m.push({ role: 'assistant', content: '', tool_calls: [c0] });
+      m.push(toolMsg(c0.id, { results: [{ n: 1, title: 'Deploy with Git', text: 'Deploy directly from your Git repository without managing Docker images. Automatically detects your framework, installs dependencies, builds, and runs your application.', url: 'https://docs.runonflux.com/fluxcloud/deploy-with-git' }] }));
+    }
+    m.push({ role: 'assistant', content: `Yes - that is what Deploy with Git is for. It runs your repo through Orbit, which detects the framework${chance(0.6) ? ` (${fw} here)` : ''}, installs dependencies, builds and starts it, so you do not need a Dockerfile. Two things I need: which branch, and which port your app listens on.` });
+    const branch = pick(['main', 'master', 'production']);
+    m.push({ role: 'user', content: pick([`${branch}, port ${port}`, `branch ${branch} and it runs on ${port}`, `${branch}. ${port}.`]) });
+    const comps = [orbitComponent(repo, branch, port, chance(0.25) ? pick(['apps/web', 'packages/api', 'src']) : null)];
+    const qa = { components: comps.map((c) => ({ name: c.name, image: c.image, ports: c.ports, cpu: c.cpu, ram: c.ram, hdd: c.hdd, env: c.env })), instances: chance(0.6) ? 1 : 3 };
+    const c1 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const q = quoteFor({ compose: comps.map((c) => ({ cpu: c.cpu, ram: c.ram, hdd: c.hdd })), instances: qa.instances, expire: 88000 }, s.pricing);
+    m.push(toolMsg(c1.id, q));
+    const c2 = tc('ui_prefill_deploy', { name, description: `${fw} app from git`, ...qa }); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    m.push(toolMsg(c2.id, { ok: true, at: '/deploy/git', prefilled: true }));
+    m.push({ role: 'assistant', content: `**${name}**: Orbit pulling ${repo} on ${branch}, app port ${port}, 0.5 cores / 1 GB / 5 GB on ${qa.instances} ${qa.instances === 1 ? 'instance' : 'instances'} - **${money(q.usdTotal)}** per month (≈ ${q.flux} FLUX). That is the size almost every Git deployment on the network uses. The form is filled in; check it and sign.${chance(0.5) ? ' It re-checks the repo once a day, so pushes to that branch roll out on their own.' : ''}` });
+    return m;
+  }
+  if (F === 'docsask') {
+    // A factual question: search, then answer from what came back. Never from memory.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const [q, a] = pick(DOC_ANSWERS);
+    m.push({ role: 'user', content: chance(0.5) ? q : `${q}?` });
+    const c = tc('flux_search_docs', { query: q.replace(/^(what|how|can) (is|are|i|long) ?/i, '').trim() || q });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: [{ n: 1, title: 'Flux documentation', text: a.replace(/ \[1\]\.?$/, '.'), url: 'https://docs.runonflux.com/' }] }));
+    m.push({ role: 'assistant', content: a });
+    if (chance(0.35)) {
+      m.push({ role: 'user', content: pick(['and how much does that cost?', 'where do I find it?', 'can you set it up for me?']) });
+      m.push({ role: 'assistant', content: pick(['Prices depend on the resources you give it - tell me the app and I will quote it exactly.', 'It is in the left-hand menu; I can take you there if you like.', 'Yes - tell me what to run and I will size it, price it and fill in the form.']) });
+    }
+    return m;
+  }
+  if (F === 'websearch') {
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const [thing, blurb, image] = pick([
+      ['uptime kuma', 'a self-hosted uptime monitor with status pages and alerting', 'louislam/uptime-kuma:1'],
+      ['n8n', 'an open-source workflow automation tool, a self-hosted alternative to Zapier', 'n8nio/n8n:latest'],
+      ['vaultwarden', 'a lightweight self-hosted server compatible with Bitwarden clients', 'vaultwarden/server:latest'],
+      ['jellyfin', 'a free media server for your own films and music', 'jellyfin/jellyfin:latest'],
+      ['plausible', 'a privacy-friendly website analytics tool', 'plausible/analytics:latest'],
+    ]);
+    m.push({ role: 'user', content: pick([`what is ${thing}`, `whats ${thing}?`, `never heard of ${thing}, what does it do`]) });
+    const c = tc('web_search', { query: `${thing} what is it` }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: [{ title: thing, snippet: `${thing} is ${blurb}. Official Docker image ${image}.` }] }));
+    m.push({ role: 'assistant', content: `${thing[0].toUpperCase()}${thing.slice(1)} is ${blurb}. The usual image is \`${image}\`. Want me to price it for Flux?` });
+    if (chance(0.55)) {
+      m.push({ role: 'user', content: pick(['yes please', 'sure, how much', 'go on then']) });
+      const comps = [{ name: thing.replace(/[^a-z0-9]/g, '').slice(0, 10), image, ports: [8080], cpu: 1, ram: 1000, hdd: 10, env: [] }];
+      const qa = { components: comps, instances: 1 };
+      const c1 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+      const qq = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: 1, expire: 88000 }, s.pricing);
+      m.push(toolMsg(c1.id, qq));
+      m.push({ role: 'assistant', content: `1 core, 1 GB RAM and 10 GB on one instance comes to **${money(qq.usdTotal)}** a month (≈ ${qq.flux} FLUX). Give me a name and I will fill in the form.` });
+    }
+    return m;
+  }
+  if (F === 'speccopy') {
+    // clone / export / import an existing app's specification
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const src = pick(['mysite', 'craftworld', 'appdb', 'shop7', 'presearch1']);
+    const kind = pick(['clone', 'export', 'inspect']);
+    const spec = { version: 8, name: src, description: 'existing app', owner: '1E8wKzBaPd3oTfg3oFkxFtBLnnZUs8Q8ZM',
+      compose: [{ name: 'web', repotag: pick(['nginx:1.27', 'itzg/minecraft-server:latest', 'runonflux/wp-nginx:latest']), ports: [31080], containerPorts: [80], domains: [''], environmentParameters: [], commands: [], containerData: '/data', cpu: 1, ram: 2000, hdd: 20 }],
+      instances: 3, expire: 88000 };
+    if (kind === 'clone') {
+      const dst = `${src}${ri(2, 9)}`;
+      m.push({ role: 'user', content: pick([`make a copy of ${src}`, `clone ${src} into a second app`, `I want another app exactly like ${src}`]) });
+      const c = tc('flux_get_app', { name: src }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { name: src, spec, running: 3, instances: 3 }));
+      m.push({ role: 'assistant', content: `Got **${src}**: ${spec.compose[0].repotag}, ${spec.compose[0].cpu} core, ${spec.compose[0].ram} MB, ${spec.compose[0].hdd} GB, ${spec.instances} instances. A copy needs its own name - shall I call it **${dst}**?` });
+      m.push({ role: 'user', content: pick(['yes', `yes, ${dst} is fine`, 'sure']) });
+      const comps = [{ name: spec.compose[0].name, image: spec.compose[0].repotag, ports: spec.compose[0].containerPorts, cpu: spec.compose[0].cpu, ram: spec.compose[0].ram, hdd: spec.compose[0].hdd }];
+      const qa = { components: comps, instances: spec.instances };
+      const c2 = tc('flux_quote_app', qa); m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      const q2 = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: spec.instances, expire: 88000 }, s.pricing);
+      m.push(toolMsg(c2.id, q2));
+      const c3 = tc('ui_prefill_deploy', { name: dst, description: `copy of ${src}`, ...qa }); m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      m.push(toolMsg(c3.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `**${dst}** is filled in with the same specification as ${src} - **${money(q2.usdTotal)}** per month. Data is not copied, only the shape of the app.` });
+      return m;
+    }
+    if (kind === 'export') {
+      m.push({ role: 'user', content: pick([`export the spec for ${src}`, `give me ${src} as json`, `can I see the raw specification of ${src}?`]) });
+      const c = tc('flux_get_app', { name: src }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { name: src, spec, running: 3, instances: 3 }));
+      m.push({ role: 'assistant', content: `Here is **${src}** as it is registered:\n\n\`\`\`json\n${JSON.stringify(spec, null, 2)}\n\`\`\`\n\nPaste that back to me any time and I will quote or adapt it.` });
+      return m;
+    }
+    m.push({ role: 'user', content: pick([`what is ${src} running?`, `show me the setup of ${src}`, `what image does ${src} use`]) });
+    const c = tc('flux_get_app', { name: src }); m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { name: src, spec, running: 3, instances: 3 }));
+    m.push({ role: 'assistant', content: `**${src}** runs ${spec.compose[0].repotag} on port ${spec.compose[0].containerPorts[0]}, with ${spec.compose[0].cpu} core, ${spec.compose[0].ram} MB of RAM and ${spec.compose[0].hdd} GB of disk, across ${spec.instances} instances. Want the raw JSON, a copy of it, or a change?` });
     return m;
   }
   if (F === 'bare') {

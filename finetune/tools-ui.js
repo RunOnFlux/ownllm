@@ -116,6 +116,18 @@ module.exports = [
     } },
   { type: 'function',
     function: {
+      name: 'flux_search_docs',
+      description: 'Search the Flux, Zelcore and SSP documentation. Use this for any factual question about how Flux works - products, limits, prices, features - and answer from what it returns, with citations. Do not answer such questions from memory.',
+      parameters: { type: 'object', required: ['query'], properties: { query: { type: 'string' } } },
+    } },
+  { type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Search the public web for things outside the Flux documentation: what a piece of software does, which image to use, current events.',
+      parameters: { type: 'object', required: ['query'], properties: { query: { type: 'string' } } },
+    } },
+  { type: 'function',
+    function: {
       name: 'flux_get_network_info',
       description: 'Node counts by tier, block height, FLUX/USD rate.',
       parameters: { type: 'object', properties: {} },
