@@ -1,0 +1,4361 @@
+[
+ {
+  "name": "AlephiumNode",
+  "displayName": "AlephiumNode",
+  "category": "Blockchain",
+  "description": "Host your Alephium Full Node on the Flux Cloud",
+  "priceUSD": 5.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "alephiumnode",
+    "description": "The Alephium Full Node container",
+    "repotag": "touilleio/alephium-standalone:latest-root",
+    "ports": [
+     39973
+    ],
+    "containerPorts": [
+     39973
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/data",
+    "userEnvironmentParameters": [],
+    "cpu": 0.5,
+    "ram": 1000,
+    "hdd": 130
+   }
+  ]
+ },
+ {
+  "name": "BittensorFN",
+  "displayName": "BittensorFN",
+  "category": "Blockchain",
+  "description": "Host your Bittensor Full Node on the Flux Cloud",
+  "priceUSD": 14.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "bittensorfullnode",
+    "description": "The Bittensor Full Node container",
+    "repotag": "opentensor/subtensor:latest",
+    "ports": [
+     9944,
+     30333,
+     9933
+    ],
+    "containerPorts": [
+     9944,
+     30333,
+     9933
+    ],
+    "environmentParameters": [
+     "CARGO_HOME=/var/www/node-subtensor/.cargo"
+    ],
+    "commands": [
+     "/bin/bash",
+     "-c",
+     "./node-subtensor --base-path /tmp/blockchain --chain ./raw_spec.json --rpc-external --rpc-cors all --ws-external --no-mdns --ws-max-connections 5000 --in-peers 200 --out-peers 200 --bootnodes /dns/bootnode.finney.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC --no-private-ip --sync warp"
+    ],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [],
+    "cpu": 4.5,
+    "ram": 8000,
+    "hdd": 150
+   }
+  ]
+ },
+ {
+  "name": "BLOCXMN",
+  "displayName": "BLOCX Node",
+  "category": "Masternode",
+  "description": "Host your BLOCX Masternode on the Flux Cloud",
+  "priceUSD": 6.32,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "blocxmasternode",
+    "description": "The BLOCX Masternode container",
+    "repotag": "blocxtech/blocxnode:latest",
+    "ports": [
+     33106
+    ],
+    "containerPorts": [
+     12972
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.blocx",
+    "userEnvironmentParameters": [
+     {
+      "name": "KEY",
+      "description": "The key of your masternode",
+      "placeholder": "Enter your key here",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Cyberfly",
+  "displayName": "Cyberfly",
+  "category": "Blockchain",
+  "description": "Host your Cyberfly Mainnet Node on FluxCloud",
+  "priceUSD": 1.63,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "cyberflymqtt",
+    "description": "Cyberfly MQTT server container",
+    "repotag": "cyberfly/cyberfly_mqtt:latest",
+    "ports": [
+     31004,
+     31005
+    ],
+    "containerPorts": [
+     1883,
+     9001
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 0.1,
+    "ram": 100,
+    "hdd": 1
+   },
+   {
+    "name": "cyberflynode",
+    "description": "Cyberfly node backend container",
+    "repotag": "cyberfly/cyberfly_node:latest",
+    "ports": [
+     31001,
+     31002,
+     31003,
+     31006
+    ],
+    "containerPorts": [
+     31001,
+     31002,
+     31003,
+     31006
+    ],
+    "environmentParameters": [
+     "MQTT_HOST=mqtt://cyberflymqtt"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [
+     {
+      "name": "KADENA_ACCOUNT",
+      "description": "Your kadena k:address",
+      "placeholder": "Enter your k: address here",
+      "optional": true
+     },
+     {
+      "name": "NODE_PRIV_KEY",
+      "description": "Your node secret key",
+      "placeholder": "Enter your node secret key",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   },
+   {
+    "name": "cyberflynodeui",
+    "description": "Cyberfly node UI container",
+    "repotag": "cyberfly/cyberfly_node_ui:latest",
+    "ports": [
+     31000
+    ],
+    "containerPorts": [
+     80
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 0.1,
+    "ram": 100,
+    "hdd": 1
+   }
+  ]
+ },
+ {
+  "name": "DashNode",
+  "displayName": "DashNode",
+  "category": "Masternode",
+  "description": "Host your Dash Masternode on the Flux Network (HA: 2 redundant nodes with automatic failover)",
+  "priceUSD": 5,
+  "multiplier": 1,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "The Dash Node container",
+    "repotag": "runonflux/dashnode:latest",
+    "ports": [
+     9999
+    ],
+    "containerPorts": [
+     9999
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.dashcore",
+    "userEnvironmentParameters": [
+     {
+      "name": "KEY",
+      "description": "Masternode operator BLS private key",
+      "placeholder": "Enter your operator BLS private key",
+      "optional": false
+     },
+     {
+      "name": "PROTXHASH",
+      "description": "Your masternode registration hash (proTxHash). Enables automatic on-chain IP updates so the node is never PoSe-banned after a relocation.",
+      "placeholder": "Enter your proTxHash",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 70
+   }
+  ]
+ },
+ {
+  "name": "DesoNode",
+  "displayName": "DesoNode",
+  "category": "Blockchain",
+  "description": "Host your Deso backend Node on the Flux Network",
+  "priceUSD": 27.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "desonode",
+    "description": "The Deso Node container",
+    "repotag": "honsontran/deso-backend:stable",
+    "ports": [
+     33445,
+     33444
+    ],
+    "containerPorts": [
+     33445,
+     33444
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "run"
+    ],
+    "containerData": "/db",
+    "userEnvironmentParameters": [],
+    "cpu": 5,
+    "ram": 24000,
+    "hdd": 400
+   }
+  ]
+ },
+ {
+  "name": "DogecoinNode",
+  "displayName": "DogecoinNode",
+  "category": "Blockchain",
+  "description": "Host your Dogecoin Full Node on the Flux Network",
+  "priceUSD": 5,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "dogenode",
+    "description": "The Dogecoin Node container",
+    "repotag": "bigmandave/doge-node:latest",
+    "ports": [
+     34203
+    ],
+    "containerPorts": [
+     22556
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "/wowmuchdocker/dogecoin-node/bin/dogecoind",
+     "-conf=/etc/doge/dogecoin.conf",
+     "-datadir=/etc/doge",
+     "-printtoconsole"
+    ],
+    "containerData": "/etc/doge/",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 3000,
+    "hdd": 100
+   }
+  ]
+ },
+ {
+  "name": "DontStarveTogether",
+  "displayName": "Don't Starve Together",
+  "category": "NewGames",
+  "description": "Brave the monsters of The Constant with up to 6 survivors, always online.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "dstdst",
+    "description": "dontstarvetogether",
+    "repotag": "wollwolke/dst-dedicated-server:latest",
+    "ports": [
+     11000,
+     10999
+    ],
+    "containerPorts": [
+     11000,
+     10999
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/data|m:dst_server:/home/dst/dst_server",
+    "userEnvironmentParameters": [
+     {
+      "name": "CLUSTER_TOKEN",
+      "description": "Your Klei cluster token (get it from accounts.klei.com > Game Servers > Add New Server)",
+      "placeholder": "Paste your cluster token here",
+      "optional": false
+     },
+     {
+      "name": "CLUSTER_NAME",
+      "description": "Server name shown in the server browser",
+      "placeholder": "My DST Server",
+      "optional": false
+     },
+     {
+      "name": "SHARD_NAME",
+      "description": "Shard name (use Master for single-shard servers)",
+      "placeholder": "Master",
+      "optional": true
+     },
+     {
+      "name": "MAX_PLAYERS",
+      "description": "Maximum players allowed",
+      "placeholder": "6",
+      "optional": true
+     }
+    ],
+    "cpu": 1,
+    "ram": 1500,
+    "hdd": 8
+   }
+  ]
+ },
+ {
+  "name": "Dopex",
+  "displayName": "Dopex",
+  "category": "Front-end",
+  "description": "Host your Dopex.io Frontend on the Flux Cloud",
+  "priceUSD": 2.1,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "dopexui",
+    "description": "The Dopex UI container",
+    "repotag": "runonflux/dopex-site:latest",
+    "ports": [
+     35003
+    ],
+    "containerPorts": [
+     3000
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ },
+ {
+  "name": "DragonWilds",
+  "displayName": "RuneScape: Dragonwilds",
+  "category": "NewGames",
+  "description": "Host your RuneScape: Dragonwilds server on Flux Cloud for a 1-month plan",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "dragonwildsdragonwilds",
+    "description": "dragonwilds",
+    "repotag": "indifferentbroccoli/runescape-dragonwilds-server-docker:latest",
+    "ports": [
+     27777
+    ],
+    "containerPorts": [
+     27777
+    ],
+    "environmentParameters": [
+     "PUID=1000",
+     "PGID=1000",
+     "UPDATE_ON_START=true",
+     "DEFAULT_PORT=27777"
+    ],
+    "commands": [],
+    "containerData": "g:/home/steam/server-files",
+    "userEnvironmentParameters": [
+     {
+      "name": "OWNER_ID",
+      "description": "Your RuneScape: Dragonwilds Player ID (in-game, bottom of the Settings menu). The server will not start without it",
+      "placeholder": "Enter your in-game Player ID",
+      "optional": false
+     },
+     {
+      "name": "SERVER_NAME",
+      "description": "Server display name",
+      "placeholder": "My Dragonwilds Server",
+      "optional": false
+     },
+     {
+      "name": "DEFAULT_WORLD_NAME",
+      "description": "World name - players search for this exact name (case sensitive) in the Public tab of the Worlds screen",
+      "placeholder": "MyWorld",
+      "optional": false
+     },
+     {
+      "name": "ADMIN_PASSWORD",
+      "description": "Password for in-game Server Management access",
+      "placeholder": "Enter admin password",
+      "optional": false
+     },
+     {
+      "name": "WORLD_PASSWORD",
+      "description": "Optional join password. Leave empty for a public world",
+      "placeholder": "Enter join password",
+      "optional": true
+     }
+    ],
+    "cpu": 4,
+    "ram": 8000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "Enshrouded",
+  "displayName": "Enshrouded",
+  "category": "NewGames",
+  "description": "Host your Enshrouded Game Server on Flux Cloud",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "Enshrouded",
+    "description": "Enshrouded",
+    "repotag": "sknnr/enshrouded-dedicated-server:latest",
+    "ports": [
+     15637,
+     27015
+    ],
+    "containerPorts": [
+     15637,
+     27015
+    ],
+    "environmentParameters": [
+     "SERVER_NAME=cloud.runonflux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/home/steam/enshrouded/savegame|f:enshrouded_server.json:/home/steam/enshrouded/enshrouded_server.json",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 5000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "Enshrouded16Slots",
+  "displayName": "Enshrouded - 16 Slots",
+  "category": "Games",
+  "description": "Host your Enshrouded 16 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 19.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "Enshrouded",
+    "description": "Enshrouded Game container",
+    "repotag": "jktuned/enshrouded-server:latest",
+    "ports": [
+     15636,
+     15637
+    ],
+    "containerPorts": [
+     15636,
+     15637
+    ],
+    "environmentParameters": [
+     "SERVER_NAME=Flux Cloud Decentralized Game Server",
+     "SERVER_SLOT_COUNT=16",
+     "UPDATE_CRON=0 2 * * *",
+     "UPDATE_CHECK_PLAYERS=true"
+    ],
+    "commands": [],
+    "containerData": "g:/opt/enshrouded/server/savegame",
+    "userEnvironmentParameters": [],
+    "cpu": 4,
+    "ram": 8000,
+    "hdd": 65
+   }
+  ]
+ },
+ {
+  "name": "Enshrouded4Slots",
+  "displayName": "Enshrouded - 4 Slots",
+  "category": "Games",
+  "description": "Host your Enshrouded 4 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 9.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU",
+   "acAS",
+   "acSA",
+   "acOC",
+   "acAF"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "Enshrouded",
+    "description": "Enshrouded Game container",
+    "repotag": "jktuned/enshrouded-server:latest",
+    "ports": [
+     15636,
+     15637
+    ],
+    "containerPorts": [
+     15636,
+     15637
+    ],
+    "environmentParameters": [
+     "SERVER_NAME=Flux Cloud Decentralized Game Server",
+     "SERVER_SLOT_COUNT=4",
+     "UPDATE_CRON=0 2 * * *",
+     "UPDATE_CHECK_PLAYERS=true"
+    ],
+    "commands": [],
+    "containerData": "g:/opt/enshrouded/server/savegame",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 50
+   }
+  ]
+ },
+ {
+  "name": "Enshrouded8Slots",
+  "displayName": "Enshrouded - 8 Slots",
+  "category": "Games",
+  "description": "Host your Enshrouded 8 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 14.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "Enshrouded",
+    "description": "Enshrouded Game container",
+    "repotag": "jktuned/enshrouded-server:latest",
+    "ports": [
+     15636,
+     15637
+    ],
+    "containerPorts": [
+     15636,
+     15637
+    ],
+    "environmentParameters": [
+     "SERVER_NAME=Flux Cloud Decentralized Game Server",
+     "SERVER_SLOT_COUNT=8",
+     "UPDATE_CRON=0 2 * * *",
+     "UPDATE_CHECK_PLAYERS=true"
+    ],
+    "commands": [],
+    "containerData": "g:/opt/enshrouded/server/savegame",
+    "userEnvironmentParameters": [],
+    "cpu": 3,
+    "ram": 6000,
+    "hdd": 60
+   }
+  ]
+ },
+ {
+  "name": "Factorio",
+  "displayName": "Factorio",
+  "category": "NewGames",
+  "description": "factorio server",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "factorio",
+    "description": "factorio",
+    "repotag": "factoriotools/factorio:latest",
+    "ports": [
+     34197,
+     27015
+    ],
+    "containerPorts": [
+     34197,
+     27015
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/factorio",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 2000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "FactorNode",
+  "displayName": "FACTOR Node",
+  "category": "Blockchain",
+  "description": "Host your FACTOR blockchain node on FluxCloud",
+  "priceUSD": 7.3,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "factornode",
+    "description": "The factor node container",
+    "repotag": "projectfactor/factornode:latest",
+    "ports": [
+     8333,
+     35001
+    ],
+    "containerPorts": [
+     8333,
+     30030
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/data",
+    "userEnvironmentParameters": [],
+    "cpu": 4,
+    "ram": 4000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "FiroMN",
+  "displayName": "Firo Node",
+  "category": "Masternode",
+  "description": "Host your(s) Firo Masternode(s) on the Flux Cloud for a 1-month plan",
+  "priceUSD": 8.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 132000,
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "The Firo Node container",
+    "repotag": "runonflux/fironode:latest",
+    "ports": [
+     8168
+    ],
+    "containerPorts": [
+     8168
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.firo",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 2000,
+    "hdd": 12
+   }
+  ]
+ },
+ {
+  "name": "FiveM",
+  "displayName": "FiveM",
+  "category": "NewGames",
+  "description": "Host your own GTA V FiveM RP server (qbcore/esx/qbox) with txAdmin + MySQL fronted by Flux-Shared-DB (synced across instances). After deploy: open port 40120 for txAdmin and paste your cfxk_* key. DB conn: host=operator port=3307 user=root db=fivem.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "fivem",
+    "description": "FiveM (Cfx.re) server with txAdmin built-in. Port 30120 = game client port (TCP+UDP), 40120 = txAdmin web UI. Connects to MariaDB via 'operator' component (Flux-Shared-DB) at host=operator port=3307 db=fivem — set in txAdmin's Database screen after boot.",
+    "repotag": "spritsail/fivem:latest",
+    "ports": [
+     30120,
+     40120
+    ],
+    "containerPorts": [
+     30120,
+     40120
+    ],
+    "environmentParameters": [
+     "NO_DEFAULT_CONFIG=1",
+     "NO_LICENSE_KEY=1"
+    ],
+    "commands": [],
+    "containerData": "g:/config|m:txdata:/txData",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 6000,
+    "hdd": 15
+   },
+   {
+    "name": "mariadb",
+    "description": "MariaDB 10.6 (LTS) backing store for FiveM. Pinned to 10.6 — MariaDB 10.10+ UCA1400 collations break the mysql2 driver oxmysql uses. Reached only via the Flux-Shared-DB Operator (component 'operator') which keeps it synced across instances.",
+    "repotag": "mariadb:10.6",
+    "ports": [],
+    "containerPorts": [],
+    "environmentParameters": [
+     "MYSQL_DATABASE=fivem",
+     "MYSQL_ROOT_HOST=172.0.0.0/255.0.0.0"
+    ],
+    "commands": [
+     "--disable-log-bin"
+    ],
+    "containerData": "/var/lib/mysql",
+    "userEnvironmentParameters": [
+     {
+      "name": "MYSQL_ROOT_PASSWORD",
+      "description": "MySQL root password. The Flux-Shared-DB Operator and your RP framework (qbcore/esx/qbox) both authenticate with this password. MUST match the value you enter for DB_INIT_PASS on the operator component. Use a strong random password (16+ chars).",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   },
+   {
+    "name": "operator",
+    "description": "Flux-Shared-DB Operator. Exposes MySQL at hostname operator port 3307 (enter manually under txAdmin's Database options). Replicates writes across all your FiveM instances on the Flux network.",
+    "repotag": "runonflux/shared-db:latest",
+    "ports": [
+     13307,
+     17071,
+     18008
+    ],
+    "containerPorts": [
+     3307,
+     7071,
+     8008
+    ],
+    "environmentParameters": [
+     "DB_COMPONENT_NAME=mariadb",
+     "INIT_DB_NAME=fivem",
+     "DB_USER=root",
+     "DB_PORT=13307",
+     "API_PORT=17071",
+     "AUTH_MASTER_ONLY=false",
+     "CLIENT_TYPE=mariadb"
+    ],
+    "commands": [],
+    "containerData": "s:/app/dumps",
+    "userEnvironmentParameters": [
+     {
+      "name": "DB_INIT_PASS",
+      "description": "Operator's auth password to MySQL. MUST match the value you enter for MYSQL_ROOT_PASSWORD on the mariadb component.",
+      "placeholder": "Same value as MYSQL_ROOT_PASSWORD",
+      "optional": false
+     }
+    ],
+    "cpu": 0.5,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ },
+ {
+  "name": "FoldingAtFluxCloud",
+  "displayName": "Folding@Home",
+  "category": "Productivity",
+  "description": "PoUW at Flux layer 2 network. Folding@home is a project focused on disease research. Client Visit was disabled, to check Run On Flux team stats go to https://stats.foldingathome.org/team/262156",
+  "priceUSD": 2.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "FoldingAtHome",
+    "description": "Folding @ Home for AMD64 Devices.",
+    "repotag": "yurinnick/folding-at-home:latest",
+    "ports": [
+     35555
+    ],
+    "containerPorts": [
+     7396
+    ],
+    "environmentParameters": [
+     "TEAM=262156"
+    ],
+    "commands": [],
+    "containerData": "/config",
+    "userEnvironmentParameters": [
+     {
+      "name": "USER",
+      "description": "Type the username that you want to be folding to",
+      "placeholder": "Your Folding Username",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 700,
+    "hdd": 3
+   }
+  ]
+ },
+ {
+  "name": "GarrysMod",
+  "displayName": "Garry's Mod",
+  "category": "NewGames",
+  "description": "Host TTT, DarkRP, Prop Hunt, or any gamemode your community can invent.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "garrysmodgarrysmod",
+    "description": "garrysmod",
+    "repotag": "ich777/steamcmd:garrysmod",
+    "ports": [
+     27015,
+     27005
+    ],
+    "containerPorts": [
+     27015,
+     27005
+    ],
+    "environmentParameters": [
+     "GAME_ID=4020",
+     "GAME_NAME=garrysmod",
+     "VALIDATE=true",
+     "DATA_PERM=777"
+    ],
+    "commands": [],
+    "containerData": "g:/serverdata/serverfiles",
+    "userEnvironmentParameters": [
+     {
+      "name": "GAME_PARAMS",
+      "description": "Server launch parameters",
+      "placeholder": "+maxplayers 24 +gamemode sandbox",
+      "optional": true
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 2000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Gmx",
+  "displayName": "Gmx",
+  "category": "Front-end",
+  "description": "Host your GMX.io Frontend on the Flux Cloud",
+  "priceUSD": 3.16,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "gmxui",
+    "description": "The GMX UI container",
+    "repotag": "runonflux/gmx-interface:latest",
+    "ports": [
+     35002
+    ],
+    "containerPorts": [
+     3000
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ },
+ {
+  "name": "HermesAgent",
+  "displayName": "Hermes Agent",
+  "category": "Productivity",
+  "description": "Deploy Hermes Agent, the self-improving AI agent by Nous Research, on Flux Cloud (4GB RAM). Password-protected dashboard, built-in Tailscale to reach your private network, and bring your own AI provider key (OpenRouter, OpenAI, Anthropic & more).",
+  "priceUSD": 4.02,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "hermes",
+    "description": "Hermes Agent container",
+    "repotag": "runonflux/hermes-tailscale:latest",
+    "ports": [
+     38080,
+     38642
+    ],
+    "containerPorts": [
+     8080,
+     8642
+    ],
+    "environmentParameters": [
+     "HERMES_DASHBOARD=1",
+     "HERMES_DASHBOARD_HOST=0.0.0.0",
+     "HERMES_ALLOW_ROOT_GATEWAY=1",
+     "API_SERVER_ENABLED=true",
+     "API_SERVER_HOST=0.0.0.0",
+     "API_SERVER_CORS_ORIGINS=*"
+    ],
+    "commands": [
+     "gateway",
+     "run"
+    ],
+    "containerData": "g:/opt/data",
+    "userEnvironmentParameters": [
+     {
+      "name": "DASHBOARD_USERNAME",
+      "description": "Username for the Hermes dashboard login (required)",
+      "placeholder": "admin",
+      "optional": false
+     },
+     {
+      "name": "DASHBOARD_PASSWORD",
+      "description": "Password for the Hermes dashboard login (required)",
+      "placeholder": "Choose a strong password",
+      "optional": false
+     },
+     {
+      "name": "API_SERVER_KEY",
+      "description": "API key / bearer token for the OpenAI-compatible API server (required). Use this as the API key in external clients such as Open WebUI or scripts.",
+      "placeholder": "Choose a strong API key",
+      "optional": false
+     },
+     {
+      "name": "TAILSCALE_AUTHKEY",
+      "description": "Tailscale auth key — lets the agent reach private services on your tailnet (optional - leave empty to skip Tailscale)",
+      "placeholder": "tskey-auth-...",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_HOSTNAME",
+      "description": "Hostname for this device on your Tailscale network (optional - leave empty to skip Tailscale)",
+      "placeholder": "hermesflux",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_EXTRA_ARGS",
+      "description": "Additional arguments for tailscale up (e.g. --advertise-tags=tag:server) (optional - leave empty to skip Tailscale)",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "HermesAgentPro",
+  "displayName": "Hermes Agent Pro",
+  "category": "Productivity",
+  "description": "Deploy Hermes Agent, the self-improving AI agent by Nous Research, on Flux Cloud — Pro (8GB RAM). Password-protected dashboard, built-in Tailscale to reach your private network, and bring your own AI provider key (OpenRouter, OpenAI, Anthropic & more).",
+  "priceUSD": 7.49,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "hermes",
+    "description": "Hermes Agent container",
+    "repotag": "runonflux/hermes-tailscale:latest",
+    "ports": [
+     38080,
+     38642
+    ],
+    "containerPorts": [
+     8080,
+     8642
+    ],
+    "environmentParameters": [
+     "HERMES_DASHBOARD=1",
+     "HERMES_DASHBOARD_HOST=0.0.0.0",
+     "HERMES_ALLOW_ROOT_GATEWAY=1",
+     "API_SERVER_ENABLED=true",
+     "API_SERVER_HOST=0.0.0.0",
+     "API_SERVER_CORS_ORIGINS=*"
+    ],
+    "commands": [
+     "gateway",
+     "run"
+    ],
+    "containerData": "g:/opt/data",
+    "userEnvironmentParameters": [
+     {
+      "name": "DASHBOARD_USERNAME",
+      "description": "Username for the Hermes dashboard login (required)",
+      "placeholder": "admin",
+      "optional": false
+     },
+     {
+      "name": "DASHBOARD_PASSWORD",
+      "description": "Password for the Hermes dashboard login (required)",
+      "placeholder": "Choose a strong password",
+      "optional": false
+     },
+     {
+      "name": "API_SERVER_KEY",
+      "description": "API key / bearer token for the OpenAI-compatible API server (required). Use this as the API key in external clients such as Open WebUI or scripts.",
+      "placeholder": "Choose a strong API key",
+      "optional": false
+     },
+     {
+      "name": "TAILSCALE_AUTHKEY",
+      "description": "Tailscale auth key — lets the agent reach private services on your tailnet (optional - leave empty to skip Tailscale)",
+      "placeholder": "tskey-auth-...",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_HOSTNAME",
+      "description": "Hostname for this device on your Tailscale network (optional - leave empty to skip Tailscale)",
+      "placeholder": "hermesflux",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_EXTRA_ARGS",
+      "description": "Additional arguments for tailscale up (e.g. --advertise-tags=tag:server) (optional - leave empty to skip Tailscale)",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 4,
+    "ram": 8000,
+    "hdd": 80
+   }
+  ]
+ },
+ {
+  "name": "IronFishNode",
+  "displayName": "IronFIshNode",
+  "category": "Blockchain",
+  "description": "An IronFish Full Node",
+  "priceUSD": 11,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "ironfishnode",
+    "description": "The IronFish Node Container",
+    "repotag": "runonflux/iron-fish:latest",
+    "ports": [
+     39010
+    ],
+    "containerPorts": [
+     9033
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.ironfish",
+    "userEnvironmentParameters": [],
+    "cpu": 4,
+    "ram": 8000,
+    "hdd": 50
+   }
+  ]
+ },
+ {
+  "name": "KadenaNode",
+  "displayName": "Kadena Chainweb Node",
+  "category": "Blockchain",
+  "description": "Kadena Chainweb Node with compacted database (~44GB). Includes web dashboard for monitoring. Uses snapshots from chainweb-community.org. Suitable for mining and API access. Initial bootstrap ~15 minutes.",
+  "priceUSD": 15,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "chainweb",
+    "description": "Kadena Chainweb Node v3.0.1. Dashboard (31350), Service API (31351), P2P (31352).",
+    "repotag": "runonflux/kadena-chainweb-node:fluxcloud-compacted",
+    "ports": [
+     31350,
+     31351,
+     31352
+    ],
+    "containerPorts": [
+     31350,
+     31351,
+     31352
+    ],
+    "environmentParameters": [
+     "DASHBOARD_PORT=31350",
+     "CHAINWEB_SERVICE_PORT=31351",
+     "CHAINWEB_P2P_PORT=31352",
+     "LOGLEVEL=warn"
+    ],
+    "commands": [],
+    "containerData": "/data",
+    "userEnvironmentParameters": [],
+    "cpu": 4,
+    "ram": 4000,
+    "hdd": 80
+   }
+  ]
+ },
+ {
+  "name": "KaspaNode16GB",
+  "displayName": "Kaspa Node 16GB RAM",
+  "category": "Blockchain",
+  "description": "Host your Kaspa Node on FluxCloud with 16GB RAM",
+  "priceUSD": 27.2,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "kaspad",
+    "description": "The Kaspad Container",
+    "repotag": "kaspanet/rusty-kaspad:latest",
+    "ports": [
+     15110,
+     15111,
+     17110,
+     18110
+    ],
+    "containerPorts": [
+     15110,
+     15111,
+     17110,
+     18110
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "kaspad",
+     "--yes",
+     "--nologfiles",
+     "--disable-upnp",
+     "--utxoindex",
+     "--listen=0.0.0.0:15111",
+     "--rpclisten=0.0.0.0:15110",
+     "--rpclisten-borsh=0.0.0.0:17110",
+     "--rpclisten-json=0.0.0.0:18110",
+     "--ram-scale=0.8",
+     "--uacomment=FluxCloud"
+    ],
+    "containerData": "/app/data",
+    "userEnvironmentParameters": [],
+    "cpu": 8,
+    "ram": 16000,
+    "hdd": 256
+   }
+  ]
+ },
+ {
+  "name": "KaspaNode24GB",
+  "displayName": "Kaspa Node 24GB RAM",
+  "category": "Blockchain",
+  "description": "Host your Kaspa Node on FluxCloud with 24GB RAM",
+  "priceUSD": 31.2,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "kaspad",
+    "description": "The Kaspad Container",
+    "repotag": "kaspanet/rusty-kaspad:latest",
+    "ports": [
+     15110,
+     15111,
+     17110,
+     18110
+    ],
+    "containerPorts": [
+     15110,
+     15111,
+     17110,
+     18110
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "kaspad",
+     "--yes",
+     "--nologfiles",
+     "--disable-upnp",
+     "--utxoindex",
+     "--listen=0.0.0.0:15111",
+     "--rpclisten=0.0.0.0:15110",
+     "--rpclisten-borsh=0.0.0.0:17110",
+     "--rpclisten-json=0.0.0.0:18110",
+     "--uacomment=FluxCloud"
+    ],
+    "containerData": "/app/data",
+    "userEnvironmentParameters": [],
+    "cpu": 8,
+    "ram": 24000,
+    "hdd": 256
+   }
+  ]
+ },
+ {
+  "name": "KaspaTestnet16GB",
+  "displayName": "Kaspa Testnet Node 16GB RAM",
+  "category": "Blockchain",
+  "description": "Host your Kaspa Testnet Node on FluxCloud with 16GB RAM",
+  "priceUSD": 27.2,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "kaspad",
+    "description": "The Kaspad Container",
+    "repotag": "kaspanet/rusty-kaspad:latest",
+    "ports": [
+     15210,
+     15211,
+     17210,
+     18210
+    ],
+    "containerPorts": [
+     15210,
+     15211,
+     17210,
+     18210
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "kaspad",
+     "--yes",
+     "--nologfiles",
+     "--disable-upnp",
+     "--utxoindex",
+     "--testnet",
+     "--listen=0.0.0.0:15211",
+     "--rpclisten=0.0.0.0:15210",
+     "--rpclisten-borsh=0.0.0.0:17210",
+     "--rpclisten-json=0.0.0.0:18210",
+     "--ram-scale=0.8",
+     "--uacomment=FluxCloud"
+    ],
+    "containerData": "/app/data",
+    "userEnvironmentParameters": [],
+    "cpu": 8,
+    "ram": 16000,
+    "hdd": 256
+   }
+  ]
+ },
+ {
+  "name": "KaspaTestnet24GB",
+  "displayName": "Kaspa Testnet Node 24GB RAM",
+  "category": "Blockchain",
+  "description": "Host your Kaspa Testnet Node on FluxCloud with 24GB RAM",
+  "priceUSD": 31.2,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "kaspad",
+    "description": "The Kaspad Container",
+    "repotag": "kaspanet/rusty-kaspad:latest",
+    "ports": [
+     15210,
+     15211,
+     17210,
+     18210
+    ],
+    "containerPorts": [
+     15210,
+     15211,
+     17210,
+     18210
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "kaspad",
+     "--yes",
+     "--nologfiles",
+     "--disable-upnp",
+     "--utxoindex",
+     "--testnet",
+     "--listen=0.0.0.0:15211",
+     "--rpclisten=0.0.0.0:15210",
+     "--rpclisten-borsh=0.0.0.0:17210",
+     "--rpclisten-json=0.0.0.0:18210",
+     "--uacomment=FluxCloud"
+    ],
+    "containerData": "/app/data",
+    "userEnvironmentParameters": [],
+    "cpu": 8,
+    "ram": 24000,
+    "hdd": 256
+   }
+  ]
+ },
+ {
+  "name": "KusamaNode",
+  "displayName": "KusamaNode",
+  "category": "Blockchain",
+  "description": "Host your Kusama Node on the Flux Network",
+  "priceUSD": 2.5,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "kusamanode",
+    "description": "The Kusama Node container",
+    "repotag": "runonflux/polkadot-docker:latest",
+    "ports": [
+     33204,
+     33205,
+     33206
+    ],
+    "containerPorts": [
+     30333,
+     9933,
+     9944
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "--chain",
+     "kusama"
+    ],
+    "containerData": "/chaindata",
+    "userEnvironmentParameters": [],
+    "cpu": 0.8,
+    "ram": 1800,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "Minecraft16GB",
+  "displayName": "Minecraft16GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Java Minecraft 16GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 24.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=16000M",
+     "INIT_MEMORY=2G",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 16000,
+    "hdd": 75
+   }
+  ]
+ },
+ {
+  "name": "Minecraft1GB",
+  "displayName": "Minecraft1GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Java Minecraft 1GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 2.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=1000M",
+     "INIT_MEMORY=512M",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 1.4000000000000001,
+    "ram": 1000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "Minecraft2GB",
+  "displayName": "Minecraft2GB",
+  "category": "Games",
+  "description": "Host your PUBLIC  Java Minecraft 2GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 4.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=2000M",
+     "INIT_MEMORY=1G",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 1.5000000000000002,
+    "ram": 2000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "Minecraft32GB",
+  "displayName": "Minecraft32GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Java Minecraft 32GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 44.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=32000M",
+     "INIT_MEMORY=2G",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 32000,
+    "hdd": 100
+   }
+  ]
+ },
+ {
+  "name": "Minecraft48GB",
+  "displayName": "Minecraft48GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Java Minecraft 48GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 69.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=48000M",
+     "INIT_MEMORY=2G",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 48000,
+    "hdd": 150
+   }
+  ]
+ },
+ {
+  "name": "Minecraft5GB",
+  "displayName": "Minecraft5GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Java Minecraft 5GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 9.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=5G",
+     "INIT_MEMORY=1G",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 5000,
+    "hdd": 30
+   }
+  ]
+ },
+ {
+  "name": "Minecraft9GB",
+  "displayName": "Minecraft9GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Java Minecraft 9GB Vanilla Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 14.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftserver",
+    "description": "The Minecraft Server container",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=TRUE",
+     "MAX_MEMORY=5G",
+     "INIT_MEMORY=2G",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 9000,
+    "hdd": 60
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock16GB",
+  "displayName": "MinecraftBedrock16GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 16GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 24.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 16000,
+    "hdd": 75
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock1GB",
+  "displayName": "MinecraftBedrock1GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 1GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 2.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 1.4,
+    "ram": 1000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock2GB",
+  "displayName": "MinecraftBedrock2GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 2GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 4.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 1.5,
+    "ram": 2000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock32GB",
+  "displayName": "MinecraftBedrock32GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 32GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 44.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 32000,
+    "hdd": 100
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock48GB",
+  "displayName": "MinecraftBedrock48GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 48GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 69.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 48000,
+    "hdd": 150
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock5GB",
+  "displayName": "MinecraftBedrock5GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 5GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 9.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 5000,
+    "hdd": 30
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrock9GB",
+  "displayName": "MinecraftBedrock9GB",
+  "category": "Games",
+  "description": "Host your PUBLIC Minecraft Bedrock 9GB Game Server on Flux Cloud for a one month plan",
+  "priceUSD": 14.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrockserver",
+    "description": "The Minecraft Bedrock Server container",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com",
+     "GAMEMODE=survival",
+     "DIFFICULTY=normal"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 9000,
+    "hdd": 60
+   }
+  ]
+ },
+ {
+  "name": "MinecraftBedrockServer",
+  "displayName": "Minecraft Bedrock",
+  "category": "NewGames",
+  "description": "",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraftbedrock",
+    "description": "minecraft bedrock server",
+    "repotag": "itzg/minecraft-bedrock-server:latest",
+    "ports": [
+     19132
+    ],
+    "containerPorts": [
+     19132
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [
+     {
+      "name": "DIFFICULTY",
+      "description": "DIFFICULTY",
+      "placeholder": "normal",
+      "optional": true
+     },
+     {
+      "name": "GAMEMODE",
+      "description": "GAMEMODE",
+      "placeholder": "survival",
+      "optional": true
+     },
+     {
+      "name": "ALLOW_CHEATS",
+      "description": "ALLOW_CHEATS",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "ONLINE_MODE",
+      "description": "ONLINE_MODE",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "DEFAULT_PLAYER_PERMISSION_LEVEL",
+      "description": "DEFAULT_PLAYER_PERMISSION_LEVEL",
+      "placeholder": "member",
+      "optional": true
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 2000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "MinecraftServer",
+  "displayName": "Minecraft",
+  "category": "NewGames",
+  "description": "",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "minecraft",
+    "description": "minecraft server",
+    "repotag": "itzg/minecraft-server:latest",
+    "ports": [
+     25565
+    ],
+    "containerPorts": [
+     25565
+    ],
+    "environmentParameters": [
+     "EULA=TRUE",
+     "ENABLE_ROLLING_LOGS=true",
+     "SERVER_NAME=RunOnFlux.com"
+    ],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [
+     {
+      "name": "TYPE",
+      "description": "Server software, and what it can load. VANILLA is unmodified Minecraft and accepts no mods or plugins. PAPER and PURPUR run plugins (PURPUR is PAPER plus extra gameplay settings). FABRIC, QUILT, FORGE and NEOFORGE run mods: pick the one your mods are built for, they are not interchangeable. Anything other than VANILLA needs at least the 4GB plan.",
+      "placeholder": "Vanilla",
+      "optional": false
+     },
+     {
+      "name": "VERSION",
+      "description": "Minecraft version. LATEST auto-updates on restart; any specific version locks the server (required for modded servers). Mojang moved to year-based numbering in 2026: 26.x releases follow the 1.21.x line.",
+      "placeholder": "LATEST",
+      "optional": true
+     },
+     {
+      "name": "DIFFICULTY",
+      "description": "DIFFICULTY",
+      "placeholder": "normal",
+      "optional": true
+     },
+     {
+      "name": "ENABLE_COMMAND_BLOCK",
+      "description": "ENABLE_COMMAND_BLOCK",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "HARDCORE",
+      "description": "HARDCORE",
+      "placeholder": "HARDCORE",
+      "optional": true
+     },
+     {
+      "name": "SPAWN_MONSTERS",
+      "description": "SPAWN_MONSTERS",
+      "placeholder": "SPAWN_MONSTERS",
+      "optional": true
+     },
+     {
+      "name": "MODE",
+      "description": "MODE",
+      "placeholder": "MODE",
+      "optional": true
+     },
+     {
+      "name": "PVP",
+      "description": "PVP",
+      "placeholder": "PVP",
+      "optional": true
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 2000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "N8NPro",
+  "displayName": "n8n Pro",
+  "category": "Productivity",
+  "description": "Self-hosted n8n workflow automation on a high-availability PostgreSQL cluster (auto-failover, 3 nodes) — n8n 4GB + HA PostgreSQL 2GB · 4 CPU · 35GB SSD. Build AI agents and connect 500+ apps. Web UI on port 35678.",
+  "priceUSD": 9.87,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "n8n",
+    "description": "n8n workflow automation platform. Web UI on port 35678. Connects to the HA PostgreSQL cluster through its primary-routing proxy at host=pgcluster port=5433 db=n8n (always reaches the current primary, even after a failover).",
+    "repotag": "n8nio/n8n:latest",
+    "ports": [
+     35678
+    ],
+    "containerPorts": [
+     5678
+    ],
+    "environmentParameters": [
+     "DB_TYPE=postgresdb",
+     "DB_POSTGRESDB_HOST=pgcluster",
+     "DB_POSTGRESDB_PORT=5433",
+     "DB_POSTGRESDB_DATABASE=n8n",
+     "DB_POSTGRESDB_USER=postgres",
+     "N8N_SECURE_COOKIE=false",
+     "EXECUTIONS_DATA_PRUNE=true",
+     "EXECUTIONS_DATA_MAX_AGE=336"
+    ],
+    "commands": [],
+    "containerData": "g:/home/node/.n8n",
+    "userEnvironmentParameters": [
+     {
+      "name": "DB_POSTGRESDB_PASSWORD",
+      "description": "Database password n8n uses to connect to PostgreSQL. MUST match the value you enter for POSTGRES_SUPERUSER_PASSWORD on the pgcluster component. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Same value as POSTGRES_SUPERUSER_PASSWORD",
+      "optional": false
+     }
+    ],
+    "cpu": 2.5,
+    "ram": 4000,
+    "hdd": 10
+   },
+   {
+    "name": "pgcluster",
+    "description": "Highly-available PostgreSQL 14 cluster (Patroni + etcd) with streaming replication and automatic failover across all instances. A built-in proxy on port 5433 always routes to the current primary, so n8n connects at host=pgcluster port=5433.",
+    "repotag": "runonflux/flux-pg-cluster:latest",
+    "ports": [
+     15432,
+     15433,
+     18008,
+     12379,
+     12380
+    ],
+    "containerPorts": [
+     5432,
+     5433,
+     8008,
+     2379,
+     2380
+    ],
+    "environmentParameters": [
+     "HOST_POSTGRES_PORT=15432",
+     "HOST_PROXY_PORT=15433",
+     "HOST_PATRONI_API_PORT=18008",
+     "HOST_ETCD_CLIENT_PORT=12379",
+     "HOST_ETCD_PEER_PORT=12380",
+     "POSTGRES_DB=n8n",
+     "SSL_ENABLED=true",
+     "ALLOW_NEW_CLUSTER_BOOTSTRAP=false",
+     "AUTO_BOOTSTRAP_IF_FRESH=true",
+     "ALLOW_PG_DATA_WIPE=false"
+    ],
+    "commands": [],
+    "containerData": "/var/lib/postgresql/data|m:etcd:/var/lib/etcd",
+    "userEnvironmentParameters": [
+     {
+      "name": "POSTGRES_SUPERUSER_PASSWORD",
+      "description": "PostgreSQL superuser password. MUST match the value you enter for DB_POSTGRESDB_PASSWORD on the n8n component. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     },
+     {
+      "name": "POSTGRES_REPLICATION_PASSWORD",
+      "description": "Password PostgreSQL replicas use for streaming replication between your instances. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     },
+     {
+      "name": "SSL_PASSPHRASE",
+      "description": "Passphrase used to generate the SSL certificates that encrypt replication traffic between your instances. Use a strong random passphrase (16+ chars).",
+      "placeholder": "Strong random passphrase (16+ chars)",
+      "optional": false
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 2000,
+    "hdd": 25
+   }
+  ]
+ },
+ {
+  "name": "N8NStandard",
+  "displayName": "n8n Standard",
+  "category": "Productivity",
+  "description": "Self-hosted n8n workflow automation on a high-availability PostgreSQL cluster (auto-failover, 3 nodes) — n8n 2GB + HA PostgreSQL 1GB · 2.5 CPU · 25GB SSD. Build AI agents and connect 500+ apps. Web UI on port 35678.",
+  "priceUSD": 6.24,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "n8n",
+    "description": "n8n workflow automation platform. Web UI on port 35678. Connects to the HA PostgreSQL cluster through its primary-routing proxy at host=pgcluster port=5433 db=n8n (always reaches the current primary, even after a failover).",
+    "repotag": "n8nio/n8n:latest",
+    "ports": [
+     35678
+    ],
+    "containerPorts": [
+     5678
+    ],
+    "environmentParameters": [
+     "DB_TYPE=postgresdb",
+     "DB_POSTGRESDB_HOST=pgcluster",
+     "DB_POSTGRESDB_PORT=5433",
+     "DB_POSTGRESDB_DATABASE=n8n",
+     "DB_POSTGRESDB_USER=postgres",
+     "N8N_SECURE_COOKIE=false",
+     "EXECUTIONS_DATA_PRUNE=true",
+     "EXECUTIONS_DATA_MAX_AGE=336"
+    ],
+    "commands": [],
+    "containerData": "g:/home/node/.n8n",
+    "userEnvironmentParameters": [
+     {
+      "name": "DB_POSTGRESDB_PASSWORD",
+      "description": "Database password n8n uses to connect to PostgreSQL. MUST match the value you enter for POSTGRES_SUPERUSER_PASSWORD on the pgcluster component. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Same value as POSTGRES_SUPERUSER_PASSWORD",
+      "optional": false
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 2000,
+    "hdd": 10
+   },
+   {
+    "name": "pgcluster",
+    "description": "Highly-available PostgreSQL 14 cluster (Patroni + etcd) with streaming replication and automatic failover across all instances. A built-in proxy on port 5433 always routes to the current primary, so n8n connects at host=pgcluster port=5433.",
+    "repotag": "runonflux/flux-pg-cluster:latest",
+    "ports": [
+     15432,
+     15433,
+     18008,
+     12379,
+     12380
+    ],
+    "containerPorts": [
+     5432,
+     5433,
+     8008,
+     2379,
+     2380
+    ],
+    "environmentParameters": [
+     "HOST_POSTGRES_PORT=15432",
+     "HOST_PROXY_PORT=15433",
+     "HOST_PATRONI_API_PORT=18008",
+     "HOST_ETCD_CLIENT_PORT=12379",
+     "HOST_ETCD_PEER_PORT=12380",
+     "POSTGRES_DB=n8n",
+     "SSL_ENABLED=true",
+     "ALLOW_NEW_CLUSTER_BOOTSTRAP=false",
+     "AUTO_BOOTSTRAP_IF_FRESH=true",
+     "ALLOW_PG_DATA_WIPE=false"
+    ],
+    "commands": [],
+    "containerData": "/var/lib/postgresql/data|m:etcd:/var/lib/etcd",
+    "userEnvironmentParameters": [
+     {
+      "name": "POSTGRES_SUPERUSER_PASSWORD",
+      "description": "PostgreSQL superuser password. MUST match the value you enter for DB_POSTGRESDB_PASSWORD on the n8n component. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     },
+     {
+      "name": "POSTGRES_REPLICATION_PASSWORD",
+      "description": "Password PostgreSQL replicas use for streaming replication between your instances. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     },
+     {
+      "name": "SSL_PASSPHRASE",
+      "description": "Passphrase used to generate the SSL certificates that encrypt replication traffic between your instances. Use a strong random passphrase (16+ chars).",
+      "placeholder": "Strong random passphrase (16+ chars)",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "N8NStarter",
+  "displayName": "n8n Starter",
+  "category": "Productivity",
+  "description": "Self-hosted n8n workflow automation on a high-availability PostgreSQL cluster (auto-failover, 3 nodes) — n8n 1GB + HA PostgreSQL 1GB · 2 CPU · 15GB SSD. Build AI agents and connect 500+ apps. Web UI on port 35678.",
+  "priceUSD": 5.32,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "n8n",
+    "description": "n8n workflow automation platform. Web UI on port 35678. Connects to the HA PostgreSQL cluster through its primary-routing proxy at host=pgcluster port=5433 db=n8n (always reaches the current primary, even after a failover).",
+    "repotag": "n8nio/n8n:latest",
+    "ports": [
+     35678
+    ],
+    "containerPorts": [
+     5678
+    ],
+    "environmentParameters": [
+     "DB_TYPE=postgresdb",
+     "DB_POSTGRESDB_HOST=pgcluster",
+     "DB_POSTGRESDB_PORT=5433",
+     "DB_POSTGRESDB_DATABASE=n8n",
+     "DB_POSTGRESDB_USER=postgres",
+     "N8N_SECURE_COOKIE=false",
+     "EXECUTIONS_DATA_PRUNE=true",
+     "EXECUTIONS_DATA_MAX_AGE=336"
+    ],
+    "commands": [],
+    "containerData": "g:/home/node/.n8n",
+    "userEnvironmentParameters": [
+     {
+      "name": "DB_POSTGRESDB_PASSWORD",
+      "description": "Database password n8n uses to connect to PostgreSQL. MUST match the value you enter for POSTGRES_SUPERUSER_PASSWORD on the pgcluster component. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Same value as POSTGRES_SUPERUSER_PASSWORD",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   },
+   {
+    "name": "pgcluster",
+    "description": "Highly-available PostgreSQL 14 cluster (Patroni + etcd) with streaming replication and automatic failover across all instances. A built-in proxy on port 5433 always routes to the current primary, so n8n connects at host=pgcluster port=5433.",
+    "repotag": "runonflux/flux-pg-cluster:latest",
+    "ports": [
+     15432,
+     15433,
+     18008,
+     12379,
+     12380
+    ],
+    "containerPorts": [
+     5432,
+     5433,
+     8008,
+     2379,
+     2380
+    ],
+    "environmentParameters": [
+     "HOST_POSTGRES_PORT=15432",
+     "HOST_PROXY_PORT=15433",
+     "HOST_PATRONI_API_PORT=18008",
+     "HOST_ETCD_CLIENT_PORT=12379",
+     "HOST_ETCD_PEER_PORT=12380",
+     "POSTGRES_DB=n8n",
+     "SSL_ENABLED=true",
+     "ALLOW_NEW_CLUSTER_BOOTSTRAP=false",
+     "AUTO_BOOTSTRAP_IF_FRESH=true",
+     "ALLOW_PG_DATA_WIPE=false"
+    ],
+    "commands": [],
+    "containerData": "/var/lib/postgresql/data|m:etcd:/var/lib/etcd",
+    "userEnvironmentParameters": [
+     {
+      "name": "POSTGRES_SUPERUSER_PASSWORD",
+      "description": "PostgreSQL superuser password. MUST match the value you enter for DB_POSTGRESDB_PASSWORD on the n8n component. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     },
+     {
+      "name": "POSTGRES_REPLICATION_PASSWORD",
+      "description": "Password PostgreSQL replicas use for streaming replication between your instances. Use a strong random password (16+ chars). Do not use the $ character.",
+      "placeholder": "Strong random password (16+ chars)",
+      "optional": false
+     },
+     {
+      "name": "SSL_PASSPHRASE",
+      "description": "Passphrase used to generate the SSL certificates that encrypt replication traffic between your instances. Use a strong random passphrase (16+ chars).",
+      "placeholder": "Strong random passphrase (16+ chars)",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Neoxa",
+  "displayName": "Neoxa",
+  "category": "Masternode",
+  "description": "Host your Neoxa Masternode on the Flux Cloud",
+  "priceUSD": 5,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "",
+    "repotag": "runonflux/neoxa-node:latest",
+    "ports": [
+     8788
+    ],
+    "containerPorts": [
+     8788
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.neoxacore",
+    "userEnvironmentParameters": [
+     {
+      "name": "KEY",
+      "description": "Smartnode operator BLS private key",
+      "placeholder": "Enter your operator BLS private key",
+      "optional": false
+     },
+     {
+      "name": "PROTXHASH",
+      "description": "Your smartnode registration hash (proTxHash). Enables automatic on-chain IP updates so the node is never PoSe-banned after a relocation.",
+      "placeholder": "Enter your proTxHash",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "NextcloudLite",
+  "displayName": "Nextcloud Lite",
+  "category": "Productivity",
+  "description": "Nextcloud Lite — a private cloud sized for one user. Perfect for phone photo backup, personal documents, calendar, and contacts. Powered by the bundled SQLite database. Upgrade to Nextcloud Personal when you need more storage or want to share with family.",
+  "priceUSD": 3,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "nextcloudlite",
+    "description": "Nextcloud Lite container",
+    "repotag": "nextcloud:33-apache",
+    "ports": [
+     33081
+    ],
+    "containerPorts": [
+     80
+    ],
+    "environmentParameters": [
+     "OVERWRITEPROTOCOL=https",
+     "TRUSTED_PROXIES=172.16.0.0/12 10.0.0.0/8 192.168.0.0/16"
+    ],
+    "commands": [],
+    "containerData": "g:/var/www/html",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 2000,
+    "hdd": 25
+   }
+  ]
+ },
+ {
+  "name": "NextcloudPersonal",
+  "displayName": "Nextcloud Personal",
+  "category": "Productivity",
+  "description": "Nextcloud Personal — your own private cloud for up to 5 users. Includes file sync, photo backup, calendar, contacts, and notes. Powered by the bundled SQLite database. Best for households or small teams who need shared storage and collaboration.",
+  "priceUSD": 5.02,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "nextcloudpersonal",
+    "description": "Nextcloud container",
+    "repotag": "nextcloud:33-apache",
+    "ports": [
+     33080
+    ],
+    "containerPorts": [
+     80
+    ],
+    "environmentParameters": [
+     "OVERWRITEPROTOCOL=https",
+     "TRUSTED_PROXIES=172.16.0.0/12 10.0.0.0/8 192.168.0.0/16"
+    ],
+    "commands": [],
+    "containerData": "g:/var/www/html",
+    "userEnvironmentParameters": [],
+    "cpu": 2.5,
+    "ram": 4000,
+    "hdd": 100
+   }
+  ]
+ },
+ {
+  "name": "OpenClaw",
+  "displayName": "OpenClaw AI Assistant",
+  "category": "Productivity",
+  "description": "OpenClaw is a personal AI assistant you run on your own hardware. Privacy-focused, local-first, with 20+ messaging integrations (WhatsApp, Telegram, Slack, Discord, Signal, Matrix), voice, browser automation and webhooks.",
+  "priceUSD": 4.02,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "OpenClaw",
+    "description": "OpenClaw personal AI assistant - self-hosted, privacy-focused multi-channel AI",
+    "repotag": "runonflux/openclaw-tailscale:latest",
+    "ports": [
+     18789
+    ],
+    "containerPorts": [
+     18789
+    ],
+    "environmentParameters": [
+     "OPENCLAW_GATEWAY_BIND=lan",
+     "OPENCLAW_GATEWAY_PORT=18789",
+     "OPENCLAW_CONFIG_DIR=/home/node/.openclaw",
+     "OPENCLAW_WORKSPACE_DIR=/home/node/.openclaw/workspace",
+     "NODE_OPTIONS=--max-old-space-size=2048"
+    ],
+    "commands": [
+     "sh",
+     "-c",
+     "[ -f /home/node/.openclaw/openclaw.json ] || echo '{\"gateway\":{\"mode\":\"local\",\"controlUi\":{\"dangerouslyAllowHostHeaderOriginFallback\":true,\"allowInsecureAuth\":true}}}' > /home/node/.openclaw/openclaw.json; /start.sh gateway --allow-unconfigured --bind lan --port 18789"
+    ],
+    "containerData": "g:/home/node/.openclaw",
+    "userEnvironmentParameters": [
+     {
+      "name": "OPENCLAW_GATEWAY_PASSWORD",
+      "description": "Password to protect the OpenClaw gateway web UI (required)",
+      "placeholder": "choose a strong password",
+      "optional": false
+     },
+     {
+      "name": "TAILSCALE_AUTHKEY",
+      "description": "Tailscale auth key for connecting to your tailnet (optional - leave empty to skip Tailscale)",
+      "placeholder": "tskey-auth-...",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_HOSTNAME",
+      "description": "Hostname for this device on your Tailscale network (optional - leave empty to skip Tailscale)",
+      "placeholder": "openclawflux",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_EXTRA_ARGS",
+      "description": "Additional arguments for tailscale up (e.g. --advertise-tags=tag:server) (optional - leave empty to skip Tailscale)",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "OpenClawPro",
+  "displayName": "OpenClaw AI Assistant Pro",
+  "category": "Productivity",
+  "description": "OpenClaw Pro - higher specs for professional usage. Privacy-focused AI assistant with 20+ messaging integrations, voice, browser automation and webhooks.",
+  "priceUSD": 7.49,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "OpenClawPro",
+    "description": "OpenClaw personal AI assistant - self-hosted, privacy-focused multi-channel AI",
+    "repotag": "runonflux/openclaw-tailscale:latest",
+    "ports": [
+     18789
+    ],
+    "containerPorts": [
+     18789
+    ],
+    "environmentParameters": [
+     "OPENCLAW_GATEWAY_BIND=lan",
+     "OPENCLAW_GATEWAY_PORT=18789",
+     "OPENCLAW_CONFIG_DIR=/home/node/.openclaw",
+     "OPENCLAW_WORKSPACE_DIR=/home/node/.openclaw/workspace",
+     "NODE_OPTIONS=--max-old-space-size=6144"
+    ],
+    "commands": [
+     "sh",
+     "-c",
+     "[ -f /home/node/.openclaw/openclaw.json ] || echo '{\"gateway\":{\"mode\":\"local\",\"controlUi\":{\"dangerouslyAllowHostHeaderOriginFallback\":true,\"allowInsecureAuth\":true}}}' > /home/node/.openclaw/openclaw.json; /start.sh gateway --allow-unconfigured --bind lan --port 18789"
+    ],
+    "containerData": "g:/home/node/.openclaw",
+    "userEnvironmentParameters": [
+     {
+      "name": "OPENCLAW_GATEWAY_PASSWORD",
+      "description": "Password to protect the OpenClaw gateway web UI (required)",
+      "placeholder": "choose a strong password",
+      "optional": false
+     },
+     {
+      "name": "TAILSCALE_AUTHKEY",
+      "description": "Tailscale auth key for connecting to your tailnet (optional - leave empty to skip Tailscale)",
+      "placeholder": "tskey-auth-...",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_HOSTNAME",
+      "description": "Hostname for this device on your Tailscale network (optional - leave empty to skip Tailscale)",
+      "placeholder": "openclawflux",
+      "optional": true
+     },
+     {
+      "name": "TAILSCALE_EXTRA_ARGS",
+      "description": "Additional arguments for tailscale up (e.g. --advertise-tags=tag:server) (optional - leave empty to skip Tailscale)",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 4,
+    "ram": 8000,
+    "hdd": 80
+   }
+  ]
+ },
+ {
+  "name": "PalWorld",
+  "displayName": "Palworld",
+  "category": "NewGames",
+  "description": "Host your Palworld Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "palworldpalworld",
+    "description": "palworld",
+    "repotag": "runonflux/palworld-server-flux:latest",
+    "ports": [
+     8211,
+     27015,
+     8212
+    ],
+    "containerPorts": [
+     8211,
+     27015,
+     8212
+    ],
+    "environmentParameters": [
+     "DISABLE_GENERATE_SETTINGS=true",
+     "BACKUP_ENABLED=false",
+     "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME=true",
+     "AUTO_REBOOT_ENABLED=true",
+     "AUTO_REBOOT_CRON_EXPRESSION=0 5 * * *",
+     "AUTO_REBOOT_WARN_MINUTES=5",
+     "AUTO_REBOOT_EVEN_IF_PLAYERS_ONLINE=false",
+     "TZ=UTC",
+     "ENABLE_PLAYER_LOGGING=false"
+    ],
+    "commands": [],
+    "containerData": "g:/palworld/Pal/Saved",
+    "userEnvironmentParameters": [
+     {
+      "name": "COMMUNITY",
+      "description": "List your server in the in-game community server browser",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 5000,
+    "hdd": 30
+   }
+  ]
+ },
+ {
+  "name": "Palworld16Slots",
+  "displayName": "Palworld - 16 Slots",
+  "category": "Games",
+  "description": "Host your Palworld 16 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 17.99,
+  "multiplier": 1.4,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "palworld",
+    "description": "Palworld Game container",
+    "repotag": "thijsvanloef/palworld-server-docker:latest",
+    "ports": [
+     8211,
+     27015,
+     25575
+    ],
+    "containerPorts": [
+     8211,
+     27015,
+     25575
+    ],
+    "environmentParameters": [
+     "BACKUP_ENABLED=false",
+     "COMMUNITY=false",
+     "SERVER_NAME=Flux Cloud Game Server",
+     "SERVER_DESCRIPTION=Best Gaming Servers are on Flux Decentralized Network, get yours at runonflux.io",
+     "PLAYERS=16"
+    ],
+    "commands": [],
+    "containerData": "g:/palworld/Pal/Saved",
+    "userEnvironmentParameters": [],
+    "cpu": 4,
+    "ram": 10000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "Palworld32Slots",
+  "displayName": "Palworld - 32 Slots",
+  "category": "Games",
+  "description": "Host your Palworld 32 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 24.99,
+  "multiplier": 1.39,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "palworld",
+    "description": "Palworld Game container",
+    "repotag": "thijsvanloef/palworld-server-docker:latest",
+    "ports": [
+     8211,
+     27015,
+     25575
+    ],
+    "containerPorts": [
+     8211,
+     27015,
+     25575
+    ],
+    "environmentParameters": [
+     "BACKUP_ENABLED=false",
+     "COMMUNITY=false",
+     "SERVER_NAME=Flux Cloud Game Server",
+     "SERVER_DESCRIPTION=Best Gaming Servers are on Flux Decentralized Network, get yours at runonflux.io",
+     "PLAYERS=32"
+    ],
+    "commands": [],
+    "containerData": "g:/palworld/Pal/Saved",
+    "userEnvironmentParameters": [],
+    "cpu": 6,
+    "ram": 14000,
+    "hdd": 35
+   }
+  ]
+ },
+ {
+  "name": "Palworld4Slots",
+  "displayName": "Palworld - 4 Slots",
+  "category": "Games",
+  "description": "Host your Palworld 4 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 7.99,
+  "multiplier": 1.16,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU",
+   "acAS",
+   "acSA",
+   "acOC",
+   "acAF"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "palworld",
+    "description": "Palworld Game container",
+    "repotag": "thijsvanloef/palworld-server-docker:latest",
+    "ports": [
+     8211,
+     27015,
+     25575
+    ],
+    "containerPorts": [
+     8211,
+     27015,
+     25575
+    ],
+    "environmentParameters": [
+     "BACKUP_ENABLED=false",
+     "COMMUNITY=false",
+     "SERVER_NAME=Flux Cloud Game Server",
+     "SERVER_DESCRIPTION=Best Gaming Servers are on Flux Decentralized Network, get yours at runonflux.io",
+     "PLAYERS=4"
+    ],
+    "commands": [],
+    "containerData": "g:/palworld/Pal/Saved",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 5000,
+    "hdd": 12
+   }
+  ]
+ },
+ {
+  "name": "Palworld8Slots",
+  "displayName": "Palworld - 8 Slots",
+  "category": "Games",
+  "description": "Host your Palworld 8 slots Game Server on Flux Cloud for a 1-month plan",
+  "priceUSD": 12.99,
+  "multiplier": 1.39,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [
+   "acNA",
+   "acEU",
+   "acAS",
+   "acSA",
+   "acOC",
+   "acAF"
+  ],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "palworld",
+    "description": "Palworld Game container",
+    "repotag": "thijsvanloef/palworld-server-docker:latest",
+    "ports": [
+     8211,
+     27015,
+     25575
+    ],
+    "containerPorts": [
+     8211,
+     27015,
+     25575
+    ],
+    "environmentParameters": [
+     "BACKUP_ENABLED=false",
+     "COMMUNITY=false",
+     "SERVER_NAME=Flux Cloud Game Server",
+     "SERVER_DESCRIPTION=Best Gaming Servers are on Flux Decentralized Network, get yours at runonflux.io",
+     "PLAYERS=8"
+    ],
+    "commands": [],
+    "containerData": "g:/palworld/Pal/Saved",
+    "userEnvironmentParameters": [],
+    "cpu": 2.5,
+    "ram": 6300,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "Pangolin",
+  "displayName": "Pangolin",
+  "category": "Front-end",
+  "description": "Host your Pangolin Frontend on the Flux Cloud",
+  "priceUSD": 2.1,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "pangolinui",
+    "description": "The Pangolin UI container",
+    "repotag": "runonflux/pangolindex-interface:latest",
+    "ports": [
+     35003
+    ],
+    "containerPorts": [
+     3000
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ },
+ {
+  "name": "PirateCashNode",
+  "displayName": "PirateCash Node",
+  "category": "Masternode",
+  "description": "Host your PirateCash Masternode on the Flux Network (HA: 2 redundant nodes with automatic failover). Collateral: 10,000 PIRATE.",
+  "priceUSD": 5,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "",
+    "repotag": "runonflux/piratecashnode:latest",
+    "ports": [
+     63636
+    ],
+    "containerPorts": [
+     63636
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.piratecore",
+    "userEnvironmentParameters": [
+     {
+      "name": "KEY",
+      "description": "Masternode operator BLS private key",
+      "placeholder": "Enter your operator BLS private key",
+      "optional": false
+     },
+     {
+      "name": "PROTXHASH",
+      "description": "Optional. Your masternode registration hash (proTxHash). Enables automatic on-chain IP updates (HA failover) so the node is never PoSe-banned after a relocation.",
+      "placeholder": "Enter your proTxHash",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "PIVXMN",
+  "displayName": "PIVX Node",
+  "category": "Masternode",
+  "description": "Host your PIVX Masternode on the Flux Cloud",
+  "priceUSD": 5.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "expire": 22000,
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "The PIVX Masternode container",
+    "repotag": "runonflux/pivxnode:latest",
+    "ports": [
+     51472
+    ],
+    "containerPorts": [
+     51472
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/root/.pivx",
+    "userEnvironmentParameters": [
+     {
+      "name": "KEY",
+      "description": "The key of your masternode",
+      "placeholder": "Enter your key here",
+      "optional": false
+     }
+    ],
+    "cpu": 1,
+    "ram": 2500,
+    "hdd": 50
+   }
+  ]
+ },
+ {
+  "name": "PresearchNode",
+  "displayName": "PreSearch Node",
+  "category": "Blockchain",
+  "description": "Presearch is a Decentralized Search Engine - PresearchNode on Flux Network uses FluxStorage to build Private Keys and works without auto staking limitations when Nodes disconnect, doesn't work with 'Grandfather' nodes.",
+  "priceUSD": 1.69,
+  "multiplier": 15.59,
+  "instances": 3,
+  "lockedValues": [
+   "instances"
+  ],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "The Presearch node container",
+    "repotag": "presearch/node:latest",
+    "ports": [
+     39000
+    ],
+    "containerPorts": [
+     38253
+    ],
+    "environmentParameters": [
+     "STAKE=disconnected:oldest#flux,wallet:minimum",
+     "ALLOW_DISCONNECTED_STAKE_TRANSFER_AFTER=30m",
+     "TAGS=flux",
+     "URL=https://home.runonflux.io",
+     "F_S_ENV=https://storage.runonflux.io/v2/env/presearch"
+    ],
+    "commands": [],
+    "containerData": "/app/node",
+    "userEnvironmentParameters": [
+     {
+      "name": "REGISTRATION_CODE",
+      "description": "Your node registration code",
+      "placeholder": "Enter your code here",
+      "optional": false
+     },
+     {
+      "name": "DESCRIPTION",
+      "description": "Optional description for your node",
+      "placeholder": "Enter your node description",
+      "optional": false
+     }
+    ],
+    "cpu": 0.3,
+    "ram": 300,
+    "hdd": 2
+   }
+  ]
+ },
+ {
+  "name": "PresearchNodeLegacy",
+  "displayName": "PreSearch Node Legacy",
+  "category": "Blockchain",
+  "description": "Presearch is a Decentralized Search Engine - PresearchNodeLegacy on Flux Network works with 'GrandFather' Nodes but with auto staking limitations when Nodes disconnect",
+  "priceUSD": 1.69,
+  "multiplier": 15.59,
+  "instances": 3,
+  "lockedValues": [
+   "instances"
+  ],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "The Presearch node container",
+    "repotag": "presearch/node:latest",
+    "ports": [
+     39000
+    ],
+    "containerPorts": [
+     38253
+    ],
+    "environmentParameters": [
+     "STAKE=disconnected:oldest,wallet:minimum",
+     "ALLOW_DISCONNECTED_STAKE_TRANSFER_AFTER=30m",
+     "TAGS=flux"
+    ],
+    "commands": [],
+    "containerData": "/app/node",
+    "userEnvironmentParameters": [
+     {
+      "name": "REGISTRATION_CODE",
+      "description": "Your node registration code",
+      "placeholder": "Enter your code here",
+      "optional": false
+     }
+    ],
+    "cpu": 0.3,
+    "ram": 300,
+    "hdd": 2
+   }
+  ]
+ },
+ {
+  "name": "PrivateSimpleXSMP",
+  "displayName": "Private SimpleX SMP Server",
+  "category": "Hosting",
+  "description": "Host your own PRIVATE (password-protected) SimpleX SMP Server with IP + Onion address. Only clients with your password can register.",
+  "priceUSD": 3.06,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "smpsimplex",
+    "description": "Private (password-protected) SimpleX SMP Server. Listens on port 5223 for SimpleX clients that present the configured PASS. Server identity keys persist on global storage so the address stays stable across instance moves.",
+    "repotag": "runonflux/simplex-smp-server:latest",
+    "ports": [
+     5223
+    ],
+    "containerPorts": [
+     5223
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/etc/opt/simplex",
+    "userEnvironmentParameters": [
+     {
+      "name": "PASS",
+      "description": "Server password. Clients must present this value to register with your SMP relay. Spec is encrypted (isAutoEnterprise) so the value is never exposed on-chain.",
+      "placeholder": "Strong random password",
+      "optional": false
+     }
+    ],
+    "cpu": 0.9,
+    "ram": 2000,
+    "hdd": 20
+   },
+   {
+    "name": "onion",
+    "description": "Tor hidden-service sidecar. Publishes the smpsimplex component as a permanent .onion address. The hidden-service private key persists on global storage so the .onion address stays the same across instance moves.",
+    "repotag": "wirewrex/hiddenonion:latest",
+    "ports": [],
+    "containerPorts": [],
+    "environmentParameters": [
+     "SERVICE_HOST=smpsimplex",
+     "SERVICE_PORT=5223",
+     "ONION_PORT=5223"
+    ],
+    "commands": [],
+    "containerData": "g:/var/lib/tor",
+    "userEnvironmentParameters": [],
+    "cpu": 0.1,
+    "ram": 500,
+    "hdd": 1
+   }
+  ]
+ },
+ {
+  "name": "ProjectZomboid",
+  "displayName": "Project Zomboid",
+  "category": "NewGames",
+  "description": "Keep Knox Country persistent - no resets, no lag, no random hosts dropping out.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "projectzomboid",
+    "description": "Project Zomboid Build 42 dedicated server (stable, multiplayer). Join at IP:36261 (UDP), Steam invite, or server browser. UDPPORT sets the second UDP port. Restart once after deploy to apply join password and browser name.",
+    "repotag": "danixu86/project-zomboid-dedicated-server:42.20.0-release",
+    "ports": [
+     36261,
+     36262
+    ],
+    "containerPorts": [
+     36261,
+     36262
+    ],
+    "environmentParameters": [
+     "PUBLIC=true",
+     "MEMORY=4608m",
+     "PORT=36261",
+     "UDPPORT=36262"
+    ],
+    "commands": [],
+    "containerData": "g:/home/steam/Zomboid",
+    "userEnvironmentParameters": [
+     {
+      "name": "SERVERNAME",
+      "description": "Server identifier (no spaces or special characters). Changing it later creates a new world.",
+      "placeholder": "FluxCloudServer",
+      "optional": false
+     },
+     {
+      "name": "DISPLAYNAME",
+      "description": "Server name shown in the in-game server browser.",
+      "placeholder": "My Zomboid Server",
+      "optional": false
+     },
+     {
+      "name": "SERVERPRESET",
+      "description": "Game difficulty preset (Build 42 sandbox presets)",
+      "placeholder": "Select preset",
+      "optional": false
+     },
+     {
+      "name": "ADMINPASSWORD",
+      "description": "Admin account password. REQUIRED - the server will not start without it. Use a strong password.",
+      "placeholder": "Enter admin password",
+      "optional": false
+     },
+     {
+      "name": "PASSWORD",
+      "description": "Password players must enter to join the server (leave empty for no join password). Applied after the first restart.",
+      "placeholder": "Enter join password",
+      "optional": true
+     },
+     {
+      "name": "ADMINUSERNAME",
+      "description": "Admin account username for server management",
+      "placeholder": "admin",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 6000,
+    "hdd": 20
+   }
+  ]
+ },
+ {
+  "name": "RaptoreumNode",
+  "displayName": "Raptoreum Node",
+  "category": "Masternode",
+  "description": "Host your Raptoreum Smartnode on the Flux Network (HA: 2 redundant nodes with automatic failover). Collateral: 1,800,000 RTM.",
+  "priceUSD": 5,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "node",
+    "description": "",
+    "repotag": "runonflux/raptoreumnode:latest",
+    "ports": [
+     10226
+    ],
+    "containerPorts": [
+     10226
+    ],
+    "environmentParameters": [
+     "BOOTSTRAP_URL=https://bootstrap.raptoreum.com/bootstraps/bootstrap.tar.xz"
+    ],
+    "commands": [],
+    "containerData": "/raptoreum/.raptoreumcore",
+    "userEnvironmentParameters": [
+     {
+      "name": "KEY",
+      "description": "Smartnode operator BLS private key",
+      "placeholder": "Enter your operator BLS private key",
+      "optional": false
+     },
+     {
+      "name": "PROTXHASH",
+      "description": "Optional. Your smartnode registration hash (proTxHash). Enables automatic on-chain IP updates (HA failover) so the node is never PoSe-banned after a relocation.",
+      "placeholder": "Enter your proTxHash",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 60
+   }
+  ]
+ },
+ {
+  "name": "RavenNode",
+  "displayName": "RavenNode",
+  "category": "Blockchain",
+  "description": "Host your Ravencoin Node on the Flux Network",
+  "priceUSD": 5.99,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "RavenNode",
+    "description": "The Raven Node container",
+    "repotag": "dramirezrt/ravencoin-core-server:latest",
+    "ports": [
+     38080,
+     38767,
+     31413
+    ],
+    "containerPorts": [
+     38080,
+     38767,
+     31413
+    ],
+    "environmentParameters": [
+     "RAVEN_PORT=38767",
+     "TRANSMISSION_PORT=31413",
+     "FRONTEND_PORT=38080"
+    ],
+    "commands": [],
+    "containerData": "/kingofthenorth",
+    "userEnvironmentParameters": [
+     {
+      "name": "UACOMMENT",
+      "description": "Let the community reward you for hosting this Raven Node or use it as a Placeholder",
+      "placeholder": "Enter your RVN address/Placeholder here",
+      "optional": false
+     }
+    ],
+    "cpu": 2,
+    "ram": 1500,
+    "hdd": 69
+   }
+  ]
+ },
+ {
+  "name": "RustServer",
+  "displayName": "RustServer",
+  "category": "NewGames",
+  "description": "Run your own wipe schedule, plugin stack, and community on a dedicated box.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "rust",
+    "description": "rust",
+    "repotag": "pfeiffermax/rust-game-server:latest",
+    "ports": [
+     28015,
+     28016,
+     28017,
+     28082
+    ],
+    "containerPorts": [
+     28015,
+     28016,
+     28017,
+     28082
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "+server.port",
+     "28015",
+     "+rcon.port",
+     "28016",
+     "+rcon.password",
+     "${RCON_PASSWORD}",
+     "+server.identity",
+     "rust",
+     "+server.maxplayers",
+     "50",
+     "+server.hostname",
+     "${SERVER_HOSTNAME}",
+     "+server.description",
+     "${SERVER_DESCRIPTION}",
+     "-queryport",
+     "28017",
+     "+app.port",
+     "28082"
+    ],
+    "containerData": "g:/srv/rust/server/rust",
+    "userEnvironmentParameters": [
+     {
+      "name": "SERVER_HOSTNAME",
+      "description": "Server name shown in the Rust server browser",
+      "placeholder": "RunOnFlux.com",
+      "optional": false
+     },
+     {
+      "name": "SERVER_DESCRIPTION",
+      "description": "Short description shown in the server info panel",
+      "placeholder": "Powered by Flux Cloud - the decentralized Web3 network for unstoppable game servers",
+      "optional": false
+     },
+     {
+      "name": "RCON_PASSWORD",
+      "description": "Password for remote admin access via RCON (port 28016). Use a strong unique value.",
+      "placeholder": "changeme-use-a-strong-password",
+      "optional": false
+     }
+    ],
+    "cpu": 2.5,
+    "ram": 8000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "RustServerOxide",
+  "displayName": "RustServer - Modded",
+  "category": "NewGames",
+  "description": "Carbon pre-installed, with uMod/Oxide plugins supported through Carbon's compatibility layer. Drop your plugin stack into the mounted carbon/plugins folder and tune gather, decay, kits, and more from carbon/configs.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "rustoxide",
+    "description": "rust-carbon",
+    "repotag": "runonflux/rust-carbon-server:latest",
+    "ports": [
+     28015,
+     28016,
+     28017,
+     28082
+    ],
+    "containerPorts": [
+     28015,
+     28016,
+     28017,
+     28082
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "+rcon.port",
+     "28016",
+     "+rcon.password",
+     "${RCON_PASSWORD}",
+     "+server.identity",
+     "rustcarbon",
+     "+server.maxplayers",
+     "50",
+     "+server.hostname",
+     "${SERVER_HOSTNAME}",
+     "+server.description",
+     "${SERVER_DESCRIPTION}",
+     "-queryport",
+     "28017",
+     "+app.port",
+     "28082",
+     "+server.worldsize",
+     "3000",
+     "+server.seed",
+     "${SERVER_SEED}"
+    ],
+    "containerData": "g:/srv/rust/server/rustcarbon|m:carbon:/srv/rust/carbon",
+    "userEnvironmentParameters": [
+     {
+      "name": "SERVER_HOSTNAME",
+      "description": "Server name shown in the Rust server browser",
+      "placeholder": "RunOnFlux.com",
+      "optional": false
+     },
+     {
+      "name": "SERVER_DESCRIPTION",
+      "description": "Short description shown in the server info panel",
+      "placeholder": "Modded Rust on Flux Cloud - the decentralized Web3 network for unstoppable game servers",
+      "optional": false
+     },
+     {
+      "name": "RCON_PASSWORD",
+      "description": "Password for remote admin access via RCON (port 28016). Use a strong unique value.",
+      "placeholder": "changeme-use-a-strong-password",
+      "optional": false
+     },
+     {
+      "name": "SERVER_SEED",
+      "description": "Map seed. Any number generates a different map; leave the suggested random one or paste a seed you picked on rustmaps.com. You can change it later in Server Settings, which generates a new map.",
+      "placeholder": "1337",
+      "optional": false
+     }
+    ],
+    "cpu": 2.5,
+    "ram": 8000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "Satisfactory",
+  "displayName": "Satisfactory",
+  "category": "NewGames",
+  "description": "satisfactory server",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "satisfactory",
+    "description": "satisfactory",
+    "repotag": "wolveix/satisfactory-server:latest",
+    "ports": [
+     7777,
+     8888
+    ],
+    "containerPorts": [
+     7777,
+     8888
+    ],
+    "environmentParameters": [
+     "PGID=1000",
+     "PUID=1000",
+     "STEAMBETA=false"
+    ],
+    "commands": [],
+    "containerData": "g:/config",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 8000,
+    "hdd": 60
+   }
+  ]
+ },
+ {
+  "name": "SimpleXSMP",
+  "displayName": "SimpleX SMP Server",
+  "category": "Hosting",
+  "description": "Host your own PUBLIC SimpleX SMP Server with IP + Onion address. Federated, decentralized messaging relay for the SimpleX Chat network.",
+  "priceUSD": 3.06,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "smpsimplex",
+    "description": "SimpleX SMP (Simple Messaging Protocol) Server. Listens on port 5223 for SimpleX clients. Server identity keys persist on global storage so the address stays stable across instance moves.",
+    "repotag": "runonflux/simplex-smp-server:latest",
+    "ports": [
+     5223
+    ],
+    "containerPorts": [
+     5223
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/etc/opt/simplex",
+    "userEnvironmentParameters": [],
+    "cpu": 0.9,
+    "ram": 2000,
+    "hdd": 20
+   },
+   {
+    "name": "onion",
+    "description": "Tor hidden-service sidecar. Publishes the smpsimplex component as a permanent .onion address. The hidden-service private key persists on global storage so the .onion address stays the same across instance moves.",
+    "repotag": "wirewrex/hiddenonion:latest",
+    "ports": [],
+    "containerPorts": [],
+    "environmentParameters": [
+     "SERVICE_HOST=smpsimplex",
+     "SERVICE_PORT=5223",
+     "ONION_PORT=5223"
+    ],
+    "commands": [],
+    "containerData": "g:/var/lib/tor",
+    "userEnvironmentParameters": [],
+    "cpu": 0.1,
+    "ram": 500,
+    "hdd": 1
+   }
+  ]
+ },
+ {
+  "name": "SimpleXxFTP",
+  "displayName": "SimpleX xFTP Server",
+  "category": "Hosting",
+  "description": "Host your own PUBLIC SimpleX xFTP server with a 40 GB quota. Decentralized, end-to-end-encrypted file relay for the SimpleX Chat network.",
+  "priceUSD": 3.06,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "xftpsimplex",
+    "description": "SimpleX xFTP file-transfer relay with 40 GB quota. Listens on port 34443 for SimpleX clients to upload and download encrypted files. Server identity keys persist on global storage so the address stays stable across instance moves.",
+    "repotag": "runonflux/simplex-xftp-server:latest",
+    "ports": [
+     34443
+    ],
+    "containerPorts": [
+     34443
+    ],
+    "environmentParameters": [
+     "QUOTA=40gb"
+    ],
+    "commands": [],
+    "containerData": "g:/etc/opt/simplex-xftp",
+    "userEnvironmentParameters": [],
+    "cpu": 0.9,
+    "ram": 2000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "StreamrNode",
+  "displayName": "Streamr Node",
+  "category": "Blockchain",
+  "description": "The Streamr Node, AutoStaker plugin,  hosted via Flux Cloud. \n\nAdjusting optional environment parameters is done at your own risk. \n\nOfficial Documentation: https://blog.streamr.network/the-autostaker-automated-staking-for-streamr-node-operators/",
+  "priceUSD": 9.7,
+  "multiplier": 2.94,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "streamrnode",
+    "description": "The Streamr node container",
+    "repotag": "streamr/node:latest",
+    "ports": [
+     32200
+    ],
+    "containerPorts": [
+     32200
+    ],
+    "environmentParameters": [
+     "LOG_COLORS=false"
+    ],
+    "commands": [],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [
+     {
+      "name": "STREAMR__BROKER__PLUGINS__OPERATOR__OPERATOR_CONTRACT_ADDRESS",
+      "description": "Operator Contract Address.",
+      "placeholder": "0xe88a417a77d95df77b4dbff875361dfb95a2a129",
+      "optional": false
+     },
+     {
+      "name": "STREAMR__BROKER__PLUGINS__AUTOSTAKER__OPERATOR_CONTRACT_ADDRESS",
+      "description": "Operator Contract Address.",
+      "placeholder": "0xe88a417a77d95df77b4dbff875361dfb95a2a129",
+      "optional": true
+     },
+     {
+      "name": "STREAMR__BROKER__CLIENT__AUTH__PRIVATE_KEY",
+      "description": "Node Private Key.",
+      "placeholder": "abc157ee663b5c3b1e3222d903b412777d0498964f6b98f10d12c3918fb33a61",
+      "optional": false
+     },
+     {
+      "name": "STREAMR__BROKER__PLUGINS__AUTOSTAKER__MAX_SPONSORSHIP_COUNT",
+      "description": "**OPTIONAL** The integer maxSponsorshipCount controls how many sponsorships the autostaker will stake into at most. The larger the capacity of your operator fleet state is (in terms of node count / CPU / bandwidth) the higher this number can be. Conversely, if your operator fleet is small, this integer should be kept low. The default value is set to 25.",
+      "placeholder": "25",
+      "optional": true
+     },
+     {
+      "name": "STREAMR__BROKER__PLUGINS__AUTOSTAKER__MIN_TRANSACTION_DATA_TOKEN_AMOUNT",
+      "description": "**OPTIONAL** The integer minTransactionDataTokenAmount controls the minimum value a transaction must be to be considered for execution. The value is expressed in $DATA tokens. Any transactions falling below this value will be skipped. This is to avoid executing transactions that are too small in value. To choose this value, balance the cost of gas vs. the value gained by staking the amount optimally. (The exception to this config is expired sponsorships, which will always be unstaked from regardless.) The default value is set to 1000.",
+      "placeholder": "1000",
+      "optional": true
+     },
+     {
+      "name": "STREAMR__BROKER__PLUGINS__AUTOSTAKER__MAX_ACCEPTABLE_MIN_OPERATOR_COUNT",
+      "description": "**OPTIONAL** The integer maxAcceptableMinOperatorCount is used to decide whether to stake into a sponsorship that has a minimum operator count requirement. Such sponsorships only start paying out once the minimum operator count is reached. E.g. if a sponsorship has a minimum operator count of 20, and this is set to 20, the autostaker will stake into it. If it is set to 10, the autostaker will not stake into it. (The check is static and does not consider how many operators may currently already be staked into such a sponsorship.) The default value is set to 50.",
+      "placeholder": "50",
+      "optional": true
+     },
+     {
+      "name": "STREAMR__BROKER__PLUGINS__AUTOSTAKER__RUN_INTERVAL_IN_MS",
+      "description": "**OPTIONAL** The integer runIntervalInMs controls how often the autostaker will run its logic. In addition to time-based runs, the autostaker will also run whenever a new sponsorship is created. The default value is set to 3600000, and the value must be >= 300000.",
+      "placeholder": "3600000",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 4000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Sushiswap",
+  "displayName": "Sushiswap",
+  "category": "Front-end",
+  "description": "Host your Sushiswap Frontend on the Flux Cloud",
+  "priceUSD": 2.1,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "sushiswapui",
+    "description": "The Sushiswap UI container",
+    "repotag": "runonflux/sushiswap-interface:latest",
+    "ports": [
+     35000
+    ],
+    "containerPorts": [
+     3000
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ },
+ {
+  "name": "Teamspeak",
+  "displayName": "Teamspeak",
+  "category": "Hosting",
+  "description": "16 Slot Teamspeak 3 Server. Use crystal clear sound to communicate with your team mates cross-platform with military-grade security, lag-free performance & unparalleled reliability and uptime.",
+  "priceUSD": 1.79,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "teamspeak",
+    "description": "The Teamspeak Container",
+    "repotag": "teamspeak:latest",
+    "ports": [
+     9987,
+     38896,
+     38897
+    ],
+    "containerPorts": [
+     9987,
+     10011,
+     30033
+    ],
+    "environmentParameters": [
+     "TS3SERVER_LICENSE=accept"
+    ],
+    "commands": [],
+    "containerData": "g:/var/ts3server/",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 2000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Teamspeak6",
+  "displayName": "Teamspeak6",
+  "category": "Hosting",
+  "description": "32 Slot Teamspeak 6 Server. Use crystal clear sound to communicate with your team mates cross-platform with military-grade security, lag-free performance & unparalleled reliability and uptime.\n",
+  "priceUSD": 3.99,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "teamspeak6",
+    "description": "The Teamspeak Container",
+    "repotag": "teamspeaksystems/teamspeak6-server:latest",
+    "ports": [
+     9987,
+     31001
+    ],
+    "containerPorts": [
+     9987,
+     31001
+    ],
+    "environmentParameters": [
+     "TSSERVER_LICENSE_ACCEPTED=accept",
+     "TSSERVER_FILE_TRANSFER_PORT=31001",
+     "TSSERVER_VOICE_IP=0.0.0.0",
+     "TSSERVER_FILE_TRANSFER_IP=0.0.0.0"
+    ],
+    "commands": [],
+    "containerData": "g:/var/tsserver",
+    "userEnvironmentParameters": [],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "Terraria",
+  "displayName": "Terraria",
+  "category": "NewGames",
+  "description": "Keep a persistent 2D sandbox running 24/7 for your whole party.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "terrariaterraria",
+    "description": "terraria",
+    "repotag": "ryshe/terraria:tshock-latest",
+    "ports": [
+     7777
+    ],
+    "containerPorts": [
+     7777
+    ],
+    "environmentParameters": [
+     "WORLD_FILENAME=FluxWorld.wld"
+    ],
+    "commands": [
+     "-autocreate",
+     "2",
+     "-worldname",
+     "FluxWorld",
+     "-maxplayers",
+     "8"
+    ],
+    "containerData": "g:/root/.local/share/Terraria/Worlds",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ },
+ {
+  "name": "TimpiCollector",
+  "displayName": "Timpi Collector",
+  "category": "Blockchain",
+  "description": "Timpi Collectors are decentralized “workers” crawling the web collecting information about websites and their pages. This system remains invisible from front-end services, safeguarding the security of our Collectors.",
+  "priceUSD": 3.3,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "timpicollector",
+    "description": "The Timpi Collector Node Container",
+    "repotag": "timpiltd/timpi-collector:latest",
+    "ports": [
+     5015
+    ],
+    "containerPorts": [
+     5015
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/opt/timpi",
+    "userEnvironmentParameters": [
+     {
+      "name": "GUID",
+      "description": "Your GUID",
+      "placeholder": "f0b8c8c5-d59e-445d-aa68-87d8354b8d81",
+      "optional": false
+     }
+    ],
+    "cpu": 2,
+    "ram": 2000,
+    "hdd": 1
+   }
+  ]
+ },
+ {
+  "name": "TimpiGeocore",
+  "displayName": "Timpi Geocore",
+  "category": "Blockchain",
+  "description": "Run a GeoCore Node to help power Timpi’s decentralized, location-aware search infrastructure. Fast. Distributed. Privacy-focused.",
+  "priceUSD": 3.49,
+  "multiplier": null,
+  "instances": 1,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "timpigeocore",
+    "description": "The Timpi Geocore Node Container",
+    "repotag": "timpiltd/timpi-geocore:latest",
+    "ports": [
+     4013
+    ],
+    "containerPorts": [
+     4013
+    ],
+    "environmentParameters": [
+     "COMPORT=4013"
+    ],
+    "commands": [
+     "--dns=100.42.180.29,--dns=100.42.180.99,--dns=8.8.8.8"
+    ],
+    "containerData": "/var/timpi",
+    "userEnvironmentParameters": [
+     {
+      "name": "LOCATION",
+      "description": "Enter the country you selected for Geolocation Allowed.",
+      "placeholder": "Germany",
+      "optional": true
+     },
+     {
+      "name": "GUID",
+      "description": "Your Registered GUID",
+      "placeholder": "2f4446b8-c265-429b-8055-01519aced572",
+      "optional": false
+     }
+    ],
+    "cpu": 4,
+    "ram": 8000,
+    "hdd": 3
+   }
+  ]
+ },
+ {
+  "name": "Unturned",
+  "displayName": "Unturned",
+  "category": "NewGames",
+  "description": "Run a zombie-survival sandbox with mods, plugins, and full admin control.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "unturnedunturned",
+    "description": "unturned",
+    "repotag": "ich777/steamcmd:unturned",
+    "ports": [
+     27015,
+     27016
+    ],
+    "containerPorts": [
+     27015,
+     27016
+    ],
+    "environmentParameters": [
+     "GAME_ID=1110390",
+     "VALIDATE=true",
+     "DATA_PERM=777",
+     "GAME_PARAMS=+secureserver/Default"
+    ],
+    "commands": [],
+    "containerData": "g:/serverdata/serverfiles",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 2000,
+    "hdd": 8
+   }
+  ]
+ },
+ {
+  "name": "UptimeKuma",
+  "displayName": "UptimeKuma",
+  "category": "Productivity",
+  "description": "Uptime Kuma is an easy-to-use self-hosted monitoring tool. ",
+  "priceUSD": 5.99,
+  "multiplier": null,
+  "instances": 3,
+  "lockedValues": [
+   "instances"
+  ],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "UptimeKuma",
+    "description": "Self-hosted, easy-to-use monitoring tool running on FluxCloud.",
+    "repotag": "louislam/uptime-kuma:latest",
+    "ports": [
+     3001
+    ],
+    "containerPorts": [
+     3001
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/app/data",
+    "userEnvironmentParameters": [],
+    "cpu": 0.5,
+    "ram": 800,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Valheim",
+  "displayName": "Valheim",
+  "category": "NewGames",
+  "description": "Sail, build, and slay the bosses of the tenth Viking realm — always online.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "valheimvalheim",
+    "description": "valheim",
+    "repotag": "lloesche/valheim-server:latest",
+    "ports": [
+     2456,
+     2457,
+     2458
+    ],
+    "containerPorts": [
+     2456,
+     2457,
+     2458
+    ],
+    "environmentParameters": [
+     "SERVER_ARGS=-crossplay",
+     "RESTART_CRON=0 5 * * *",
+     "RESTART_IF_IDLE=true",
+     "TZ=Etc/UTC"
+    ],
+    "commands": [],
+    "containerData": "g:/config",
+    "userEnvironmentParameters": [
+     {
+      "name": "SERVER_NAME",
+      "description": "Server name shown in the server browser",
+      "placeholder": "My Valheim Server",
+      "optional": false
+     },
+     {
+      "name": "WORLD_NAME",
+      "description": "Name of the world save file",
+      "placeholder": "FluxWorld",
+      "optional": true
+     },
+     {
+      "name": "SERVER_PASS",
+      "description": "Password required to join the server (min 5 characters)",
+      "placeholder": "Enter server password",
+      "optional": false
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Vaultwarden",
+  "displayName": "Vaultwarden",
+  "category": "Productivity",
+  "description": "Deploy your own Vaultwarden password manager on Flux Cloud",
+  "priceUSD": 2.55,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "vaultwarden",
+    "description": "Vaultwarden container",
+    "repotag": "vaultwarden/server:latest",
+    "ports": [
+     38080
+    ],
+    "containerPorts": [
+     80
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "g:/data",
+    "userEnvironmentParameters": [
+     {
+      "name": "ADMIN_TOKEN",
+      "description": "Admin panel token (plain string or Argon2id hash; leave empty to disable admin panel)",
+      "placeholder": "Enter admin token",
+      "optional": true
+     }
+    ],
+    "cpu": 1,
+    "ram": 500,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "VRising",
+  "displayName": "V Rising",
+  "category": "NewGames",
+  "description": "Rise as a vampire lord and keep your castle standing while you sleep.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "vrisingvrising",
+    "description": "vrising",
+    "repotag": "trueosiris/vrising:latest",
+    "ports": [
+     9876,
+     9877
+    ],
+    "containerPorts": [
+     9876,
+     9877
+    ],
+    "environmentParameters": [],
+    "commands": [
+     "bash",
+     "-c",
+     "sed -i 's/\\r$//' /start.sh && exec /start.sh"
+    ],
+    "containerData": "g:/mnt/vrising/persistentdata|m:server:/mnt/vrising/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "SERVERNAME",
+      "description": "Server name shown in the server browser",
+      "placeholder": "My V Rising Server",
+      "optional": false
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "Windrose",
+  "displayName": "Windrose",
+  "category": "NewGames",
+  "description": "Sail the skies in this co-op survival adventure — your crew's island, always online. Early Access; requires an AVX2-capable CPU.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "windrosewindrose",
+    "description": "windrose",
+    "repotag": "indifferentbroccoli/windrose-server-docker:latest",
+    "ports": [
+     7777
+    ],
+    "containerPorts": [
+     7777
+    ],
+    "environmentParameters": [
+     "USE_DIRECT_CONNECTION=true",
+     "UPDATE_ON_START=true",
+     "SERVER_PORT=7777",
+     "PUID=1000",
+     "PGID=1000"
+    ],
+    "commands": [],
+    "containerData": "g:/home/steam/server-files",
+    "userEnvironmentParameters": [
+     {
+      "name": "SERVER_NAME",
+      "description": "Display name shown in the server list",
+      "placeholder": "My Windrose Server",
+      "optional": false
+     },
+     {
+      "name": "SERVER_PASSWORD",
+      "description": "Optional password to restrict who can join the server",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "USER_SELECTED_REGION",
+      "description": "Preferred matchmaking region",
+      "placeholder": "us-east",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 8000,
+    "hdd": 35
+   }
+  ]
+ },
+ {
+  "name": "Yearn",
+  "displayName": "Yearn",
+  "category": "Front-end",
+  "description": "Host your Yearn Finance Frontend on the Flux Cloud",
+  "priceUSD": 3.16,
+  "multiplier": 1,
+  "instances": 3,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "yearnui",
+    "description": "The Yearn Finance UI container",
+    "repotag": "runonflux/yearn-finance-v3:latest",
+    "ports": [
+     35001
+    ],
+    "containerPorts": [
+     80
+    ],
+    "environmentParameters": [],
+    "commands": [],
+    "containerData": "/tmp",
+    "userEnvironmentParameters": [],
+    "cpu": 1,
+    "ram": 1000,
+    "hdd": 5
+   }
+  ]
+ }
+]

@@ -82,7 +82,7 @@ function scenario() {
   const s = { preset, image: preset.image || pick(CUSTOM_IMAGES), ports: preset.ports, env: preset.env || [] };
   s.name = pick(preset.appname) + (chance(0.4) ? String(ri(1, 99)) : '');
   s.surface = surfaces.sample(rnd);
-  s.pricing = { cpuCore: +(0.6 + rnd() * 0.6).toFixed(2), ramGB: +(0.4 + rnd() * 0.6).toFixed(2), hddGB: +(0.08 + rnd() * 0.12).toFixed(3), minimum: 0.99, fluxUsd: +(0.1 + rnd() * 0.5).toFixed(3), discount: 0.1 };
+  s.pricing = { cpuCore: +(0.6 + rnd() * 0.6).toFixed(2), ramGB: +(0.4 + rnd() * 0.6).toFixed(2), hddGB: +(0.08 + rnd() * 0.12).toFixed(3), minimum: 0.99, fluxUsd: +(0.1 + rnd() * 0.5).toFixed(3), discount: 0.05 };
   let mode = pick(['explicit', 'explicit', 'default', 'players', 'tier', 'tier']);
   if (mode === 'players' && !preset.players) mode = 'default';
   s.mode = mode;
@@ -123,7 +123,59 @@ function scenario() {
     'answerfirst', 'answerfirst', 'answerfirst', 'answerfirst', 'answerfirst', 'smalltalk', 'smalltalk', 'smalltalk', 'noroute', 'noroute',
     // act on every qualifier, ask for a name instead of inventing one, and give
     // a long answer when a long answer is what was asked for
-    'qualifiers', 'qualifiers', 'qualifiers', 'needname', 'needname', 'needname', 'longform', 'longform', 'longform']);
+    'qualifiers', 'qualifiers', 'qualifiers', 'needname', 'needname', 'needname', 'longform', 'longform', 'longform',
+    // v7: the side of the network v6 could not see. Asked "how much FLUX does a
+    // Stratus node need?" it answered with a $2.50 Redis quote, because six
+    // rounds of training had taught it that every question is a deployment.
+    'nodeop', 'nodeop', 'nodeop', 'nodeop', 'nodeop', 'nodeop', 'nodeop',
+    // the wider ecosystem, with real addresses. v6 invented "sspwallet.online"
+    // and a QR button that does not exist; a confident wrong domain is the worst
+    // thing this model can emit, so it is worth its own flow, together with the
+    // case where the docs come back empty and the answer is "I do not know".
+    'ecosystem', 'ecosystem', 'ecosystem', 'ecosystem', 'ecosystem', 'nodocs', 'nodocs', 'nodocs',
+    // contacts and description are fields on the specification. v6 refused to
+    // touch either: "no tool for that here, put the email in the description".
+    'speccontact', 'speccontact', 'speccontact', 'speccontact', 'speccontact', 'specedit-live', 'specedit-live',
+    // the catalogue at the sizes the images actually need, and the sanity check
+    // when someone asks for 30 instances of a game server
+    'realapp', 'realapp', 'realapp', 'realapp', 'realapp', 'realapp', 'bigorder', 'bigorder', 'bigorder',
+    // ask the knowledge bot more often
+    'docsask', 'docsask', 'docsask',
+    // v6 diluted the deploy protocol itself - quote, confirm, then spend - from
+    // 27/28 to 25/28 on the compact surface. Put that weight back.
+    'deploy', 'deploy', 'deploy', 'yes-first', 'yes-first', 'bigspend', 'skipquote', 'stale-quote', 'estimate', 'spec', 'update',
+    // v7, second pass: be a language model. The brief was "able to do it all, just
+    // heavily favouring deployments", and the live transcripts show the opposite -
+    // a greeting gets a navigation and a request for a poem gets a WordPress pitch.
+    // Whole scripted conversations carry what single turns cannot: context held
+    // over six turns, one question at a time, and a deployment that arrives when
+    // the conversation reaches it.
+    'script', 'script', 'script', 'script', 'script', 'script', 'script', 'script',
+    // general knowledge, technical and not, plus persona and creative work
+    'chat', 'chat', 'chat', 'chat', 'chat', 'chat', 'persona', 'persona', 'persona', 'creative', 'creative', 'creative',
+    // the rest of the ecosystem: the coin, mining, Titan, Fusion, FluxOS, how
+    // decentralized it really is, how it compares to AWS
+    'fluxtopic', 'fluxtopic', 'fluxtopic', 'fluxtopic', 'fluxtopic', 'fluxtopic',
+    // read the log, name the cause, price the fix
+    'trouble', 'trouble', 'trouble', 'trouble', 'trouble', 'trouble',
+    // "will this work", "how big should it be", Dockerfiles and compose files
+    'advise', 'advise', 'advise', 'advise', 'codehelp', 'codehelp', 'codehelp',
+    'offtopic', 'offtopic', 'offtopic',
+    // v7, third pass: deep ecosystem and wallet knowledge. v6 calls the docs tool
+    // for "what is Zelcore" but navigates to a page for "how do I claim parallel
+    // assets", and answers "I lost my phone with SSP Key" from memory with
+    // invented nonsense. Wallet questions are the ones where being confidently
+    // wrong costs someone money.
+    'wallet', 'wallet', 'wallet', 'wallet', 'wallet', 'wallet', 'wallet',
+    'walletsafety', 'walletsafety', 'walletsafety', 'walletsafety', 'walletsafety',
+    'deepfact', 'deepfact', 'deepfact', 'deepfact', 'deepfact', 'deepfact', 'deepfact', 'deepfact', 'deepfact', 'deepfact',
+    // v7, fourth pass: marketplace specifications exactly as the catalogue has
+    // them, fetched from api.marketplace.runonflux.io rather than remembered.
+    // Every game carries a g: sync flag on containerData so the save survives an
+    // instance moving node, and no previous round had that field at all.
+    'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy',
+    'mktladder', 'mktladder', 'mktladder', 'mktladder', 'mktladder', 'mktladder',
+    'syncmode', 'syncmode', 'syncmode', 'syncmode', 'syncmode', 'syncmode']);
   return s;
 }
 
@@ -550,6 +602,9 @@ const totals = (comps) => comps.reduce((t, c) => ({ cpu: +(t.cpu + c.cpu).toFixe
 // there is no deploy tool - the assistant prefills the deploy form and the
 // person confirms. Training this explicitly stops the model from reaching for
 // flux_deploy_app when it is not there, and teaches it the real routes.
+const CONVO = require('./convo');
+const MKT = require('./marketplace');
+const REGION_NAMES = { acNA: 'North America', acEU: 'Europe', acAS: 'Asia', acSA: 'South America', acOC: 'Oceania', acAF: 'Africa' };
 const UI_TOOLS = require('./tools-ui');
 const UI_ROUTES = UI_TOOLS.ROUTES;
 const UI_SYSTEM = [
@@ -608,15 +663,34 @@ const orbitComponent = (repo, branch, appPort, sub) => ({
 // The apps people actually run here, with the images they actually use, counted
 // from the network: palworld 230, minecraft 54, presearch 62, vpn 23, blockbook
 // 18, ethereum nodes and the shared-db/wp-nginx pair from the team's own apps.
-const REAL_APPS = {
-  palworld: { image: 'runonflux/palworld-server-flux:latest', ports: [8211, 27015], cpu: 4, ram: 16000, hdd: 40, words: ['a Palworld server', 'Palworld for our group'] },
-  minecraft: { image: 'itzg/minecraft-server:latest', ports: [25565], cpu: 3, ram: 8000, hdd: 30, words: ['a Minecraft server', 'Minecraft for my friends'] },
-  presearch: { image: 'presearch/node:latest', ports: [], cpu: 0.3, ram: 300, hdd: 2, words: ['a Presearch node'] },
-  vpn: { image: 'ghcr.io/runonflux/cumulusvpn-gateway:latest', ports: [51820], cpu: 0.5, ram: 500, hdd: 5, words: ['a VPN gateway', 'my own VPN'] },
-  explorer: { image: 'runonflux/blockbook-docker:latest', ports: [9130], cpu: 2, ram: 8000, hdd: 200, words: ['a block explorer', 'Blockbook'] },
-  ethereum: { image: 'ethereum/client-go:stable', ports: [8545, 30303], cpu: 4, ram: 16000, hdd: 600, words: ['an Ethereum node', 'geth'] },
-  wordpress: { image: 'runonflux/wp-nginx:latest', ports: [80], cpu: 1, ram: 1000, hdd: 20, words: ['WordPress'] },
+// Sizes, images and sync flags for the apps people actually run. Taken from the
+// marketplace catalogue rather than written from memory, because memory had
+// Palworld as runonflux/palworld-server-flux at 4 cores and 16 GB on one
+// instance with no sync flag, and the marketplace Games entry is
+// thijsvanloef/palworld-server-docker at 2.5 cores and 6300 MB on three
+// instances with containerData "g:/palworld/Pal/Saved". The flag is the part
+// that decides whether the save survives an instance moving node.
+const fromMarket = (name, words) => {
+  const a = MKT.byName[name.toLowerCase()];
+  if (!a) return null;
+  const c = a.compose[0];
+  return { image: c.repotag, ports: c.containerPorts, cpu: c.cpu, ram: c.ram, hdd: c.hdd,
+    containerData: c.containerData, instances: a.instances, marketName: a.name, words };
 };
+const REAL_APPS = Object.fromEntries(Object.entries({
+  palworld: fromMarket('Palworld8Slots', ['a Palworld server', 'Palworld for our group']),
+  minecraft: fromMarket('Minecraft9GB', ['a Minecraft server', 'Minecraft for my friends']),
+  valheim: fromMarket('Valheim', ['a Valheim server', 'Valheim for us']),
+  enshrouded: fromMarket('Enshrouded8Slots', ['an Enshrouded server']),
+  terraria: fromMarket('Terraria', ['a Terraria server']),
+  vaultwarden: fromMarket('Vaultwarden', ['a password manager', 'Vaultwarden']),
+  // not in the marketplace, so these stay hand-written and are marked as such
+  presearch: { image: 'presearch/node:latest', ports: [], cpu: 0.3, ram: 300, hdd: 2, containerData: '/app/node', instances: 3, words: ['a Presearch node'] },
+  vpn: { image: 'ghcr.io/runonflux/cumulusvpn-gateway:latest', ports: [51820], cpu: 0.5, ram: 500, hdd: 5, containerData: '/data', instances: 1, words: ['a VPN gateway', 'my own VPN'] },
+  explorer: { image: 'runonflux/blockbook-docker:latest', ports: [9130], cpu: 2, ram: 8000, hdd: 200, containerData: '/data', instances: 3, words: ['a block explorer', 'Blockbook'] },
+  ethereum: { image: 'ethereum/client-go:stable', ports: [8545, 30303], cpu: 4, ram: 16000, hdd: 600, containerData: '/root/.ethereum', instances: 1, words: ['an Ethereum node', 'geth'] },
+  wordpress: { image: 'runonflux/wp-nginx:latest', ports: [80], cpu: 1, ram: 1000, hdd: 20, containerData: '/var/www/html', instances: 3, words: ['WordPress'] },
+}).filter(([, v]) => v));
 
 // Short, sourced answers for the questions the model currently invents.
 const DOC_ANSWERS = [
@@ -628,7 +702,109 @@ const DOC_ANSWERS = [
   ['what is a fluxnode', 'A machine an operator runs to host applications, backed by locked FLUX collateral, in one of three tiers [1].'],
   ['can i deploy from github', 'Yes - Deploy with Git takes a repository, detects the framework and builds it for you, with no Dockerfile needed [1].'],
   ['what is arcaneos', 'ArcaneOS is the node operating system that can decrypt and run enterprise applications, whose compose section is encrypted [1].'],
+  ['how many components can an app have', 'Up to 10 components in one application, and the resource limits apply to their sum: 15 cores, 59,000 MB of RAM and 820 GB of disk across the whole app [1]. Every instance runs the full set of components together.'],
+  ['how do components talk to each other', 'Privately, by hostname. Inside an application a component is reachable at `flux<component>_<appname>` - so a component named `db` in an app named `shop` answers on `fluxdb_shop` [1]. Nothing has to be published for that to work, which is why a database component should have no public port.'],
+  ['what are the rules for app names', 'Letters and digits with inner hyphens, and it cannot start with `flux` or `zel` - those prefixes are reserved [1]. The name becomes the address, `<name>.app.runonflux.io`, so it has to be unique on the network.'],
+  ['how do i get a custom domain on my app', 'Put the domain in the app\'s domains field for the port serving it, then point a CNAME at `<name>.app.runonflux.io` [1]. The certificate is issued for you, so there is nothing to install in the container.'],
+  ['how do i pay for an app', 'Stripe card, PayPal or FLUX, and paying in FLUX applies a 5% discount [1]. FLUX has to arrive on mainnet - a parallel asset on another chain is not accepted.'],
+  ['what is the minimum an app can cost', 'Small apps land around **$0.99 a month**, and the published rate card is per 0.1 of a core, per 100 MB of RAM and per GB of disk, charged per instance per month, with surcharges for a static IP, an enterprise port and a scoped deployment [1]. Paying in FLUX takes 5% off.\n\nI would rather quote it than recite rates at you, because the rate card moves and the quote does not. Tell me what you want to run.'],
+  ['what happens when my app expires', 'It stops and is removed from the nodes when the term runs out [1]. You renew by signing a renewal message for a new period before that happens; if you cancel early instead, you are credited for the part of the term you did not use.'],
+  ['can i back up my app', 'Yes - the app\'s Backup/Restore tab writes to FluxDrive on a schedule, and restoring offers FluxDrive, a remote URL or a direct upload [1]. Flux does not back apps up for you automatically, so it is worth setting up.'],
+  ['what is a static ip and do i need one', 'A static IP pins the app to nodes with fixed addresses, which costs extra per instance [1]. You need it only when something outside has to allowlist your address - most apps are fine on the load-balanced domain.'],
+  ['can i choose where my app runs', 'Yes, by geolocation: acEU, acNA, acAS and the rest, set on the specification [1]. Narrowing it cuts the pool of nodes that can take the app, so pin it only when latency or a legal requirement calls for it.'],
+  ['what is an enterprise app', 'An application whose compose section is encrypted, so only nodes running ArcaneOS can decrypt and run it [1]. It is how you keep images from a private registry, and the secrets that pull them, out of the public specification.'],
+  ['how do i use a private registry', 'Put the credentials in the component\'s repoauth field and the app becomes an enterprise app, encrypted so only ArcaneOS nodes can read it [1]. Never put a registry password in an environment variable - environment parameters are public on the chain.'],
+  ['how long can i run an app for', 'Up to 1,056,000 blocks, and since about 88,000 blocks is a month that is roughly 12 months; the minimum is a single block [1].'],
+  ['what is the marketplace', 'A catalogue of one-click applications - games, WordPress, node software, tools - already sized and configured, so you pick one, name it and pay [1]. Everything in it can also be built by hand as a normal specification.'],
+  ['can i update an app after deploying it', 'Yes - sign a new specification for the same name and it replaces the running one [1]. Change images, resources, ports, instances or contacts that way. You are credited for the unused part of the current term, so a change mid-month does not cost you the month.'],
+  ['how many instances should i run', 'Instances are copies of the whole app on different nodes, for redundancy and load spreading [1]. Three is the usual default for anything serving traffic. For a game server or anything with one save file you want one, because the copies do not share state.'],
 ];
+// --- v7: node operation, spec fields v6 refused to touch, the real catalogue ---
+// Every round so far has been about deploying applications, so v6 answers "how
+// much FLUX does a Stratus node need?" with a $2.50 Redis quote: it force-fits
+// an operator question into a tenant question. Operating a node and renting
+// capacity on one are opposite sides of the network. These figures come from
+// the docs corpus (fluxnodes requirements table); the app column is what a node
+// of that tier can give one application.
+const NODE_TIERS = [
+  { tier: 'Cumulus', collateral: '1,000 FLUX', cpu: '2 cores / 4 threads', ram: '8 GB', ssd: '220 GB SSD or NVMe', bw: '25 Mbit/s', appCpu: 3, appRam: 5000, appHdd: 160 },
+  { tier: 'Nimbus', collateral: '12,500 FLUX', cpu: '4 cores / 8 threads', ram: '32 GB', ssd: '440 GB SSD or NVMe', bw: '50 Mbit/s', appCpu: 7, appRam: 28000, appHdd: 380 },
+  { tier: 'Stratus', collateral: '40,000 FLUX', cpu: '8 cores / 16 threads', ram: '64 GB', ssd: '880 GB SSD or NVMe', bw: '100 Mbit/s', appCpu: 15, appRam: 59000, appHdd: 820 },
+];
+const TIER_TABLE = NODE_TIERS.map((t) => `${t.tier}: ${t.collateral} collateral, ${t.cpu}, ${t.ram} RAM, ${t.ssd}, at least ${t.bw}, a public IP and about 97% uptime.`).join(' ');
+
+// Questions an operator asks, and what the answer has to contain. Not one of
+// these may end in a flux_quote_app call - that is the v6 bug being fixed.
+const NODEOP_QA = [
+  { q: ['how much flux do i need to lock to run a stratus node', 'how much flux does a stratus node need', 'stratus collateral?', 'what is the collateral for stratus'],
+    docs: 'node-requirements',
+    a: `A Stratus node locks **40,000 FLUX** as collateral [1]. The collateral is not spent - it stays in your wallet, it just has to sit there while the node is running. The other two tiers are 1,000 FLUX for Cumulus and 12,500 for Nimbus.\n\nWorth being clear about which side of this you want: locking collateral is how you *operate* a node and earn rewards. If you only want to *run an app* on the network you pay per month for its resources and lock nothing.` },
+  { q: ['what hardware do i need for a nimbus node', 'nimbus node requirements', 'what specs for a nimbus'],
+    docs: 'node-requirements',
+    a: `Nimbus wants **4 cores / 8 threads, 32 GB of RAM and 440 GB of SSD or NVMe**, a link of at least 50 Mbit/s, a public IP and roughly 97% uptime, on top of the **12,500 FLUX** collateral [1]. Storage has to be solid state - a spinning disk fails the benchmark.` },
+  { q: ['what are the node tiers and what do they cost', 'compare the node tiers', 'cumulus vs nimbus vs stratus'],
+    docs: 'node-requirements',
+    a: `Three tiers, each a bigger machine and a bigger stake [1]:\n\n| Tier | Collateral | CPU | RAM | Storage | Bandwidth |\n|---|---|---|---|---|---|\n| Cumulus | 1,000 FLUX | 2 cores / 4 threads | 8 GB | 220 GB | ≥ 25 Mbit/s |\n| Nimbus | 12,500 FLUX | 4 cores / 8 threads | 32 GB | 440 GB | ≥ 50 Mbit/s |\n| Stratus | 40,000 FLUX | 8 cores / 16 threads | 64 GB | 880 GB | ≥ 100 Mbit/s |\n\nAll three need a public IP and about 97% uptime. The bigger the tier the larger the applications it can host, which is why a 15-core app only ever lands on Stratus.` },
+  { q: ['how do i become a node operator', 'i want to run a fluxnode, where do i start', 'how do i set up a flux node'],
+    docs: 'node-setup',
+    a: `Four steps [1]. Pick a tier and lock its collateral - 1,000 FLUX for Cumulus, 12,500 for Nimbus, 40,000 for Stratus. Get a machine that meets that tier's specs with a public IP. Install the node software; ArcaneOS is the current route and boots the whole node from a hardened image, with the legacy Ubuntu install still documented. Then confirm the node from the wallet holding the collateral and it starts being paid.\n\nThe **Node** page in here is the dashboard for one you already run. Want me to open it, or shall I pull up the setup guide?` },
+  { q: ['what do i earn from running a node', 'node rewards?', 'is running a flux node profitable'],
+    docs: 'node-rewards',
+    a: `Rewards scale with the tier and are paid in FLUX plus Parallel Assets, and the dashboard shows the current estimate per day, week and month for each tier [1]. I will not tell you whether that beats your electricity bill - the FLUX price and your hosting cost decide that, and both move. The node dashboard has today's numbers.` },
+  { q: ['can i run a node on a raspberry pi', 'will a raspberry pi work as a fluxnode'],
+    docs: 'node-setup',
+    a: `A Raspberry Pi can run a **Cumulus** node only, and it still needs the 1,000 FLUX collateral, 8 GB of RAM, 220 GB of solid-state storage and a public IP [1]. Nimbus and Stratus need real server hardware.` },
+  { q: ['whats the difference between running a node and deploying an app', 'is deploying an app the same as running a node'],
+    docs: 'node-requirements',
+    a: `Opposite ends of the same network. **Running a node** means you supply the hardware: you lock collateral, keep a machine up, host other people's applications and get paid in FLUX [1]. **Deploying an app** means you rent that capacity: you pay per month for cores, RAM and disk and someone else's nodes run it.\n\nNothing stops you doing both, but they share no setup. Which one are you after?` },
+  { q: ['do i need the collateral in one wallet', 'can i split node collateral across addresses'],
+    docs: 'node-requirements',
+    a: `The collateral for one node sits as a single unspent output at one address - 1,000, 12,500 or 40,000 FLUX exactly, in one piece [1]. You cannot add two 500 FLUX outputs together to make a Cumulus. Several nodes can be funded from the same wallet, each with its own output.` },
+  { q: ['how much ram does a stratus node need', 'stratus hardware'],
+    docs: 'node-requirements',
+    a: `Stratus: **8 cores / 16 threads, 64 GB of RAM and 880 GB of SSD or NVMe**, at least 100 Mbit/s, a public IP and about 97% uptime, with **40,000 FLUX** locked [1]. That size is why Stratus is the only tier that can host a full 15-core, 59,000 MB application.` },
+];
+
+// The rest of the ecosystem. v6 invented "sspwallet.online" and a QR button
+// that does not exist, which is the worst failure mode here: a confident made-up
+// domain. Answers are short, sourced, and use the real addresses.
+const ECOSYSTEM_QA = [
+  { k: 'ssp', q: ['do you know something about ssp wallet', 'what is ssp wallet', 'tell me about ssp'],
+    doc: 'SSP Wallet is a true two-factor self-custody wallet: the browser extension holds one private key and the SSP Key mobile app holds a second, and every transaction is a 2-of-2 multisignature signed by both. Documentation at docs.sspwallet.io.',
+    a: 'SSP Wallet is Flux\'s two-factor self-custody wallet [1]. The browser extension holds one private key, the SSP Key app on your phone holds the second, and every transaction is a 2-of-2 multisignature that both have to sign - so a compromised laptop alone cannot move your funds. The documentation is at docs.sspwallet.io. You can also use it to sign Flux app deployments here instead of Zelcore.' },
+  { k: 'zelcore', q: ['what is zelcore', 'is zelcore still a thing'],
+    doc: 'Zelcore is the most feature-rich wallet for the Flux ecosystem, available on Windows, macOS, Linux, Android and iOS.',
+    a: 'Zelcore is the long-standing Flux ecosystem wallet, on Windows, macOS, Linux, Android and iOS [1]. It holds FLUX and a few hundred other assets and it is one of the wallets you can sign a deployment with here; SSP is the newer two-factor option.' },
+  { k: 'edge', q: ['what is fluxedge', 'where do i get a gpu'],
+    doc: 'FluxEdge is the GPU marketplace of the Flux ecosystem: machines with cards such as the L40, A100 and H100 rented by the hour, separate from the CPU nodes that run Flux Cloud applications.',
+    a: 'FluxEdge is the GPU side of Flux - L40, A100 and H100 machines rented by the hour [1]. It is separate from the CPU network that runs applications here, so if you need a GPU for training or inference that is where it lives. Want me to open the GPU page?' },
+  { k: 'xdao', q: ['how does flux governance work', 'what is xdao', 'where do i vote'],
+    doc: 'XDAO is the Flux governance system. FLUX holders vote on proposals affecting the network, including emissions and consensus changes.',
+    a: 'Through XDAO [1]. FLUX holders vote on proposals that change the network - emissions, consensus rules, funding - and the votes bind. The **Governance** page in here lists what is open. Shall I open it?' },
+  { k: 'arcane', q: ['what is arcaneos', 'do i have to use arcaneos'],
+    doc: 'ArcaneOS is the hardened node operating system. It boots a FluxNode from a verified image with UEFI and TPM 2.0, and it is the only node type able to decrypt and run enterprise applications whose compose section is encrypted.',
+    a: 'ArcaneOS is the hardened operating system a FluxNode boots from - a verified image with UEFI and TPM 2.0 rather than a general-purpose Ubuntu box [1]. It is also the only node type that can decrypt and run enterprise applications, whose compose section is encrypted, so those apps only ever land on ArcaneOS nodes. The legacy Ubuntu install still works, but ArcaneOS is the current route.' },
+  { k: 'parallel', q: ['what are parallel assets', 'what is flux on ethereum'],
+    doc: 'Parallel Assets are representations of FLUX on other chains, such as Ethereum, BNB Chain, Solana, Avalanche, Base and Kadena. Node operators receive part of their rewards in Parallel Assets.',
+    a: 'Parallel Assets are FLUX on other chains - Ethereum, BNB Chain, Solana, Avalanche, Base and others - one-for-one with mainnet FLUX [1]. Node rewards come partly in them. One thing that catches people out: app payments are only accepted on FLUX mainnet, never a parallel asset.' },
+  { k: 'drive', q: ['what is fluxdrive', 'where do my files go'],
+    doc: 'FluxDrive is decentralized storage on IPFS, part of Flux Cloud: store, manage and share files with global distribution and unlimited bandwidth, through the web UI or its API, on a subscription paid in FLUX or by card.',
+    a: 'FluxDrive is decentralized storage built on IPFS, part of Flux Cloud [1]. You store, manage and share files with global distribution and unlimited bandwidth, through the web UI or the API, on a subscription you pay in FLUX or by card. It is also where app backups go. Want me to open it?' },
+  { k: 'fluxid', q: ['what is a flux id', 'do i need a wallet to deploy'],
+    doc: 'A Flux ID is the address that owns an application. Deployments are signed with the wallet holding that address; Zelcore, SSP, MetaMask and email login are all supported.',
+    a: 'Your Flux ID is the address that owns an app - it is what signs the specification and what proves the app is yours later [1]. Zelcore, SSP Wallet, MetaMask or an email login all work. You never hand me the key; the page does the signing.' },
+];
+
+// When the docs come back empty, say so. v6 filled the gap with invented
+// domains and invented buttons, which is worse than "I do not know".
+const NO_ANSWER_QA = [
+  ['is there a flux status page', 'Nothing in the docs about a status page, so I would rather not point you at a URL I am guessing at. The **Network** page in here shows live node counts and block height, and the team posts incidents on their Discord and X accounts. Want the Network page?'],
+  ['what is the refund policy if my app fails', 'The docs do not set out a refund policy, and I do not want to invent one. What I can tell you is mechanical: a registration is an on-chain transaction, so it is not reversible once broadcast, and if you cancel early you are credited for the unused part of the term. For anything beyond that, the Help page has the ways to reach the team.'],
+  ['who is the ceo of flux', 'That is not in the documentation I can search, so I will not guess. The team and contributors are listed on influxtechnologies.com.'],
+  ['does flux have an affiliate program', 'I cannot find anything about an affiliate programme in the docs, so I would be making it up. The Help page has the contacts if you want to ask the team directly.'],
+  ['when is the next flux halving', 'Not something the documentation I search covers, and I do not want to give you a date I am guessing. Emission changes go through XDAO votes, so the governance page and the monthly progress reports are where that shows up.'],
+];
+
 // --- flows -------------------------------------------------------------------------
 function build(s) {
   callN = 0;
@@ -958,6 +1134,519 @@ function build(s) {
     m.push({ role: 'assistant', content: `**${name}** looks fine - it is listening and serving requests, last health check 200. Want me to open its page?` });
     return m;
   }
+  if (F === 'deepfact' || F === 'wallet') {
+    // Deep ecosystem and wallet knowledge, always retrieved before it is stated.
+    //
+    // The wallet half is the part with teeth. Asked "I lost my phone with SSP Key,
+    // can I recover my funds?", v6 answered from memory with invented nonsense
+    // about the key living on the nodes that host the app. Someone acting on that
+    // loses money. So: wallet questions are searched, answered from what comes
+    // back, and where the docs do not settle it the answer says so and points at
+    // the wallet's own documentation rather than guessing a procedure.
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const bank = F === 'wallet' ? CONVO.WALLET_QA : CONVO.DEEP_QA;
+    const item = pick(bank);
+    m.push({ role: 'user', content: pick(item.q) });
+    const c = tc('flux_search_docs', { query: item.query || item.k });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: (Array.isArray(item.doc) ? item.doc : [item.doc]).map((d, i) => ({ n: i + 1, title: item.k, text: d, url: item.url || 'https://docs.runonflux.com/' })) }));
+    m.push({ role: 'assistant', content: item.a });
+    // Follow-ups are where depth actually lives: the second question is the one
+    // a person asks once they have the first answer.
+    const fus = item.fu || [];
+    if (fus.length && chance(0.65)) {
+      const n = chance(0.35) ? 2 : 1;
+      const used = [];
+      for (let i = 0; i < n && i < fus.length; i += 1) {
+        const f = pick(fus.filter((x) => !used.includes(x))) || fus[0];
+        used.push(f);
+        m.push({ role: 'user', content: f.u });
+        if (f.doc) {
+          const c2 = tc('flux_search_docs', { query: f.query || f.u.replace(/^(what|how|can|do|does|is|are|where|who|why)\s+/i, '').replace(/\?$/, '') });
+          m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+          m.push(toolMsg(c2.id, { results: [{ n: 1, title: item.k, text: f.doc, url: item.url || 'https://docs.runonflux.com/' }] }));
+        }
+        m.push({ role: 'assistant', content: f.a });
+      }
+    }
+    return m;
+  }
+  if (F === 'walletsafety') {
+    // The refusals that must survive every future round. Not hedging: a short,
+    // concrete "do not do that, here is why, here is what to do instead".
+    if (chance(0.65)) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const item = pick(CONVO.WALLET_SAFETY);
+    m.push({ role: 'user', content: pick(item.q) });
+    m.push({ role: 'assistant', content: item.a });
+    if (item.fu && chance(0.5)) {
+      m.push({ role: 'user', content: item.fu.u });
+      m.push({ role: 'assistant', content: item.fu.a });
+    }
+    return m;
+  }
+  // --- v7 conversation flows ------------------------------------------------------
+  // The brief: "able to do it all, just heavily favouring deployments". Answering a
+  // question properly and stopping is a correct answer; every one of these used to
+  // end in a WordPress pitch.
+  if (F === 'script') {
+    // A whole conversation, replayed. These carry what no single-turn row can:
+    // context held over six turns, one question at a time, and a deployment that
+    // arrives when the conversation gets there rather than on turn one.
+    const sc = pick(CONVO.SCRIPTS);
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    // Sometimes cut the conversation short, so the model does not learn that every
+    // exchange runs to exactly this length.
+    const userTurns = sc.turns.filter((t) => t.u).length;
+    const keep = chance(0.3) ? ri(2, Math.max(2, userTurns)) : userTurns;
+    let seen = 0;
+    for (const t of sc.turns) {
+      if (t.u) { seen += 1; if (seen > keep) break; m.push({ role: 'user', content: t.u }); continue; }
+      if (t.c) {
+        const c = tc(t.c, t.args);
+        m.push({ role: 'assistant', content: '', tool_calls: [c] });
+        m.push(toolMsg(c.id, t.r));
+      }
+      if (t.a) m.push({ role: 'assistant', content: t.a });
+    }
+    return m;
+  }
+  if (F === 'chat' || F === 'creative' || F === 'persona') {
+    // General conversation. The model is allowed to be a language model.
+    const uiLike = chance(0.7);
+    if (uiLike) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    if (F === 'creative') {
+      const item = pick(CONVO.CREATIVE);
+      m.push({ role: 'user', content: pick(item.ask) });
+      m.push({ role: 'assistant', content: item.out });
+      if (chance(0.4)) {
+        const [q2, a2] = pick([
+          ['another one', pick(CONVO.CREATIVE.filter((x) => x !== item)).out],
+          ['thats good, did you write that just now', 'Just now, yes. It is not retrieved from anywhere, which also means I could not reproduce it exactly if you asked again.'],
+          ['can you make it longer', 'I can, though short is usually doing more work than long here. Tell me what you want more of and I will extend that part rather than padding the whole thing.'],
+        ]);
+        m.push({ role: 'user', content: q2 });
+        m.push({ role: 'assistant', content: a2 });
+      }
+      return m;
+    }
+    const bank = F === 'persona' ? CONVO.PERSONA_QA : chance(0.55) ? CONVO.TECH_QA : CONVO.WORLD_QA;
+    const rounds = chance(0.45) ? 2 : chance(0.2) ? 3 : 1;
+    const used = [];
+    for (let i = 0; i < rounds; i += 1) {
+      const item = pick(bank.filter((x) => !used.includes(x))) || pick(bank);
+      used.push(item);
+      m.push({ role: 'user', content: item[0] });
+      m.push({ role: 'assistant', content: item[1] });
+    }
+    // Sometimes the conversation turns into work. Sometimes it just ends, which is
+    // the part v6 never learned.
+    if (uiLike && chance(0.3)) {
+      const s2 = { ...scenario(), surface: s.surface, pricing: s.pricing };
+      m.push({ role: 'user', content: pick(['anyway', 'ok different topic', 'right, back to it']) + ' - ' + userOpening(s2).toLowerCase() });
+      const comps = [{ name: s2.preset.key === 'custom' ? 'app' : s2.preset.key, image: s2.image, ports: s2.ports, cpu: roundCpu(s2.cpu), ram: roundRam(s2.ram), hdd: s2.hdd }];
+      const c1 = tc('flux_quote_app', { components: comps, instances: s2.instances });
+      m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+      const q1 = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: s2.instances, expire: 88000 }, s.pricing);
+      m.push(toolMsg(c1.id, q1));
+      m.push({ role: 'assistant', content: `${comps[0].cpu} ${comps[0].cpu === 1 ? 'core' : 'cores'}, ${ramWords(comps[0].ram)} and ${comps[0].hdd} GB on ${s2.instances} ${s2.instances === 1 ? 'instance' : 'instances'} is **${money(q1.usdTotal)}** a month (≈ ${q1.flux} FLUX). Give me a name and I will fill the form in.` });
+    }
+    return m;
+  }
+  if (F === 'fluxtopic') {
+    // The ecosystem beyond deployments: the coin, mining, Titan, Fusion, FluxOS,
+    // decentralisation, comparisons, the marketplace. Searched, then answered.
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const item = pick(CONVO.FLUX_TOPICS);
+    m.push({ role: 'user', content: pick(item.q) });
+    const c = tc('flux_search_docs', { query: item.k });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: [{ n: 1, title: item.k, text: item.doc, url: 'https://docs.runonflux.com/' }] }));
+    m.push({ role: 'assistant', content: item.a });
+    if (chance(0.4)) {
+      const item2 = pick(CONVO.FLUX_TOPICS.filter((x) => x !== item));
+      m.push({ role: 'user', content: pick(item2.q) });
+      const c2 = tc('flux_search_docs', { query: item2.k });
+      m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      m.push(toolMsg(c2.id, { results: [{ n: 1, title: item2.k, text: item2.doc, url: 'https://docs.runonflux.com/' }] }));
+      m.push({ role: 'assistant', content: item2.a });
+    }
+    return m;
+  }
+  if (F === 'trouble') {
+    // Read the log, name the cause, propose the specific change. Not "check your
+    // configuration", which is what a model says when it has not read the log.
+    // needs a log tool: diagnosing from a log is the whole point, and on a surface
+    // without one the flow was calling flux_get_app and pretending it returned lines.
+    if (!has(s, 'flux_get_app_logs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const t = pick(CONVO.TROUBLE);
+    const name = pick(['mysite', 'craftworld', 'shopfront', 'api', 'blogstack', 'appdb']);
+    m.push({ role: 'user', content: chance(0.5) ? pick(t.sym) : `${name} ${pick(t.sym).replace(/^(my app|it|the container|my site|my database|one instance)\s*/i, '')}` });
+    if (chance(0.35) && has(s, 'flux_list_my_apps')) {
+      const c0 = tc('flux_list_my_apps', {});
+      m.push({ role: 'assistant', content: '', tool_calls: [c0] });
+      m.push(toolMsg(c0.id, { apps: [{ name, instances: 3, expiresInDays: ri(6, 25) }, { name: 'appdb', instances: 1, expiresInDays: ri(6, 25) }] }));
+      m.push({ role: 'assistant', content: `Let me read its log.` });
+    }
+    const cl = tc('flux_get_app_logs', { name, lines: 50 });
+    m.push({ role: 'assistant', content: '', tool_calls: [cl] });
+    m.push(toolMsg(cl.id, { lines: t.logs }));
+    if (t.fix.from) {
+      const unit = t.fix.what === 'more disk' ? 'hdd' : 'ram';
+      const comps = [{ name: 'app', image: 'myorg/app:1.4', ports: [8080], cpu: 1, ram: unit === 'ram' ? t.fix.to : 1000, hdd: unit === 'hdd' ? t.fix.to : 10 }];
+      const before = quoteFor({ compose: [{ cpu: 1, ram: unit === 'ram' ? t.fix.from : 1000, hdd: unit === 'hdd' ? t.fix.from : 10 }], instances: 3, expire: 88000 }, s.pricing);
+      m.push({ role: 'assistant', content: `${t.dx}\n\nLet me price the change.` });
+      const cq = tc('flux_quote_app', { components: comps, instances: 3 });
+      m.push({ role: 'assistant', content: '', tool_calls: [cq] });
+      const after = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: 3, expire: 88000 }, s.pricing);
+      m.push(toolMsg(cq.id, after));
+      m.push({ role: 'assistant', content: `Going from ${unit === 'ram' ? `${ramWords(t.fix.from)} to ${ramWords(t.fix.to)}` : `${t.fix.from} GB to ${t.fix.to} GB of disk`} takes it from **${money(before.usdTotal)}** to **${money(after.usdTotal)}** a month.${t.fix.note ? `\n\n${t.fix.note}` : ''}\n\nYou are credited for the unused part of the current term, so the change costs the difference rather than a fresh month. Want it prepared?` });
+    } else {
+      m.push({ role: 'assistant', content: `${t.dx}\n\n${t.fix.note}` });
+    }
+    if (chance(0.35)) {
+      const [q2, a2] = pick([
+        ['how do i stop it happening again', 'Watch the memory and disk graphs on the app page for a week and size from what you see rather than from a guess. Most of these are a number that was right when the app was small.'],
+        ['is my data ok', 'Anything on the persistent path is fine, that survives a restart. Anything the container wrote elsewhere is gone, which is the usual reason to move a data directory onto containerData before this happens rather than after.'],
+        ['will this happen on the other instances too', 'Yes, if it is a sizing problem: every instance declares the same resources, so all three hit the same wall. If it were one node misbehaving you would see one instance fail and two healthy.'],
+        ['can you just fix it', 'I can prepare the change, but I cannot sign it. The updated specification needs your signature and the page handles that. Say the word and it will be filled in for you.'],
+      ]);
+      m.push({ role: 'user', content: q2 });
+      m.push({ role: 'assistant', content: a2 });
+    }
+    return m;
+  }
+  if (F === 'advise' || F === 'codehelp') {
+    const bank = F === 'advise' ? CONVO.ADVICE : CONVO.CODEHELP;
+    if (chance(0.6)) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const item = pick(bank);
+    m.push({ role: 'user', content: pick(item.q) });
+    m.push({ role: 'assistant', content: item.a });
+    if (chance(0.45)) {
+      const item2 = pick(bank.filter((x) => x !== item));
+      m.push({ role: 'user', content: pick(item2.q) });
+      m.push({ role: 'assistant', content: item2.a });
+    }
+    return m;
+  }
+  if (F === 'mktdeploy' || F === 'mktladder') {
+    // Deploy a marketplace app at its ACTUAL specification. Every field here comes
+    // from data/marketplace.json, fetched from the live API, because the model had
+    // been confidently inventing these: wrong image, wrong size, one instance
+    // instead of three, and no sync flag at all, which is the field that decides
+    // whether a game world survives an instance moving node.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const ladder = F === 'mktladder' ? pick(MKT.LADDERS) : null;
+    let chosenName = null;
+    const app = ladder ? ladder[Math.floor(rnd() * ladder.length)] : pick(MKT.APPS);
+    const c0 = app.compose[0];
+    const mode = MKT.syncMode(c0.containerData);
+    const family = app.name.replace(/\d+(GB|Slots)?$/i, '') || app.name;
+
+    if (ladder) {
+      // The ladder is the interesting case: the marketplace sells one app at
+      // several sizes and picking the rung is the actual work.
+      m.push({ role: 'user', content: pick([`i want a ${family.toLowerCase()} server`, `can you set up ${family.toLowerCase()} for us`, `how much is ${family.toLowerCase()} on here`]) });
+      const rungs = ladder.map((x) => `- **${x.name}**: ${x.compose[0].cpu} ${x.compose[0].cpu === 1 ? 'core' : 'cores'}, ${ramWords(x.compose[0].ram)}, ${x.compose[0].hdd} GB${x.priceUSD ? ` - $${x.priceUSD.toFixed(2)} a month` : ''}`).join('\n');
+      m.push({ role: 'assistant', content: `It is in the marketplace at ${ladder.length} sizes, so the question is which rung:\n\n${rungs}\n\n${/minecraft/i.test(family) ? 'The number is the memory the server gets, and mods are what eat it. Vanilla with a handful of friends is happy at 4 GB; a big modpack wants 8 or 16.' : /palworld/i.test(family) ? 'The number is player slots. Palworld is memory-hungry per player, which is why the ladder climbs the way it does.' : /enshrouded/i.test(family) ? 'The number is player slots.' : 'Pick by how much you expect to store and serve.'}\n\nWhich one, and what should it be called?` });
+      chosenName = `${family.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}${ri(1, 99)}`;
+      m.push({ role: 'user', content: pick([`${app.name.toLowerCase()}, call it ${chosenName}`, `the ${ramWords(c0.ram).toLowerCase()} one please, name ${chosenName}`]) });
+    } else {
+      m.push({ role: 'user', content: pick([`deploy ${app.name} from the marketplace`, `i want to run ${app.name}`, `can you set up ${app.name}`]) });
+    }
+
+    const nm = chosenName || `${app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12)}${ri(1, 99)}`;
+    const comps = app.compose.map((c) => ({
+      name: c.name, image: c.repotag, ports: c.containerPorts, env: c.environmentParameters,
+      cpu: c.cpu, ram: c.ram, hdd: c.hdd, containerData: c.containerData,
+    }));
+    const qa = { components: comps, instances: app.instances };
+    const cq = tc('flux_quote_app', qa);
+    m.push({ role: 'assistant', content: '', tool_calls: [cq] });
+    // A g: app is 20% cheaper - appSpecHelpers.js multiplies actualPriceToPay by 0.8.
+    const raw = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: app.instances, expire: 88000 }, s.pricing);
+    const q = mode === 'g' ? { ...raw, usdTotal: +(raw.usdTotal * 0.8).toFixed(2), flux: +(raw.flux * 0.8).toFixed(2), gDiscount: true } : raw;
+    m.push(toolMsg(cq.id, q));
+    const cp = tc('ui_prefill_deploy', { name: nm, description: app.description.slice(0, 120), ...qa });
+    m.push({ role: 'assistant', content: '', tool_calls: [cp] });
+    m.push(toolMsg(cp.id, { ok: true, at: '/deploy', prefilled: true }));
+
+    const total = comps.reduce((t, c) => ({ cpu: +(t.cpu + c.cpu).toFixed(1), ram: t.ram + c.ram, hdd: t.hdd + c.hdd }), { cpu: 0, ram: 0, hdd: 0 });
+    const flagLine = mode === 'g'
+      ? `\n\nThe line that matters is \`containerData: ${c0.containerData}\`. The \`g:\` makes it primary/standby: one instance actually runs, the other two hold a synchronised copy of ${c0.containerData.slice(2)}, and if the node running it drops the world carries on somewhere else. Without that flag a reschedule would come back empty. It also takes 20% off the price.`
+      : mode === 'r'
+        ? `\n\nNote \`containerData: ${c0.containerData}\`. The \`r:\` replicates ${c0.containerData.slice(2)} across all three instances, so they all run and they all see the same files.`
+        : '';
+    m.push({ role: 'assistant', content: `**${nm}**: \`${c0.repotag}\`, ${total.cpu} ${total.cpu === 1 ? 'core' : 'cores'}, ${ramWords(total.ram)}, ${total.hdd} GB${comps.length > 1 ? ` across ${comps.length} components` : ''}, on **${app.instances} instances**${c0.containerPorts.length ? `, port ${c0.containerPorts.join(' and ')}` : ''} - **${money(q.usdTotal)}** a month (≈ ${q.flux} FLUX). The form is filled in; check it and sign.${flagLine}` });
+
+    if (chance(0.4)) {
+      const [q2, a2] = pick([
+        ['why three instances, i only need one server', mode === 'g'
+          ? `Because only one of them is serving. With \`g:\` the other two are standby copies holding the same ${c0.containerData.slice(2)}, and they exist so that the node hosting your server can vanish without taking the data with it.\n\nYou could set it to one instance. It would be cheaper right up until the first reschedule, and then it would be empty. The marketplace ships this at three for that reason, and the ${mode === 'g' ? '20% g: discount' : 'discount'} narrows the gap.`
+          : 'Three is the marketplace default: copies on independent nodes so one going away does not take the app down. For this app the instances do not share a single save the way a game does.'],
+        ['can i change the region', app.geolocationOptions && app.geolocationOptions.length
+          ? `Yes, this one offers ${app.geolocationOptions.map((g) => REGION_NAMES[g] || g).join(', ')}. Pin it close to your players, because latency is the thing people actually notice. Want me to set it?`
+          : 'Geolocation is a field on the specification, so yes. Narrowing it shrinks the pool of nodes that can take the app, which is only a problem in small regions.'],
+        ['what are those environment variables', c0.environmentParameters.length
+          ? `The preset for this app:\n\n${c0.environmentParameters.map((e) => `- \`${e}\``).join('\n')}\n\nThey are editable before you sign. ${/EULA/.test(c0.environmentParameters.join()) ? 'EULA=TRUE is the Mojang licence acceptance and the server will not start without it.' : 'Change what you need and leave the rest.'}`
+          : 'This one ships with no preset environment variables. You can add your own before signing.'],
+      ]);
+      m.push({ role: 'user', content: q2 });
+      m.push({ role: 'assistant', content: a2 });
+    }
+    return m;
+  }
+  if (F === 'syncmode') {
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const item = pick(MKT.SYNC_QA);
+    m.push({ role: 'user', content: pick(item.q) });
+    const c = tc('flux_search_docs', { query: item.query });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: [{ n: 1, title: item.k, text: item.doc, url: item.url }] }));
+    m.push({ role: 'assistant', content: item.a });
+    if ((item.fu || []).length && chance(0.6)) {
+      const f = pick(item.fu);
+      m.push({ role: 'user', content: f.u });
+      m.push({ role: 'assistant', content: f.a });
+    }
+    return m;
+  }
+  // --- v7 -----------------------------------------------------------------------
+  if (F === 'nodeop') {
+    // Operator questions. The whole point of this flow is the tool it does NOT
+    // call: v6 answered "how much FLUX does a Stratus node need?" with a $2.50
+    // application quote. Search the docs, answer the operator question, and
+    // only offer the deployment side if the person turns out to want it.
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const item = pick(NODEOP_QA);
+    m.push({ role: 'user', content: pick(item.q) });
+    const c = tc('flux_search_docs', { query: pick(item.q).replace(/\?$/, '') });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    const body = item.docs === 'node-requirements'
+      ? `Minimum requirements for each FluxNode tier. ${TIER_TABLE}`
+      : item.docs === 'node-rewards'
+        ? 'The node dashboard shows collateral and estimated rewards per tier: Cumulus 1,000 FLUX, Nimbus 12,500 FLUX, Stratus 40,000 FLUX, with rewards per day, week and month in native FLUX plus Parallel Assets.'
+        : `Running a FluxNode: choose a tier, lock its collateral, provision a machine that meets the tier specs with a public IP, install ArcaneOS (or the legacy Ubuntu setup) and confirm the node from the wallet holding the collateral. ${TIER_TABLE}`;
+    m.push(toolMsg(c.id, { results: [{ n: 1, title: 'FluxNode requirements', text: body, url: 'https://docs.runonflux.com/fluxnodes/' }] }));
+    // "the Node page in here" only exists in the web app; off that surface the
+    // same answer has to stop at the facts.
+    const uiTail = has(s, 'ui_navigate');
+    m.push({ role: 'assistant', content: uiTail ? item.a : item.a.replace(/\n\nThe \*\*Node\*\* page in here[\s\S]*$/, '').replace(/ Want me to open it\?$/, '') });
+    const fu = pick(['none', 'none', 'node-page', 'crossover', 'more']);
+    if (fu === 'node-page' && has(s, 'ui_navigate')) {
+      m.push({ role: 'user', content: pick(['open the node page', 'yes take me there', 'show me the node dashboard']) });
+      const c2 = tc('ui_navigate', { to: '/node' });
+      m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      m.push(toolMsg(c2.id, { ok: true, at: '/node' }));
+      m.push({ role: 'assistant', content: 'Here you go. This is the dashboard for nodes you already run - if you have not set one up yet it will be empty, and the setup guide is the place to start.' });
+    } else if (fu === 'crossover') {
+      // the operator question turns into a tenant question. Only here is a quote right.
+      m.push({ role: 'user', content: pick(['actually i just want to host my website, forget the node', 'hmm thats a lot. i only wanted to run a small app really']) });
+      const comps = [{ name: 'web', image: 'nginx:1.27', ports: [80], cpu: 0.5, ram: 500, hdd: 5, env: [] }];
+      const c3 = tc('flux_quote_app', { components: comps, instances: 3 });
+      m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      const q3 = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: 3, expire: 88000 }, s.pricing);
+      m.push(toolMsg(c3.id, q3));
+      m.push({ role: 'assistant', content: `Then you want the other side of this entirely - no collateral, no hardware, you just pay for what the app uses. A small static site on 0.5 cores, 500 MB and 5 GB across three instances is **${money(q3.usdTotal)}** a month (≈ ${q3.flux} FLUX). Tell me what the site is and I will size it properly.` });
+    } else if (fu === 'more') {
+      const item2 = pick(NODEOP_QA.filter((x) => x !== item));
+      m.push({ role: 'user', content: pick(item2.q) });
+      m.push({ role: 'assistant', content: uiTail ? item2.a : item2.a.replace(/\n\nThe \*\*Node\*\* page in here[\s\S]*$/, '') });
+    }
+    return m;
+  }
+  if (F === 'ecosystem') {
+    // Anything in the wider ecosystem: wallets, governance, GPU, storage.
+    // v6 answered "do you know something about ssp wallet" with an invented
+    // domain and an invented QR button. Search, answer, use the real address.
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const item = pick(ECOSYSTEM_QA);
+    m.push({ role: 'user', content: pick(item.q) });
+    const c = tc('flux_search_docs', { query: pick(item.q).replace(/^(what|who|how|do|does|where) (is|are|you|i|do|does) ?/i, '').trim() || item.k });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: [{ n: 1, title: item.k, text: item.doc, url: 'https://docs.runonflux.com/' }] }));
+    m.push({ role: 'assistant', content: has(s, 'ui_navigate') ? item.a : item.a.replace(/ (Want me to open [^.]*\.|Shall I open it\?)$/, '') });
+    if (chance(0.35)) {
+      const [q2, a2] = pick([
+        ['is it free', 'The wallet software is free; you only pay network fees when you move funds.'],
+        ['can i use it to pay for apps here', 'Yes - it signs the deployment and pays in FLUX, and paying in FLUX takes 5% off the price.'],
+        ['where do i download it', 'From its own site rather than anywhere in here - I will not paste a link I am not sure of, but the Help page has the official ones.'],
+        ['do you have a page for it here', 'Not inside Flux Cloud, no. This app is deployments, storage, nodes and governance; the wallets live on their own sites.'],
+      ]);
+      m.push({ role: 'user', content: q2 });
+      m.push({ role: 'assistant', content: a2 });
+    }
+    return m;
+  }
+  if (F === 'nodocs') {
+    // The docs have nothing. Say so. Do not invent a domain, a page or a policy.
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const [q, a] = pick(NO_ANSWER_QA);
+    m.push({ role: 'user', content: q });
+    const c = tc('flux_search_docs', { query: q });
+    m.push({ role: 'assistant', content: '', tool_calls: [c] });
+    m.push(toolMsg(c.id, { results: [] }));
+    m.push({ role: 'assistant', content: a });
+    return m;
+  }
+  if (F === 'speccontact') {
+    // contacts and description ARE fields on the specification. v6 refused:
+    // "no tool for that here, add the email in the description under /apps",
+    // which is wrong twice over. Editing a draft means calling prefill again
+    // with the field filled in.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const key = pick(['palworld', 'minecraft', 'wordpress', 'vpn']);
+    const P0 = REAL_APPS[key];
+    const nm = `${key}${ri(1, 99)}`;
+    const base = { name: nm, description: `${key} server`, components: [{ name: key, image: P0.image, ports: P0.ports, cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd, env: [], ...(P0.containerData ? { containerData: P0.containerData } : {}) }], instances: P0.instances || 3 };
+    m.push({ role: 'user', content: pick([`set up ${P0.words[0]}, call it ${nm}`, `${P0.words[0]} please, name ${nm}`]) });
+    const c1 = tc('flux_quote_app', { components: base.components, instances: base.instances });
+    m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const q1 = quoteFor({ compose: base.components.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: base.instances, expire: 88000 }, s.pricing);
+    m.push(toolMsg(c1.id, q1));
+    const c2 = tc('ui_prefill_deploy', base);
+    m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    m.push(toolMsg(c2.id, { ok: true, at: '/deploy', prefilled: true }));
+    m.push({ role: 'assistant', content: `**${nm}**: ${P0.image}, ${P0.cpu} ${P0.cpu === 1 ? 'core' : 'cores'}, ${ramWords(P0.ram)}, ${P0.hdd} GB on ${base.instances} instance${base.instances === 1 ? '' : 's'} - **${money(q1.usdTotal)}** a month (≈ ${q1.flux} FLUX). The form is filled in; review it and sign.` });
+
+    const email = pick(['tadeas@runonflux.io', 'ops@example.com', 'me@mydomain.org', 'admin@acme.co']);
+    const order = pick(['contact', 'desc', 'contact', 'both']);
+    if (order === 'contact' || order === 'both') {
+      m.push({ role: 'user', content: pick([`can you add contact ${email}`, `add ${email} as the contact`, `put my email ${email} on it`, `contact email: ${email}`]) });
+      const withC = { ...base, contacts: [email] };
+      const c3 = tc('ui_prefill_deploy', withC);
+      m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      m.push(toolMsg(c3.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `Added - ${email} is on the contacts field now, so expiry warnings and notices about the app go there. Nothing else changed, it is still **${money(q1.usdTotal)}** a month.` });
+      Object.assign(base, withC);
+    }
+    if (order === 'desc' || order === 'both') {
+      const descs = {
+        palworld: 'Palworld dedicated server - catch Pals, build a base, play with friends on a private world.',
+        minecraft: 'Private Minecraft world for friends, always on.',
+        wordpress: 'WordPress site with its own database, backed up nightly.',
+        vpn: 'Private WireGuard VPN gateway for personal use.',
+      };
+      m.push({ role: 'user', content: pick([`adjust the description to have something nice about ${key}`, `write a better description for it`, `can the description say something about ${key}`]) });
+      const withD = { ...base, description: descs[key] };
+      const c4 = tc('ui_prefill_deploy', withD);
+      m.push({ role: 'assistant', content: '', tool_calls: [c4] });
+      m.push(toolMsg(c4.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `Updated the description to "${descs[key]}" - it shows on the app page and in the marketplace listing. Price is unchanged. Change anything else, or is it ready to sign?` });
+    }
+    return m;
+  }
+  if (F === 'specedit-live') {
+    // the same two fields, on an app that is already deployed
+    const name = pick(['mysite', 'craftworld', 'shop7']);
+    const email = pick(['ops@example.com', 'me@mydomain.org']);
+    m.push({ role: 'user', content: pick([`add ${email} as a contact on ${name}`, `I want expiry emails for ${name}, use ${email}`]) });
+    if (has(s, 'flux_get_app')) {
+      const c0 = tc('flux_get_app', { name });
+      m.push({ role: 'assistant', content: '', tool_calls: [c0] });
+      m.push(toolMsg(c0.id, { name, instances: 3, contacts: [], compose: [{ name: 'web', repotag: 'nginx:1.27', cpu: 0.5, ram: 500, hdd: 5 }], expire: 88000 }));
+    }
+    m.push({ role: 'assistant', content: `Contacts live on the specification, so changing them means signing an updated spec for **${name}** - same resources, same term, no extra cost. Shall I prepare that with ${email} on it?` });
+    m.push({ role: 'user', content: pick(['yes', 'go ahead', 'yes please']) });
+    if (has(s, 'flux_build_spec')) {
+      const c1 = tc('flux_build_spec', { name, components: [{ name: 'web', image: 'nginx:1.27', ports: [80], cpu: 0.5, ram: 500, hdd: 5 }], instances: 3, contacts: [email] });
+      m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+      m.push(toolMsg(c1.id, { version: 8, name, contacts: [email], instances: 3 }));
+      m.push({ role: 'assistant', content: `Prepared: **${name}** unchanged except contacts, now ${email}. Sign it and the update goes out - you are credited for the unused part of the current term, so the change itself costs nothing.` });
+    } else {
+      m.push({ role: 'assistant', content: `Prepared: **${name}** unchanged except contacts, now ${email}. Review and sign it in the page.` });
+    }
+    return m;
+  }
+  if (F === 'realapp' || F === 'bigorder') {
+    // The catalogue people actually deploy, at the sizes those images actually
+    // need. v6 quoted Palworld at whatever the user said and never mentioned
+    // that it wants 16 GB, so the deployment would have died on first boot.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const key = pick(F === 'bigorder' ? ['palworld', 'minecraft', 'explorer'] : Object.keys(REAL_APPS));
+    const P0 = REAL_APPS[key];
+    const NOTE = {
+      palworld: 'Palworld is the memory hog of the two big game servers - below 16 GB it gets killed part way through loading a world',
+      minecraft: 'a 20-player world with a few mods settles around 8 GB; below that it stalls on chunk generation',
+      presearch: 'it is tiny - a few hundred MB is genuinely enough',
+      vpn: 'a WireGuard gateway needs almost nothing; bandwidth matters more than cores',
+      explorer: 'Blockbook indexes the whole chain, so the disk is the number that matters and it only grows',
+      ethereum: 'a full geth node is 600 GB and rising, and it needs fast disk more than cores',
+      wordpress: 'WordPress itself is light; give the database the memory',
+    }[key];
+
+    if (F === 'bigorder') {
+      // The scale check, rebuilt on the real marketplace shape. The old version
+      // told people "30 instances is 30 separate worlds, you want 1", which is
+      // wrong twice: with the g: flag the extra instances are standby copies of
+      // ONE world, and dropping to a single instance is what loses the save when
+      // the node it is on goes away.
+      const inst = pick([20, 25, 30, 40, 50]);
+      const askCpu = pick([5, 6, 8]);
+      const right = P0.instances || 3;
+      const cd = P0.containerData || '';
+      const isG = cd.startsWith('g:');
+      m.push({ role: 'user', content: pick([`deploy ${key} on ${inst} instances with ${askCpu} cpu cores`, `i want ${inst} instances of ${key}, ${askCpu} cores each`]) });
+      const comps = [{ name: key, image: P0.image, ports: P0.ports, cpu: askCpu, ram: P0.ram, hdd: P0.hdd, env: [], containerData: cd }];
+      const c1 = tc('flux_quote_app', { components: comps, instances: inst });
+      m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+      const qBig = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: inst, expire: 88000 }, s.pricing);
+      m.push(toolMsg(c1.id, qBig));
+      const c2 = tc('flux_quote_app', { components: comps, instances: right });
+      m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      const qR = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: right, expire: 88000 }, s.pricing);
+      const qRight = isG ? { ...qR, usdTotal: +(qR.usdTotal * 0.8).toFixed(2), flux: +(qR.flux * 0.8).toFixed(2), gDiscount: true } : qR;
+      m.push(toolMsg(c2.id, qRight));
+      m.push({ role: 'assistant', content: `I can, but ${inst} will not do what you are hoping. ${isG
+        ? `This app runs \`containerData: ${cd}\`, and the \`g:\` means primary/standby: **one** instance actually serves players and the rest hold a synchronised copy of ${cd.slice(2)} so the world survives the serving node going away. Extra instances are extra standby copies, not extra capacity. Player count comes from the size of the one that runs.`
+        : `Instances are whole copies of the app on separate nodes, not a bigger server. Nothing about ${inst} of them makes one of them serve more people.`}
+
+The marketplace ships this at **${right} instance${right === 1 ? '' : 's'}**${isG ? `, which is the right number` : ''}:
+
+- ${right} instances: **${money(qRight.usdTotal)}** a month (≈ ${qRight.flux} FLUX)${isG ? ' - the g: flag takes 20% off' : ''}
+- ${inst} instances: **${money(qBig.usdTotal)}** a month (≈ ${qBig.flux} FLUX), for nothing extra
+
+I have kept the RAM at ${ramWords(P0.ram)} rather than ${askCpu} cores\' worth of guesswork, because that is what the marketplace sizes this at. What should it be called?` });
+      const nm = `${key}${ri(1, 99)}`;
+      m.push({ role: 'user', content: pick([`ah i see. ${right} then, call it ${nm}`, `ok ${right} is fine, name it ${nm}`]) });
+      const qa = { name: nm, description: `${key} server`, components: comps, instances: right };
+      const c3 = tc('ui_prefill_deploy', qa);
+      m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+      m.push(toolMsg(c3.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `**${nm}**: ${P0.image}, ${askCpu} cores, ${ramWords(P0.ram)}, ${P0.hdd} GB on ${right} instance${right === 1 ? '' : 's'}${P0.ports.length ? `, port ${P0.ports[0]}` : ''}${cd ? `, \`${cd}\`` : ''} - **${money(qRight.usdTotal)}** a month (≈ ${qRight.flux} FLUX). The form is filled in; review it and sign.` });
+      return m;
+    }
+
+    // realapp: ask for it plainly, sometimes with a size that will not work
+    const undersize = chance(0.45);
+    const badRam = undersize ? Math.max(500, Math.round(P0.ram / 4 / 100) * 100) : P0.ram;
+    m.push({ role: 'user', content: undersize
+      ? pick([`deploy ${P0.words[0]} with ${P0.cpu} cores and ${ramWords(badRam)} of ram`, `${P0.words[0]}, ${ramWords(badRam)} should be enough right?`])
+      : pick([`how do i deploy ${P0.words[0]}`, `can flux run ${P0.words[0]}?`, `i want ${P0.words[0]}`]) });
+    if (chance(0.5)) {
+      const cD = tc('flux_search_docs', { query: `${key} deploy` });
+      m.push({ role: 'assistant', content: '', tool_calls: [cD] });
+      m.push(toolMsg(cD.id, { results: [{ n: 1, title: `${key} on Flux`, text: `${key} runs from the ${P0.image} image on Flux Cloud; it is in the marketplace templates.`, url: 'https://docs.runonflux.com/fluxcloud/marketplace' }] }));
+    }
+    const inst0 = P0.instances || 3;
+    const comps = [{ name: key, image: P0.image, ports: P0.ports, cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd, env: [], ...(P0.containerData ? { containerData: P0.containerData } : {}) }];
+    const c1 = tc('flux_quote_app', { components: comps, instances: inst0 });
+    m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const q1r = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: inst0, expire: 88000 }, s.pricing);
+    const q1 = (P0.containerData || '').startsWith('g:') ? { ...q1r, usdTotal: +(q1r.usdTotal * 0.8).toFixed(2), flux: +(q1r.flux * 0.8).toFixed(2), gDiscount: true } : q1r;
+    m.push(toolMsg(c1.id, q1));
+    m.push({ role: 'assistant', content: `${undersize ? `${ramWords(badRam)} will not hold it - ${NOTE}. I have quoted it at ${ramWords(P0.ram)} instead.\n\n` : `Yes. The image is \`${P0.image}\`, and ${NOTE}.\n\n`}${P0.cpu} ${P0.cpu === 1 ? 'core' : 'cores'}, ${ramWords(P0.ram)}, ${P0.hdd} GB on ${inst0} instance${inst0 === 1 ? '' : 's'} is **${money(q1.usdTotal)}** a month (≈ ${q1.flux} FLUX)${P0.ports.length ? `, on port ${P0.ports[0]}` : ''}.${(P0.containerData || '').startsWith('g:') ? ` It runs \`${P0.containerData}\`, so one instance serves and the others keep a synchronised copy of the data - that is what makes it survive a node going away, and it takes 20% off the price.` : ''} What should I call it?` });
+    const nm = `${key}${ri(1, 99)}`;
+    m.push({ role: 'user', content: pick([nm, `call it ${nm}`, `${nm} please`]) });
+    const c2 = tc('ui_prefill_deploy', { name: nm, description: `${key} on Flux`, components: comps, instances: inst0 });
+    m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+    m.push(toolMsg(c2.id, { ok: true, at: '/deploy', prefilled: true }));
+    m.push({ role: 'assistant', content: `**${nm}** is in the form at ${P0.cpu} ${P0.cpu === 1 ? 'core' : 'cores'}, ${ramWords(P0.ram)}, ${P0.hdd} GB on ${inst0} instance${inst0 === 1 ? '' : 's'} - **${money(q1.usdTotal)}** a month. Review it and sign to launch.` });
+    return m;
+  }
   if (F === 'orbit') {
     // Deploy with Git. v5 refused these outright, which was wrong.
     s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
@@ -988,9 +1677,13 @@ function build(s) {
     m[0] = { role: 'system', content: s.surface.system };
     const [q, a] = pick(DOC_ANSWERS);
     m.push({ role: 'user', content: chance(0.5) ? q : `${q}?` });
-    const c = tc('flux_search_docs', { query: q.replace(/^(what|how|can) (is|are|i|long) ?/i, '').trim() || q });
+    const c = tc('flux_search_docs', { query: q.replace(/^(what|how|can|do|does|where|when|why)\s+(is|are|i|long|many|much|do|does)?\s*/i, '').trim() || q });
     m.push({ role: 'assistant', content: '', tool_calls: [c] });
-    m.push(toolMsg(c.id, { results: [{ n: 1, title: 'Flux documentation', text: a.replace(/ \[1\]\.?$/, '.'), url: 'https://docs.runonflux.com/' }] }));
+    // the retrieved passage is the answer stripped of its citation markers and of
+    // the assistant's own advice, so the model learns to write the second part
+    // rather than to echo the source back.
+    const passage = a.split('\n\n')[0].replace(/\s*\[1\]/g, '').replace(/\*\*/g, '');
+    m.push(toolMsg(c.id, { results: [{ n: 1, title: 'Flux documentation', text: passage, url: 'https://docs.runonflux.com/' }] }));
     m.push({ role: 'assistant', content: a });
     if (chance(0.35)) {
       m.push({ role: 'user', content: pick(['and how much does that cost?', 'where do I find it?', 'can you set it up for me?']) });
@@ -1577,7 +2270,31 @@ function build(s) {
     return m;
   }
   if (F === 'offtopic') {
-    const QA = [['hello', 'Hi! Tell me what you want to run - an app, a game server, a database - and I will size it, quote it and deploy it on Flux.'], ['Hi there!', 'Hello! What would you like to deploy on Flux?'], ['What can you do?', 'I deploy and manage apps on Flux Cloud: quote a price for any Docker image or common app, deploy it after you agree, then show status and logs, restart or cancel it.'], ['Who are you?', 'I am Flux AI, the assistant in Flux Cloud. I quote, deploy and manage apps on the Flux decentralized cloud for you.'], ['Thanks!', 'You are welcome. Anything else to deploy?'], ['What is Flux?', 'Flux is a decentralized cloud: thousands of independently run nodes host Docker apps, paid monthly in FLUX from $0.99. Tell me what to run and I will quote it.'], ['Can you write me a poem?', 'Deployments are my thing rather than poetry, but I can have a WordPress site for your poems running in a minute if you like.'], ['What is 17 times 23?', '391. Anything to deploy?'], ['Do I need to run a node to deploy?', 'No. Deploying an app does not require running a FluxNode; you pay per month for the resources your app declares. Tell me what to run and I will quote it.'], ['Can I pay with a credit card?', 'Flux Cloud prices are in USD and paid in FLUX from your signed-in account; I take care of the payment when you approve a quote.']];
+    // This flow used to teach the deflection. Its old bank answered "can you write
+    // me a poem?" with "deployments are my thing rather than poetry, but I can have
+    // a WordPress site for your poems running in a minute", and "what is 17 times
+    // 23?" with "391. Anything to deploy?". That is where the live model's refusals
+    // come from: it was trained to treat every non-deployment question as an
+    // interruption. Answer the question. Stop. Offering something is optional and
+    // usually wrong.
+    const QA = [
+      ['hello', pick(['Hi. What can I do for you?', 'Hello. What are you working on?'])],
+      ['Hi there!', 'Hi. Anything I can help with?'],
+      ['What can you do?', 'Quite a lot. Mainly I size, price and prepare deployments on Flux, and look up your apps, their logs and the network. Beyond that I can search the Flux docs, search the web, explain how something works, read a config or a log, and hold a normal conversation. What do you need?'],
+      ['Who are you?', 'Flux AI, the assistant in Flux Cloud. A small model the Flux team fine-tuned, running on the Flux network rather than on someone else\'s cloud.'],
+      ['Thanks!', pick(['Any time.', 'You are welcome.'])],
+      ['What is Flux?', 'A decentralized cloud. Thousands of independently run nodes host Docker applications, scheduled across several at once, paid monthly from about $0.99. There is a coin, FLUX, which pays for the hosting and is locked as node collateral.'],
+      ['Can you write me a poem?', 'Sure.\n\n**Deploy**\n\nSomewhere a fan spins up in a room\nyou will never enter, in a city\nyou cannot name, because you typed\na name and pressed a key.\n\nThe work is not the typing.\nThe work is that a stranger\nkeeps the power on.'],
+      ['What is 17 times 23?', '391.'],
+      ['whats 2+2', '4.'],
+      ['can you help me write an email', 'Yes. Tell me who it is to, what you want out of it, and how formal it should be, and I will draft it.'],
+      ['Do I need to run a node to deploy?', 'No, they are separate things. Deploying an app means renting capacity and paying per month. Running a node means supplying capacity and locking collateral. Plenty of people do only one.'],
+      ['Can I pay with a credit card?', 'Yes. Stripe card, PayPal or FLUX, and paying in FLUX takes 5% off. FLUX has to be on mainnet, not a parallel asset on another chain.'],
+      ['are you there', 'Here. Go ahead.'],
+      ['sorry wrong window', 'No problem. I will be here if you need anything.'],
+      ['what time is it', 'I cannot see a clock, no live feed on my side. Your device will know better than I do.'],
+      ['summarise this for me', 'Paste it in and I will. Tell me how short you want it and who it is for, since a summary for you and a summary for your boss are different documents.'],
+    ];
     const [q, a] = pick(QA); m.push({ role: 'user', content: q }); m.push({ role: 'assistant', content: a }); return m;
   }
   if (F === 'manage') {
@@ -1761,13 +2478,24 @@ async function paraphrase(text) {
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   const outStream = fs.createWriteStream(OUT);
   const stats = { flows: {}, surfaces: {} };
-  let done = 0; let para = 0;
+  let done = 0; let para = 0; let dup = 0;
+  // Scripted conversations are emitted close to verbatim, so at a large N the
+  // same dialogue would appear dozens of times and the model would memorise it
+  // rather than learn the shape. Drop exact repeats and try again; a scenario
+  // that keeps colliding is one whose content bank is exhausted, which the
+  // duplicate count at the end makes visible.
+  const seen = new Set();
   const jobs = Array.from({ length: N }, (_, i) => i);
   async function worker() {
     while (jobs.length) {
       jobs.pop();
-      const s = scenario();
-      const messages = fixToolProse(build(s));
+      let s = scenario();
+      let messages = fixToolProse(build(s));
+      for (let tries = 0; tries < 8; tries += 1) {
+        const key = JSON.stringify(messages);
+        if (!seen.has(key)) { seen.add(key); break; }
+        dup += 1; s = scenario(); messages = fixToolProse(build(s));
+      }
       stats.flows[s.flow] = (stats.flows[s.flow] || 0) + 1; stats.surfaces[s.surface.kind] = (stats.surfaces[s.surface.kind] || 0) + 1;
       const first = messages.find((x) => x.role === 'user');
       if (first && !['compose', 'lang', 'github', 'spec', 'secret', 'inject', 'abuse'].includes(s.flow) && chance(0.25)) first.content = noisy(first.content);
@@ -1778,5 +2506,5 @@ async function paraphrase(text) {
   }
   await Promise.all(Array.from({ length: NO_TEACHER ? 1 : CONC }, worker));
   outStream.end();
-  console.log(`wrote ${done} dialogues to ${OUT} (${para} user lines paraphrased)\n${JSON.stringify(stats)}`);
+  console.log(`wrote ${done} dialogues to ${OUT} (${para} user lines paraphrased, ${dup} exact duplicates regenerated)\n${JSON.stringify(stats)}`);
 })();

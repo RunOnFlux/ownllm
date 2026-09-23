@@ -31,6 +31,7 @@ module.exports = [
     components: { type: 'array', items: COMPONENT },
     instances: { type: 'integer', description: '1-100, default 3' },
     months: { type: 'number', description: 'term, default 1' },
+    contacts: { type: 'array', items: { type: 'string' }, description: 'email addresses notified about the app' },
     geolocation: { type: 'array', items: { type: 'string' }, description: 'e.g. acEU, acNA, acAS' },
     staticip: { type: 'boolean' },
   } } } },

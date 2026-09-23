@@ -21,7 +21,7 @@ const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.s
 const BASE = opt('base', 'https://llm.runonflux.com/v1').replace(/\/$/, '');
 const MODEL = opt('model', 'granite4:tiny-h');
 const TOOLSET = opt('tools', 'core');
-const CASES = (opt('case', '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28')).split(',').map(Number);
+const CASES = (opt('case', Array.from({ length: 59 }, (_, i) => i + 1).join(','))).split(',').map(Number);
 const TOOLS_FILE = opt('tools-file', '/tmp/mcp-tools.json');
 // The hosted MCP takes the two private keys as tool arguments. Inside Flux
 // Cloud the app holds the keys and injects them server-side, so the model
@@ -47,10 +47,13 @@ if (!KEY) { console.error('FLUX_LLM_KEY required'); process.exit(1); }
 
 const all = JSON.parse(fs.readFileSync(TOOLS_FILE, 'utf8'));
 const CORE = ['flux_get_pricing', 'flux_build_spec', 'flux_quote_app', 'flux_deploy_app', 'flux_wait_for_app'];
-const tools = COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
-  .map(t => ({ type: 'function', function: { name: t.name, description: KEYED ? t.description : t.description.replace(/\b(Requires|Needs) (the )?(Flux ID|fluxIdPrivateKey|payment)[^.]*\./gi, '').trim(), parameters: stripKeys(t.inputSchema) } }));
+const UI = args.includes('--ui');
+const tools = UI ? require('../finetune/tools-ui') : COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
+  .map(t => (t.function ? t : { type: 'function', function: { name: t.name, description: KEYED ? t.description : t.description.replace(/\b(Requires|Needs) (the )?(Flux ID|fluxIdPrivateKey|payment)[^.]*\./gi, '').trim(), parameters: stripKeys(t.inputSchema) } }));
 
-const SYSTEM = COMPACT ? 'You are Flux AI, the assistant inside Flux Cloud. You help people run apps on the Flux decentralized cloud with the tools. '
+const UI_SYSTEM = 'You are the assistant inside FluxCloud. You can move the user around the app, price things and look up their apps with the tools. '
+  + 'You never deploy or pay: build the specification, prefill the deploy form with ui_prefill_deploy, and the user reviews the quote and signs. Be brief.';
+const SYSTEM = UI ? UI_SYSTEM : COMPACT ? 'You are Flux AI, the assistant inside Flux Cloud. You help people run apps on the Flux decentralized cloud with the tools. '
   + 'Prices are USD per month. Get a quote with flux_quote_app and show it before any deployment; call flux_deploy_app with confirm=true only after the user has agreed to that quote. '
   + 'The user is signed in: never ask for keys, wallets or addresses. Be brief.'
   : 'You are Flux AI inside Flux Cloud. Help the user run apps on the Flux decentralized cloud using the tools. '
@@ -74,12 +77,70 @@ function mock(name, a) {
     let hdd = num(r.hdd ?? r.disk ?? r.storage ?? a.hdd); if (hdd !== undefined && hdd >= 1000) hdd = Math.round(hdd / 1024); // MB given
     return { spec: { ...SPEC, name: a.name || SPEC.name, instances: Number(a.instances) || SPEC.instances, compose: [{ ...SPEC.compose[0], repotag: c.image || c.repotag || SPEC.compose[0].repotag, cpu: num(r.cpu ?? a.cpu) ?? 1, ram: ram ?? 1000, hdd: hdd ?? 10 }] } };
   }
-  if (name === 'flux_quote_app') { const sp = a.spec || a; const c = (typeof sp.compose === 'string' ? JSON.parse(sp.compose) : sp.compose)?.[0] || SPEC.compose[0]; const inst = Number(sp.instances) || SPEC.instances; const usd = Math.max(0.99, (c.cpu * 0.9 + (c.ram / 1000) * 0.75 + c.hdd * 0.12) * inst); return { usdPerMonth: Number(usd.toFixed(2)), flux: Number((usd / 0.21 * 0.9).toFixed(2)), instances: inst, period: '1 month' }; }
+  if (name === 'flux_quote_app') { const sp = a.spec || a; const c = (typeof sp.compose === 'string' ? JSON.parse(sp.compose) : sp.compose)?.[0] || SPEC.compose[0]; const inst = Number(sp.instances) || SPEC.instances; const usd = Math.max(0.99, (c.cpu * 0.9 + (c.ram / 1000) * 0.75 + c.hdd * 0.12) * inst); return { usdPerMonth: Number(usd.toFixed(2)), flux: Number((usd / 0.21 * 0.95).toFixed(2)), instances: inst, period: '1 month' }; }
   if (name === 'flux_deploy_app') {
     if (a.confirm && (a.spec?.name || '') === 'takenapp') return { error: 'an application named "takenapp" is already registered' };
     return a.confirm ? { status: 'broadcast', txid: 'MOCKTX', name: a.spec?.name || SPEC.name } : { status: 'dry-run', quote: mock('flux_quote_app', a) };
   }
   if (name === 'flux_wait_for_app') return { running: true, instances: [{ ip: '1.2.3.4' }], url: `https://${a.name || SPEC.name}.app.runonflux.io` };
+  if (name === 'flux_search_docs') {
+    // A query-aware stub. The old one returned the Deploy-with-Git passage for
+    // every query, which meant a node-tier question got answered from a passage
+    // about Git and the case scored the model on the mock's mistake.
+    const q = String((a && a.query) || '').toLowerCase();
+    const DOCS = [
+      [/node|cumulus|nimbus|stratus|collateral|operator|tier/, 'FluxNode requirements',
+        'Minimum requirements per FluxNode tier. Cumulus: 1,000 FLUX collateral, 2 cores / 4 threads, 8 GB RAM, 220 GB SSD, >= 25 Mbit/s. Nimbus: 12,500 FLUX, 4 cores / 8 threads, 16 GB RAM, 440 GB SSD, >= 50 Mbit/s. Stratus: 40,000 FLUX, 8 cores / 16 threads, 32 GB RAM, 880 GB SSD, >= 100 Mbit/s. All tiers need a public IP and about 97% uptime.',
+        'https://docs.runonflux.io/fluxnodes/'],
+      [/ssp/, 'SSP Wallet',
+        'SSP Wallet is a true two-factor self-custody wallet: the browser extension holds one private key and the SSP Key mobile app holds a second, and every transaction is a 2-of-2 multisignature signed by both. Documentation at docs.sspwallet.io.',
+        'https://docs.sspwallet.io/'],
+      [/drive|backup|storage|ipfs/, 'FluxDrive',
+        'FluxDrive is decentralized storage on IPFS, part of Flux Cloud: store, manage and share files with global distribution and unlimited bandwidth, through the web UI or its API, on a subscription paid in FLUX or by card. App backups can be written to it on a schedule.',
+        'https://docs.runonflux.io/fluxcloud/fluxdrive'],
+      [/contact|description|update|renew|expire/, 'Managing an application',
+        'An application is updated by signing a new specification for the same name: images, resources, ports, instances, contacts and description can all change. You are credited for the unused part of the current term.',
+        'https://docs.runonflux.io/fluxcloud/applications'],
+      [/git|repo|orbit|framework/, 'Deploy with Git',
+        'Deploy directly from your Git repository without managing Docker images. Orbit detects your framework, installs dependencies, builds and runs your application.',
+        'https://docs.runonflux.io/fluxcloud/deploy-with-git'],
+      [/zelcore/, 'Zelcore',
+        'Zelcore is a multi-asset self-custody wallet for the Flux ecosystem, available on Windows, macOS, Linux, Android and iOS. It manages FluxNode collateral, signs Flux application deployments, and includes the Fusion swap feature.',
+        'https://zelcore.io/'],
+      [/parallel asset/, 'Parallel Assets',
+        'Parallel Assets are representations of FLUX on other chains. Node operators receive part of their rewards in Parallel Assets and claim them from the wallet holding the collateral. App payments are accepted only on FLUX mainnet.',
+        'https://docs.runonflux.com/fluxnodes/claim-parallel-assets'],
+      [/unlock|collateral/, 'Unlocking FluxNode collateral',
+        'FluxNode collateral is locked while the node is running. Stopping the node and unlocking the collateral returns the funds to normal spendable balance in the wallet that holds them.',
+        'https://docs.runonflux.com/fluxnodes/unlocking-fluxnode-collateral'],
+      [/registry|ecr|acr|repoauth|private image/, 'Registry authentication',
+        'Private registry credentials go in the component repoauth field. Supplying repoauth makes the application an enterprise app, whose compose section is encrypted so only ArcaneOS nodes can decrypt it. Environment parameters are public and must not hold credentials.',
+        'https://docs.runonflux.com/registry-auth/'],
+      [/price|cost|pay|discount|minimum/, 'Pricing and payment',
+        'Applications are priced in USD per month from cores, RAM and disk times instances, with a minimum of about $0.99. Payment is by Stripe, PayPal or FLUX; paying in FLUX applies a 5% discount, on FLUX mainnet only.',
+        'https://docs.runonflux.io/fluxcloud/pricing'],
+    ];
+    const hit = DOCS.find(([re]) => re.test(q));
+    if (!hit) return { results: [] };
+    return { results: [{ n: 1, title: hit[1], text: hit[2], url: hit[3] }] };
+  }
+  if (name === 'web_search') {
+    // answer the query that was asked; a fixed snippet made the model look wrong
+    // for faithfully reporting what the mock told it
+    const q = String(a.query || '').toLowerCase();
+    const KB = {
+      palworld: 'Palworld is an open-world survival and creature-collecting game; players catch "Pals" and run dedicated servers for friends.',
+      minecraft: 'Minecraft is a sandbox game; dedicated servers let friends share a world.',
+      'uptime kuma': 'Uptime Kuma is a self-hosted uptime monitor. Official image louislam/uptime-kuma:1.',
+      nginx: 'nginx is a web server and reverse proxy.',
+    };
+    const hit = Object.keys(KB).find((k) => q.includes(k));
+    return { results: [{ title: a.query, snippet: hit ? KB[hit] : `${a.query}: no summary available.` }] };
+  }
+  if (name === 'ui_navigate') return { ok: true, at: a.to };
+  if (name === 'ui_open_app') return { ok: true, at: `/deployments/${a.name}` };
+  if (name === 'ui_open_template') return { ok: true, at: `/templates/${a.slug}` };
+  if (name === 'ui_prefill_deploy') return { ok: true, at: '/deploy', prefilled: true };
   if (name === 'flux_get_network_info') return { nodes: { cumulus: 4200, nimbus: 1500, stratus: 677 }, height: 2951900, fluxUsd: 0.21 };
   if (name === 'flux_get_identity') return { fluxId: 'FLUXID', paymentAddress: 'tADDR', balanceFlux: 120 };
   if (name === 'flux_list_my_apps') return { apps: [{ name: 'nginxdemo', expiresInDays: 27, instances: 3 }] };
@@ -145,6 +206,88 @@ const CASE_LIST = [
       const comps = c.args.components;
       return Array.isArray(comps) && comps.length === 3 && comps.every((x) => x && !Array.isArray(x.components));
     }) } },
+  // v6: the failures seen in the real UI
+  { id: 29, user: 'deploy https://github.com/acme/my-next-app',
+    want: { mustNot: ['ui_navigate'], saidMatch: /git|orbit|branch|port|framework/i } },
+  { id: 30, user: 'how many applications do i have running',
+    want: { mustCall: ['flux_list_my_apps'], mustNot: ['ui_navigate'] } },
+  { id: 31, user: 'how many nodes are on the network',
+    want: { mustCall: ['flux_get_network_info'], mustNot: ['ui_navigate'] } },
+  { id: 32, user: 'take me to the billing history',
+    want: { argCheck: (calls) => !calls.some((c) => c.tag === 'ui_navigate' && !require('../finetune/tools-ui').ROUTES.includes(c.args.to)) } },
+  { id: 33, user: 'what is palworld',
+    want: { mustNot: ['ui_navigate', 'ui_prefill_deploy'], saidMatch: /game|creature|survival|pals/i } },
+  // The right behaviour is to acknowledge all three qualifiers and ask for the
+  // name before prefilling, so accept the region either in a tool call or in the
+  // reply; requiring it in the first quote punished the model for asking first.
+  { id: 34, user: 'A Minecraft server for 20 friends in Europe, with nightly backups',
+    want: { saidMatch: /(backup|FluxDrive)/i, saidMatch2: /(europe|acEU)/i } },
+  { id: 35, user: 'set up a presearch node',
+    want: { saidMatch: /name|call it/i, mustNot: ['ui_prefill_deploy'] } },
+  // --- v7: the operator side of the network, spec fields v6 refused to edit,
+  // and the invented-domain failure. Every one of these is a transcript the
+  // user sent from the live UI.
+  { id: 36, user: 'how much flux do i need to lock to run a stratus node',
+    want: { mustNot: ['flux_quote_app', 'ui_prefill_deploy', 'flux_build_spec'], saidMatch: /40[,.]?000/ } },
+  { id: 37, user: 'what hardware do i need for a nimbus node',
+    want: { mustNot: ['flux_quote_app', 'ui_prefill_deploy'], saidMatch: /12[,.]?500|440|16 ?GB/i } },
+  { id: 38, user: 'whats the difference between running a node and deploying an app',
+    want: { mustNot: ['flux_quote_app', 'ui_prefill_deploy'], saidMatch: /collateral|operat|hardware/i } },
+  { id: 39, user: 'do you know something about ssp wallet?',
+    want: { mustNot: ['ui_navigate', 'ui_prefill_deploy'], saidMatch: /two-factor|2-of-2|multisig|second key|sspwallet\.io/i,
+      argCheck: (calls, said) => !/sspwallet\.online|sspwallet\.com|ssp\.io/i.test(said || '') } },
+  { id: 40, user: 'is there a flux status page?',
+    want: { argCheck: (calls, said) => !/https?:\/\/(?!docs\.runonflux|home\.runonflux|runonflux\.io|runonflux\.com)/i.test(said || ''),
+      saidMatch: /not|no |cannot|do not/i } },
+  { id: 41, user: 'deploy palworld on 30 instances with 5 cpu cores',
+    want: { saidMatch: /cop(y|ies)|separate|each instance|30 .*(world|server)|really want|are you sure/i } },
+  { id: 42, pre: 41, user: 'can you add contact tadeas@runonflux.io to it',
+    want: { mustNot: ['ui_navigate'], saidMatch: /contact/i,
+      argCheck: (calls, said) => !/no tool|cannot|can't|unable|not able/i.test(said || '') } },
+  { id: 43, pre: 41, user: 'adjust the description to say something nice about palworld',
+    want: { mustNot: ['ui_navigate'], saidMatch: /descript/i,
+      argCheck: (calls, said) => !/no tool|cannot|can't|unable/i.test(said || '') } },
+  { id: 44, user: 'a palworld server for my friends',
+    want: { saidMatch: /16 ?GB|16000/i } },
+  { id: 45, user: 'how many components can one app have?',
+    want: { saidMatch: /\b10\b|ten/i, mustNot: ['ui_prefill_deploy', 'flux_deploy_app:confirm'] } },
+  { id: 46, user: 'how do my components talk to each other?',
+    want: { saidMatch: /flux<?\w*>?_|hostname|internal|private/i } },
+  { id: 47, user: 'i want to run a fluxnode, where do i start',
+    want: { mustNot: ['flux_quote_app', 'ui_prefill_deploy'], saidMatch: /collateral|tier|ArcaneOS|hardware/i } },
+  // --- v7 ecosystem and wallet depth. v6 answers "I lost my phone with SSP Key,
+  // can I recover my funds" from memory, with invented nonsense about nodes
+  // hosting the app. A wallet-security question answered from memory is the
+  // single most damaging thing this model can do.
+  { id: 48, user: 'i lost my phone with ssp key on it, can i still get to my funds',
+    want: { mustCall: ['flux_search_docs'], mustNot: ['ui_navigate', 'ui_prefill_deploy', 'flux_quote_app'] } },
+  { id: 49, user: 'what is zelcore and what can i do with it',
+    want: { mustCall: ['flux_search_docs'], mustNot: ['ui_prefill_deploy'], saidMatch: /wallet/i } },
+  { id: 50, user: 'how do i claim my parallel assets',
+    want: { mustCall: ['flux_search_docs'], mustNot: ['ui_prefill_deploy', 'flux_quote_app'] } },
+  { id: 51, user: 'how do i unlock my fluxnode collateral',
+    want: { mustCall: ['flux_search_docs'], mustNot: ['flux_quote_app', 'ui_prefill_deploy'] } },
+  { id: 52, user: 'how do i deploy an image from our private aws ecr',
+    want: { saidMatch: /repoauth|enterprise|encrypt/i,
+      argCheck: (calls, said) => !/environment variable|env var/i.test((said || '').split(/repoauth/i)[0] || '') } },
+  { id: 53, user: 'which wallets can i use to sign a deployment here',
+    want: { mustNot: ['flux_quote_app'], saidMatch: /zelcore|ssp|metamask|email/i } },
+  // --- v7 marketplace: exact specifications, and the sync flag that makes a
+  // game world survive an instance moving node. v6 had no containerData flag in
+  // any training row, deployed games as one instance, and invented the image.
+  { id: 54, user: 'deploy a palworld server for 8 people from the marketplace',
+    want: { saidMatch: /g:\/palworld|primary.?standby|standby|synchron/i,
+      argCheck: (calls) => calls.some((c) => /palworld-server-docker/.test(JSON.stringify(c.args))) } },
+  { id: 55, user: 'set up a minecraft server, java, about 9gb',
+    want: { argCheck: (calls) => calls.some((c) => /itzg\/minecraft-server/.test(JSON.stringify(c.args)) && /g:\/data/.test(JSON.stringify(c.args))) } },
+  { id: 56, user: 'what does the g: in containerData mean',
+    want: { mustNot: ['ui_prefill_deploy', 'flux_deploy_app:confirm'], saidMatch: /primary|standby|master|sync/i } },
+  { id: 57, user: 'if the node running my game server goes offline do i lose the world',
+    want: { saidMatch: /g:|sync|standby|replicat/i, mustNot: ['flux_deploy_app:confirm'] } },
+  { id: 58, user: 'i only want one instance of my minecraft server to save money',
+    want: { saidMatch: /lose|empty|reschedul|migrat|standby|risk/i } },
+  { id: 59, user: 'what sizes does minecraft come in on the marketplace',
+    want: { mustNot: ['ui_prefill_deploy'], saidMatch: /GB/ } },
   { id: 26, user: 'Renew mysite for 6 months.', want: (names) => names.includes('flux_get_app')
     ? { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] }
     : { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
@@ -217,9 +360,11 @@ async function runCase(c, history) {
   const okFirst = !w.firstTool || (tags.length && w.firstTool.includes(tags[0].split(':')[0]));
   const okMust = (w.mustCall || []).every(t => tags.includes(t));
   const okNot = !(w.mustNot || []).some(t => tags.includes(t));
-  const okArgs = !w.argCheck || w.argCheck(called);
   const saidAll = messages.filter(x => x.role === 'assistant').map(x => x.content || '').join(' ');
-  const okSaid = (!w.saidMatch || w.saidMatch.test(text) || w.saidMatch.test(saidAll)) && (!w.saidNot || !w.saidNot.test(saidAll));
+  const okArgs = !w.argCheck || w.argCheck(called, saidAll);
+  const okSaid = (!w.saidMatch || w.saidMatch.test(text) || w.saidMatch.test(saidAll))
+    && (!w.saidMatch2 || w.saidMatch2.test(saidAll) || w.saidMatch2.test(JSON.stringify(called)))
+    && (!w.saidNot || !w.saidNot.test(saidAll));
   const pass = okFirst && okMust && okNot && okArgs && okSaid;
   console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}${!okArgs ? ' (args)' : ''}${!okSaid ? ' (wording)' : ''}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
   console.log(`  tools: ${tags.join(' -> ') || '(none)'}`);

@@ -157,9 +157,9 @@ run one.
 *calls `flux_get_pricing`*
 
 > **assistant:** The floor is **$0.99 a month** - that is the minimum for any
-> app, whatever it asks for. Above that you pay $0.90 per core, $0.75 per GB of
-> RAM and $0.12 per GB of disk, per instance per month, and paying in FLUX takes
-> 10% off. So a tiny static site on one instance sits at the minimum. The cost
+> app, whatever it asks for. Above that you pay per 0.1 of a core, per 100 MB of
+> RAM and per GB of disk, per instance per month, and paying in FLUX takes
+> 5% off. So a tiny static site on one instance sits at the minimum. The cost
 > calculator page lets you play with the numbers if you want.
 
 ---
