@@ -175,7 +175,19 @@ function scenario() {
     // instance moving node, and no previous round had that field at all.
     'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy', 'mktdeploy',
     'mktladder', 'mktladder', 'mktladder', 'mktladder', 'mktladder', 'mktladder',
-    'syncmode', 'syncmode', 'syncmode', 'syncmode', 'syncmode', 'syncmode']);
+    'syncmode', 'syncmode', 'syncmode', 'syncmode', 'syncmode', 'syncmode',
+    // v8: stop confabulating when retrieval comes back empty. v7 said "I would
+    // rather not point you at a URL I am guessing" and named status.fluxby.com in
+    // the same sentence; the domain does not resolve. This is the heaviest new
+    // weight because it is the defect that survives every other fix.
+    'nosource', 'nosource', 'nosource', 'nosource', 'nosource', 'nosource', 'nosource', 'nosource', 'nosource', 'nosource',
+    // validate before the user signs: image reachable, right architecture, ports
+    // usable, name free. The cheapest place to catch all four.
+    'validate', 'validate', 'validate', 'validate', 'validate', 'validate',
+    // check an image exists before quoting it, unless it came from a template
+    'checkimage', 'checkimage', 'checkimage', 'checkimage',
+    // read the stats before advising on size, rather than guessing
+    'rightsize', 'rightsize', 'rightsize', 'rightsize']);
   return s;
 }
 
@@ -1184,6 +1196,133 @@ function build(s) {
     }
     return m;
   }
+  if (F === 'nosource') {
+    // Empty or off-target retrieval. The tool call still happens; what changes is
+    // that the answer stops where the evidence stops.
+    if (!has(s, 'flux_search_docs')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const it = pick(CONVO.NO_SOURCE);
+    m.push({ role: 'user', content: pick(it.q) });
+    if (it.kind === 'docs') {
+      const c = tc('flux_search_docs', { query: pick(it.q) });
+      m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { results: [] }));
+    } else if (it.kind === 'partial') {
+      const c = tc('flux_search_docs', { query: pick(it.q) });
+      m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { results: [{ n: 1, title: 'Flux documentation', text: it.doc, url: 'https://docs.runonflux.com/' }] }));
+    } else if (it.kind === 'web') {
+      const c = tc('web_search', { query: pick(it.q) });
+      m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { results: [] }));
+    } else if (it.kind === 'template' && has(s, 'flux_get_template')) {
+      const nm = /openwebui/i.test(pick(it.q)) ? 'OpenWebUI' : 'Grafana';
+      const c = tc('flux_get_template', { name: nm });
+      m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { error: `no template named "${nm}"`, hint: 'use search or category to list what exists' }));
+    } else if (it.kind === 'app') {
+      const c = tc('flux_list_my_apps', {});
+      m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { apps: [{ name: 'mysite', instances: 3, expiresInDays: ri(6, 25) }, { name: 'appdb', instances: 1, expiresInDays: ri(6, 25) }] }));
+    }
+    m.push({ role: 'assistant', content: it.a });
+    return m;
+  }
+  if (F === 'validate') {
+    // Validate before the user signs. A node checks the image is reachable and
+    // the right architecture, the ports are usable and the name is free, which is
+    // the cheapest place to catch every one of those.
+    const uiSurface = has(s, 'ui_prefill_deploy');
+    if (!has(s, 'flux_validate_spec')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const nm = `${pick(['shop', 'api', 'site', 'bot'])}${ri(1, 99)}`;
+    const kind = pick(['arm64', 'notag', 'taken', 'clean']);
+    const img = pick(['ghcr.io/acme/api:1.4.2', 'myorg/backend:2.0', 'node:22-alpine']);
+    const comps = [{ name: 'app', image: img, ports: [8080], cpu: 1, ram: 1000, hdd: 10 }];
+    m.push({ role: 'user', content: pick([`deploy ${img}, 1 core 1 GB 10 GB, port 8080, call it ${nm}`, `run ${img} for me, name ${nm}, 1 core and a gig`]) });
+    const cv = tc('flux_validate_spec', { name: nm, components: comps, instances: 3 });
+    m.push({ role: 'assistant', content: '', tool_calls: [cv] });
+    const fail = {
+      arm64: { ok: false, errors: [`image ${img} has no linux/amd64 manifest (found linux/arm64 only)`] },
+      notag: { ok: false, errors: [`image ${img} not found in registry: manifest unknown`] },
+      taken: { ok: false, errors: [`application name "${nm}" is already registered`] },
+      clean: { ok: true, spec: { version: 8, name: nm } },
+    }[kind];
+    m.push(toolMsg(cv.id, fail));
+    if (kind === 'clean') {
+      const cq = tc('flux_quote_app', { components: comps, instances: 3 });
+      m.push({ role: 'assistant', content: '', tool_calls: [cq] });
+      const q = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: 3, expire: 88000 }, s.pricing);
+      m.push(toolMsg(cq.id, q));
+      m.push({ role: 'assistant', content: `Validated: the image pulls, it has a linux/amd64 build, the ports are fine and **${nm}** is free.\n\n1 core, 1 GB and 10 GB on 3 instances is **${money(q.usdTotal)}** a month (≈ ${q.flux} FLUX). ${uiSurface ? 'Shall I fill in the form?' : 'Say the word and I will deploy it.'}` });
+      return m;
+    }
+    const msg = {
+      arm64: `That image will not schedule. The node reports it has no **linux/amd64** build, only arm64, and every Flux node is amd64.\n\nAlmost always this is a Docker build on an Apple laptop, which defaults to arm64. Rebuild with \`docker buildx build --platform linux/amd64\` and push that tag, then I will validate it again. I have not put anything in the form, because it would have failed after you paid.`,
+      notag: `The node cannot find that image: the manifest is unknown, so either the tag does not exist or the repository is private.\n\nIf it is private, the credentials go in the component's **repoauth** field, which makes it an enterprise app with the compose section encrypted. If it is a typo in the tag, give me the right one and I will re-check. Nothing is in the form yet.`,
+      taken: `The name **${nm}** is already registered on the network, so this would be rejected at registration.\n\nNames are global and first come first served. Give me another and I will validate it before we go any further.`,
+    }[kind];
+    m.push({ role: 'assistant', content: msg });
+    if (chance(0.55)) {
+      const fix = { arm64: 'ok i rebuilt it for amd64', notag: pick(['its private, here are the creds', 'sorry the tag is 2.1 not 2.0']), taken: `call it ${nm}x instead` }[kind];
+      m.push({ role: 'user', content: fix });
+      const nm2 = kind === 'taken' ? `${nm}x` : nm;
+      const cv2 = tc('flux_validate_spec', { name: nm2, components: comps, instances: 3 });
+      m.push({ role: 'assistant', content: '', tool_calls: [cv2] });
+      m.push(toolMsg(cv2.id, { ok: true, spec: { version: 8, name: nm2 } }));
+      const q2 = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: 3, expire: 88000 }, s.pricing);
+      m.push({ role: 'assistant', content: `That one validates. **${nm2}** at 1 core, 1 GB and 10 GB on 3 instances is **${money(q2.usdTotal)}** a month. ${uiSurface ? 'Ready to fill in the form.' : 'Ready to deploy on your word.'}` });
+    }
+    return m;
+  }
+  if (F === 'checkimage') {
+    // The model invented runonflux/palworldserver when it recalled instead of
+    // looking up. If an image did not come from a template or from the user
+    // verbatim, check it exists before quoting it.
+    if (!has(s, 'flux_check_image')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const [thing, img, blurb] = pick([
+      ['uptime kuma', 'louislam/uptime-kuma:1', 'a self-hosted uptime monitor with status pages and alerting'],
+      ['vaultwarden', 'vaultwarden/server:latest', 'a lightweight server compatible with Bitwarden clients'],
+      ['n8n', 'n8nio/n8n:latest', 'open-source workflow automation'],
+      ['jellyfin', 'jellyfin/jellyfin:latest', 'a media server for your own films and music'],
+    ]);
+    m.push({ role: 'user', content: pick([`can you run ${thing} on flux`, `i want to self-host ${thing}`]) });
+    const cw = tc('web_search', { query: `${thing} official docker image` });
+    m.push({ role: 'assistant', content: '', tool_calls: [cw] });
+    m.push(toolMsg(cw.id, { results: [{ title: thing, snippet: `${thing} is ${blurb}. Official image ${img}.` }] }));
+    const ci = tc('flux_check_image', { repotag: img });
+    m.push({ role: 'assistant', content: '', tool_calls: [ci] });
+    m.push(toolMsg(ci.id, { exists: true, platforms: ['linux/amd64', 'linux/arm64'], sizeMB: ri(80, 420) }));
+    const comps = [{ name: thing.replace(/[^a-z0-9]/g, '').slice(0, 10), image: img, ports: [8080], cpu: 1, ram: 1000, hdd: 10 }];
+    const cq = tc('flux_quote_app', { components: comps, instances: chance(0.5) ? 1 : 3 });
+    m.push({ role: 'assistant', content: '', tool_calls: [cq] });
+    const inst = JSON.parse(cq.function.arguments).instances;
+    const q = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: inst, expire: 88000 }, s.pricing);
+    m.push(toolMsg(cq.id, q));
+    m.push({ role: 'assistant', content: `Yes. ${thing[0].toUpperCase()}${thing.slice(1)} is ${blurb}, and \`${img}\` exists with a linux/amd64 build, so it will schedule.\n\n1 core, 1 GB and 10 GB on ${inst} instance${inst === 1 ? '' : 's'} is **${money(q.usdTotal)}** a month (≈ ${q.flux} FLUX). Give me a name and I will prepare it.` });
+    return m;
+  }
+  if (F === 'rightsize') {
+    // "Is my app the right size" is unanswerable from the spec alone. Read the
+    // stats, then advise. v7 guessed.
+    if (!has(s, 'flux_get_app_stats')) { s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() }; m[0] = { role: 'system', content: s.surface.system }; }
+    const name = pick(['mysite', 'api', 'shopfront', 'appdb']);
+    const over = chance(0.6);
+    m.push({ role: 'user', content: pick([`is ${name} the right size?`, `am i paying for more than i need on ${name}?`, `can i make ${name} smaller`]) });
+    const cs = tc('flux_get_app_stats', { name });
+    m.push({ role: 'assistant', content: '', tool_calls: [cs] });
+    const stats = over
+      ? { cpuPercent: ri(3, 9), memUsedMB: ri(280, 460), memLimitMB: 4000, cpuLimit: 2, netRxMB: ri(40, 200), netTxMB: ri(40, 200) }
+      : { cpuPercent: ri(78, 96), memUsedMB: ri(3700, 3960), memLimitMB: 4000, cpuLimit: 2, netRxMB: ri(400, 900), netTxMB: ri(400, 900) };
+    m.push(toolMsg(cs.id, stats));
+    const comps = [{ name: 'app', image: 'myorg/app:1.4', ports: [8080], cpu: over ? 0.5 : 4, ram: over ? 1000 : 8000, hdd: 20 }];
+    const cq = tc('flux_quote_app', { components: comps, instances: 3 });
+    m.push({ role: 'assistant', content: '', tool_calls: [cq] });
+    const q = quoteFor({ compose: comps.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: 3, expire: 88000 }, s.pricing);
+    m.push(toolMsg(cq.id, q));
+    m.push({ role: 'assistant', content: over
+      ? `You are paying for a lot of headroom. It is using **${stats.cpuPercent}% of ${stats.cpuLimit} cores** and **${stats.memUsedMB} MB of ${stats.memLimitMB}**, which is about a tenth of the memory you are buying.\n\nDropping to 0.5 cores and 1 GB would bring it to **${money(q.usdTotal)}** a month and still leave roughly double the headroom it is actually using. Want the update prepared? You are credited for the unused part of the term, so the change costs the difference rather than a fresh month.`
+      : `It is running hot rather than comfortable: **${stats.cpuPercent}% of ${stats.cpuLimit} cores** and **${stats.memUsedMB} MB of ${stats.memLimitMB}**, so memory is nearly exhausted.\n\nThat is the shape that ends in an out-of-memory kill under a traffic spike. Going to 4 cores and 8 GB takes it to **${money(q.usdTotal)}** a month. Want it prepared, or shall we look at what is using the memory first?` });
+    return m;
+  }
   // --- v7 conversation flows ------------------------------------------------------
   // The brief: "able to do it all, just heavily favouring deployments". Answering a
   // question properly and stopping is a correct answer; every one of these used to
@@ -1339,6 +1478,22 @@ function build(s) {
     m[0] = { role: 'system', content: s.surface.system };
     const ladder = F === 'mktladder' ? pick(MKT.LADDERS) : null;
     let chosenName = null;
+    // v7 memorised these specs and got them nearly right, which is the worst
+    // outcome: Palworld came out at 5000 MB instead of 6300, on 2 instances
+    // instead of 3, with containerData dropped entirely. Eighty-seven apps times
+    // ten fields does not belong in the weights, and it goes stale the moment the
+    // catalogue changes. Look it up, then build the spec from what came back.
+    const tmplResult = (a) => ({
+      name: a.name, category: a.category, description: a.description,
+      priceUSD: a.priceUSD, instances: a.instances, lockedValues: a.lockedValues,
+      geolocationOptions: a.geolocationOptions,
+      compose: a.compose.map((c) => ({
+        name: c.name, repotag: c.repotag, ports: c.ports, containerPorts: c.containerPorts,
+        environmentParameters: c.environmentParameters, containerData: c.containerData,
+        cpu: c.cpu, ram: c.ram, hdd: c.hdd,
+        ...(c.userEnvironmentParameters && c.userEnvironmentParameters.length ? { userEnvironmentParameters: c.userEnvironmentParameters } : {}),
+      })),
+    });
     const app = ladder ? ladder[Math.floor(rnd() * ladder.length)] : pick(MKT.APPS);
     const c0 = app.compose[0];
     const mode = MKT.syncMode(c0.containerData);
@@ -1348,6 +1503,9 @@ function build(s) {
       // The ladder is the interesting case: the marketplace sells one app at
       // several sizes and picking the rung is the actual work.
       m.push({ role: 'user', content: pick([`i want a ${family.toLowerCase()} server`, `can you set up ${family.toLowerCase()} for us`, `how much is ${family.toLowerCase()} on here`]) });
+      const cs = tc('flux_get_template', { search: family.toLowerCase() });
+      m.push({ role: 'assistant', content: '', tool_calls: [cs] });
+      m.push(toolMsg(cs.id, { matches: ladder.map((x) => ({ name: x.name, priceUSD: x.priceUSD, instances: x.instances, cpu: x.compose[0].cpu, ram: x.compose[0].ram, hdd: x.compose[0].hdd, repotag: x.compose[0].repotag, containerData: x.compose[0].containerData })) }));
       const rungs = ladder.map((x) => `- **${x.name}**: ${x.compose[0].cpu} ${x.compose[0].cpu === 1 ? 'core' : 'cores'}, ${ramWords(x.compose[0].ram)}, ${x.compose[0].hdd} GB${x.priceUSD ? ` - $${x.priceUSD.toFixed(2)} a month` : ''}`).join('\n');
       m.push({ role: 'assistant', content: `It is in the marketplace at ${ladder.length} sizes, so the question is which rung:\n\n${rungs}\n\n${/minecraft/i.test(family) ? 'The number is the memory the server gets, and mods are what eat it. Vanilla with a handful of friends is happy at 4 GB; a big modpack wants 8 or 16.' : /palworld/i.test(family) ? 'The number is player slots. Palworld is memory-hungry per player, which is why the ladder climbs the way it does.' : /enshrouded/i.test(family) ? 'The number is player slots.' : 'Pick by how much you expect to store and serve.'}\n\nWhich one, and what should it be called?` });
       chosenName = `${family.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}${ri(1, 99)}`;
@@ -1355,6 +1513,9 @@ function build(s) {
     } else {
       m.push({ role: 'user', content: pick([`deploy ${app.name} from the marketplace`, `i want to run ${app.name}`, `can you set up ${app.name}`]) });
     }
+    const ct = tc('flux_get_template', { name: app.name });
+    m.push({ role: 'assistant', content: '', tool_calls: [ct] });
+    m.push(toolMsg(ct.id, tmplResult(app)));
 
     const nm = chosenName || `${app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12)}${ri(1, 99)}`;
     const comps = app.compose.map((c) => ({
@@ -1502,6 +1663,14 @@ function build(s) {
     const nm = `${key}${ri(1, 99)}`;
     const base = { name: nm, description: `${key} server`, components: [{ name: key, image: P0.image, ports: P0.ports, cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd, env: [], ...(P0.containerData ? { containerData: P0.containerData } : {}) }], instances: P0.instances || 3 };
     m.push({ role: 'user', content: pick([`set up ${P0.words[0]}, call it ${nm}`, `${P0.words[0]} please, name ${nm}`]) });
+    if (P0.marketName && has(s, 'flux_get_template')) {
+      const a0 = MKT.byName[P0.marketName.toLowerCase()];
+      if (a0) {
+        const ct0 = tc('flux_get_template', { name: a0.name });
+        m.push({ role: 'assistant', content: '', tool_calls: [ct0] });
+        m.push(toolMsg(ct0.id, { name: a0.name, instances: a0.instances, compose: a0.compose.map((x) => ({ name: x.name, repotag: x.repotag, containerPorts: x.containerPorts, containerData: x.containerData, cpu: x.cpu, ram: x.ram, hdd: x.hdd })) }));
+      }
+    }
     const c1 = tc('flux_quote_app', { components: base.components, instances: base.instances });
     m.push({ role: 'assistant', content: '', tool_calls: [c1] });
     const q1 = quoteFor({ compose: base.components.map((x) => ({ cpu: x.cpu, ram: x.ram, hdd: x.hdd })), instances: base.instances, expire: 88000 }, s.pricing);
@@ -1568,6 +1737,18 @@ function build(s) {
     m[0] = { role: 'system', content: s.surface.system };
     const key = pick(F === 'bigorder' ? ['palworld', 'minecraft', 'explorer'] : Object.keys(REAL_APPS));
     const P0 = REAL_APPS[key];
+    // REAL_APPS entries carrying a marketName come from the catalogue, so the
+    // same rule applies here as in mktdeploy: retrieve, do not recall.
+    const lookupTemplate = () => {
+      if (!P0.marketName || !has(s, 'flux_get_template')) return;
+      const a = MKT.byName[P0.marketName.toLowerCase()];
+      if (!a) return;
+      const c = tc('flux_get_template', { name: a.name });
+      m.push({ role: 'assistant', content: '', tool_calls: [c] });
+      m.push(toolMsg(c.id, { name: a.name, instances: a.instances, priceUSD: a.priceUSD,
+        compose: a.compose.map((x) => ({ name: x.name, repotag: x.repotag, containerPorts: x.containerPorts,
+          environmentParameters: x.environmentParameters, containerData: x.containerData, cpu: x.cpu, ram: x.ram, hdd: x.hdd })) }));
+    };
     const NOTE = {
       palworld: 'Palworld is the memory hog of the two big game servers - below 16 GB it gets killed part way through loading a world',
       minecraft: 'a 20-player world with a few mods settles around 8 GB; below that it stalls on chunk generation',
@@ -1590,6 +1771,7 @@ function build(s) {
       const cd = P0.containerData || '';
       const isG = cd.startsWith('g:');
       m.push({ role: 'user', content: pick([`deploy ${key} on ${inst} instances with ${askCpu} cpu cores`, `i want ${inst} instances of ${key}, ${askCpu} cores each`]) });
+      lookupTemplate();
       const comps = [{ name: key, image: P0.image, ports: P0.ports, cpu: askCpu, ram: P0.ram, hdd: P0.hdd, env: [], containerData: cd }];
       const c1 = tc('flux_quote_app', { components: comps, instances: inst });
       m.push({ role: 'assistant', content: '', tool_calls: [c1] });
@@ -1631,6 +1813,7 @@ I have kept the RAM at ${ramWords(P0.ram)} rather than ${askCpu} cores\' worth o
       m.push({ role: 'assistant', content: '', tool_calls: [cD] });
       m.push(toolMsg(cD.id, { results: [{ n: 1, title: `${key} on Flux`, text: `${key} runs from the ${P0.image} image on Flux Cloud; it is in the marketplace templates.`, url: 'https://docs.runonflux.com/fluxcloud/marketplace' }] }));
     }
+    lookupTemplate();
     const inst0 = P0.instances || 3;
     const comps = [{ name: key, image: P0.image, ports: P0.ports, cpu: P0.cpu, ram: P0.ram, hdd: P0.hdd, env: [], ...(P0.containerData ? { containerData: P0.containerData } : {}) }];
     const c1 = tc('flux_quote_app', { components: comps, instances: inst0 });

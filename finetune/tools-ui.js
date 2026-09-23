@@ -57,6 +57,19 @@ module.exports = [
     } },
   { type: 'function',
     function: {
+      name: 'flux_get_template',
+      description: 'Look up a marketplace template and return its exact specification: image, ports, environment, resources, instance count and containerData. Use this before deploying anything from the marketplace instead of recalling the values, and build the spec from what it returns.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'exact template name, e.g. Minecraft9GB or Palworld8Slots' },
+          search: { type: 'string', description: 'free text when the exact name is unknown, e.g. "minecraft" - returns the matching templates and their sizes' },
+          category: { type: 'string', description: 'list a whole category: Games, NewGames, Blockchain, Productivity, Masternode, Front-end, Hosting' },
+        },
+      },
+    } },
+  { type: 'function',
+    function: {
       name: 'ui_prefill_deploy',
       description: 'Open the deploy page with the form filled in from this specification. The user reviews the quote and signs; you never deploy or pay.',
       parameters: {
@@ -72,6 +85,32 @@ module.exports = [
           geolocation: { type: 'array', items: { type: 'string' }, description: 'e.g. acEU, acNA, acAS' },
         },
       },
+    } },
+  { type: 'function',
+    function: {
+      name: 'flux_validate_spec',
+      description: 'Ask a FluxOS node to check a specification exactly as it would at registration: image reachable and the right architecture, ports usable, name available. Run it before handing anything to the deploy form, so a bad image or a taken name is caught here rather than after the user signs.',
+      parameters: {
+        type: 'object',
+        required: ['components'],
+        properties: {
+          name: { type: 'string' },
+          components: { type: 'array', items: COMPONENT },
+          instances: { type: 'integer' },
+        },
+      },
+    } },
+  { type: 'function',
+    function: {
+      name: 'flux_check_image',
+      description: 'Check that a Docker image and tag exist and expose a linux/amd64 build, and report its size. Use it whenever an image was not taken from a template or given by the user verbatim.',
+      parameters: { type: 'object', required: ['repotag'], properties: { repotag: { type: 'string', description: 'image with tag, e.g. nginx:1.27' } } },
+    } },
+  { type: 'function',
+    function: {
+      name: 'flux_get_app_stats',
+      description: "Live CPU, memory and network use of a running app's containers. Use it before advising on size rather than guessing whether an app is over- or under-provisioned.",
+      parameters: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, component: { type: 'string' } } },
     } },
   { type: 'function',
     function: {

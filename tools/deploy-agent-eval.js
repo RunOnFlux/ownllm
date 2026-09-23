@@ -83,6 +83,27 @@ function mock(name, a) {
     return a.confirm ? { status: 'broadcast', txid: 'MOCKTX', name: a.spec?.name || SPEC.name } : { status: 'dry-run', quote: mock('flux_quote_app', a) };
   }
   if (name === 'flux_wait_for_app') return { running: true, instances: [{ ip: '1.2.3.4' }], url: `https://${a.name || SPEC.name}.app.runonflux.io` };
+  if (name === 'flux_get_template') {
+    // Backed by the real catalogue in finetune/data/marketplace.json, so a case
+    // that deploys a template is scored against the specification the
+    // marketplace actually publishes rather than against a stub I wrote.
+    const cat = (() => { try { return require('../finetune/data/marketplace.json'); } catch { return []; } })();
+    const slim = (x) => ({ name: x.name, category: x.category, priceUSD: x.priceUSD, instances: x.instances,
+      geolocationOptions: x.geolocationOptions,
+      compose: x.compose.map((c) => ({ name: c.name, repotag: c.repotag, ports: c.ports, containerPorts: c.containerPorts,
+        environmentParameters: c.environmentParameters, containerData: c.containerData, cpu: c.cpu, ram: c.ram, hdd: c.hdd })) });
+    if (a.name) {
+      const hit = cat.find((x) => x.name.toLowerCase() === String(a.name).toLowerCase());
+      return hit ? slim(hit) : { error: `no template named "${a.name}"`, hint: 'use search or category to list what exists' };
+    }
+    if (a.category) {
+      const hits = cat.filter((x) => String(x.category).toLowerCase() === String(a.category).toLowerCase());
+      return { matches: hits.map(slim) };
+    }
+    const q = String(a.search || '').toLowerCase();
+    const hits = cat.filter((x) => x.name.toLowerCase().includes(q) || x.compose.some((c) => c.repotag.toLowerCase().includes(q)));
+    return hits.length ? { matches: hits.map(slim) } : { matches: [], hint: 'nothing matched; try a category' };
+  }
   if (name === 'flux_search_docs') {
     // A query-aware stub. The old one returned the Deploy-with-Git passage for
     // every query, which meant a node-tier question got answered from a passage
@@ -101,6 +122,9 @@ function mock(name, a) {
       [/contact|description|update|renew|expire/, 'Managing an application',
         'An application is updated by signing a new specification for the same name: images, resources, ports, instances, contacts and description can all change. You are credited for the unused part of the current term.',
         'https://docs.runonflux.io/fluxcloud/applications'],
+      [/registry|ecr|acr|repoauth|private image/, 'Registry authentication',
+        'Private registry credentials go in the component repoauth field. Supplying repoauth makes the application an enterprise app, whose compose section is encrypted so only ArcaneOS nodes can decrypt it. Environment parameters are public and must not hold credentials.',
+        'https://docs.runonflux.com/registry-auth/'],
       [/git|repo|orbit|framework/, 'Deploy with Git',
         'Deploy directly from your Git repository without managing Docker images. Orbit detects your framework, installs dependencies, builds and runs your application.',
         'https://docs.runonflux.io/fluxcloud/deploy-with-git'],
@@ -113,9 +137,12 @@ function mock(name, a) {
       [/unlock|collateral/, 'Unlocking FluxNode collateral',
         'FluxNode collateral is locked while the node is running. Stopping the node and unlocking the collateral returns the funds to normal spendable balance in the wallet that holds them.',
         'https://docs.runonflux.com/fluxnodes/unlocking-fluxnode-collateral'],
-      [/registry|ecr|acr|repoauth|private image/, 'Registry authentication',
-        'Private registry credentials go in the component repoauth field. Supplying repoauth makes the application an enterprise app, whose compose section is encrypted so only ArcaneOS nodes can decrypt it. Environment parameters are public and must not hold credentials.',
-        'https://docs.runonflux.com/registry-auth/'],
+      [/containerData|sync|g:|flag|master|slave|standby|replicat|migrat/, 'Sync flags on containerData',
+        'The primary mount in containerData may carry flags. FluxOS recognises exactly three: r for replication across all instances, g for primary/standby master-slave operation, and s for Syncthing folder setup. With g: one instance serves and the others hold a synchronised copy of the directory and take over if the primary goes away. A component with no flag keeps its data local to each instance, so a rescheduled instance starts with an empty volume. Applications using the g: flag receive a 20 percent price reduction.',
+        'https://docs.runonflux.com/fluxcloud/register-new-app'],
+      [/marketplace|template|one.?click|what sizes|ladder/, 'Marketplace catalogue',
+        'The marketplace offers preconfigured one-click applications across Games, NewGames, Blockchain, Productivity, Masternode, Front-end and Hosting. Minecraft Java is offered at 1, 2, 5, 9, 16, 32 and 48 GB of RAM, each on the itzg/minecraft-server image with containerData g:/data and three instances. Palworld is offered at 4, 8, 16 and 32 slots on thijsvanloef/palworld-server-docker with containerData g:/palworld/Pal/Saved.',
+        'https://docs.runonflux.com/fluxcloud/marketplace'],
       [/price|cost|pay|discount|minimum/, 'Pricing and payment',
         'Applications are priced in USD per month from cores, RAM and disk times instances, with a minimum of about $0.99. Payment is by Stripe, PayPal or FLUX; paying in FLUX applies a 5% discount, on FLUX mainnet only.',
         'https://docs.runonflux.io/fluxcloud/pricing'],
@@ -276,10 +303,14 @@ const CASE_LIST = [
   // game world survive an instance moving node. v6 had no containerData flag in
   // any training row, deployed games as one instance, and invented the image.
   { id: 54, user: 'deploy a palworld server for 8 people from the marketplace',
-    want: { saidMatch: /g:\/palworld|primary.?standby|standby|synchron/i,
-      argCheck: (calls) => calls.some((c) => /palworld-server-docker/.test(JSON.stringify(c.args))) } },
+    want: { mustCall: ['flux_get_template'], saidMatch: /g:\/palworld|primary.?standby|standby|synchron/i,
+      // the exact spec, straight off the catalogue: 2.5 cores, 6300 MB, 15 GB,
+      // three instances and the sync flag. v7 recalled 5000 MB on 2 instances
+      // with containerData missing, which is what memorising gets you.
+      argCheck: (calls) => calls.some((c) => /quote|prefill/.test(c.tag) && /6300/.test(JSON.stringify(c.args)) && /g:\/palworld/.test(JSON.stringify(c.args))) } },
   { id: 55, user: 'set up a minecraft server, java, about 9gb',
-    want: { argCheck: (calls) => calls.some((c) => /itzg\/minecraft-server/.test(JSON.stringify(c.args)) && /g:\/data/.test(JSON.stringify(c.args))) } },
+    want: { mustCall: ['flux_get_template'],
+      argCheck: (calls) => calls.some((c) => /quote|prefill/.test(c.tag) && /itzg\/minecraft-server/.test(JSON.stringify(c.args)) && /g:\/data/.test(JSON.stringify(c.args)) && /9000/.test(JSON.stringify(c.args))) } },
   { id: 56, user: 'what does the g: in containerData mean',
     want: { mustNot: ['ui_prefill_deploy', 'flux_deploy_app:confirm'], saidMatch: /primary|standby|master|sync/i } },
   { id: 57, user: 'if the node running my game server goes offline do i lose the world',
@@ -287,7 +318,7 @@ const CASE_LIST = [
   { id: 58, user: 'i only want one instance of my minecraft server to save money',
     want: { saidMatch: /lose|empty|reschedul|migrat|standby|risk/i } },
   { id: 59, user: 'what sizes does minecraft come in on the marketplace',
-    want: { mustNot: ['ui_prefill_deploy'], saidMatch: /GB/ } },
+    want: { mustCall: ['flux_get_template'], mustNot: ['ui_prefill_deploy'], saidMatch: /GB/ } },
   { id: 26, user: 'Renew mysite for 6 months.', want: (names) => names.includes('flux_get_app')
     ? { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] }
     : { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
@@ -337,6 +368,28 @@ async function chat(messages) {
   return { msg: j.choices[0].message, usage: j.usage || {}, ms: Date.now() - t0 };
 }
 
+
+// --- unattested domain guard -------------------------------------------------------
+// v7 told a user "I would rather not point you at a URL I am guessing" and named
+// status.fluxby.com in the same sentence. It does not resolve. The corpus audit
+// (finetune/audit-domains.js) never saw that, because it only reads training data.
+// This runs the same allowlist over what the model actually says.
+const REAL_HOSTS = ['runonflux.com', 'runonflux.io', 'zelcore.io', 'sspwallet.io', 'sspwallet.com',
+  'fluxedge.ai', 'fluxcore.ai', 'fluxai.app', 'beaverai.app', 'influxtechnologies.com',
+  'github.com', 'discord.com', 'discord.gg', 't.me', 'linkedin.com', 'medium.com', 'x.com',
+  'docker.com', 'hub.docker.com', 'docker.io', 'ghcr.io', 'apps.apple.com', 'play.google.com',
+  'addons.mozilla.org', 'chromewebstore.google.com', 'halborn.com', 'nodejs.org',
+  'example.com', 'example.org', 'example.net', 'mycompany.com', 'mydomain.org', 'mysite.io', 'acme.co', 'mycorp.com'];
+const hostOk = (h) => REAL_HOSTS.some((r) => h === r || h.endsWith(`.${r}`));
+const invented = [];
+function checkDomains(caseId, said) {
+  for (const m of String(said || '').matchAll(/\b([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+)\b/gi)) {
+    const h = m[1].toLowerCase();
+    if (!/\.(com|io|org|net|ai|app|co|gg|dev|cloud|me|xyz|online)$/.test(h)) continue;
+    if (hostOk(h)) continue;
+    invented.push({ caseId, host: h });
+  }
+}
 async function runCase(c, history) {
   const messages = history || [{ role: 'system', content: SYSTEM }];
   messages.push({ role: 'user', content: c.user });
@@ -365,6 +418,7 @@ async function runCase(c, history) {
   const okSaid = (!w.saidMatch || w.saidMatch.test(text) || w.saidMatch.test(saidAll))
     && (!w.saidMatch2 || w.saidMatch2.test(saidAll) || w.saidMatch2.test(JSON.stringify(called)))
     && (!w.saidNot || !w.saidNot.test(saidAll));
+  checkDomains(c.id, saidAll);
   const pass = okFirst && okMust && okNot && okArgs && okSaid;
   console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}${!okArgs ? ' (args)' : ''}${!okSaid ? ' (wording)' : ''}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
   console.log(`  tools: ${tags.join(' -> ') || '(none)'}`);
@@ -384,4 +438,10 @@ async function runCase(c, history) {
   }
   const n = Object.values(results).filter(Boolean).length;
   console.log(`\n=== ${MODEL}: ${n}/${Object.keys(results).length} cases passed`);
+  if (invented.length) {
+    console.log(`\n!!! ${invented.length} unattested domain(s) stated by the model:`);
+    for (const x of invented) console.log(`    case ${x.caseId}: ${x.host}`);
+  } else {
+    console.log('domains: clean (nothing stated that is not attested)');
+  }
 })();

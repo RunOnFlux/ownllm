@@ -72,6 +72,15 @@ async function main() {
     const out = vast('create', 'instance', String(offer), '--image', opt('image', 'pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel'),
       '--disk', opt('disk', '80'), '--ssh', '--direct', '--env', '-p 8080:8080', '--onstart-cmd', onstart, '--raw');
     const id = (out.match(/"new_contract":\s*(\d+)/) || [])[1];
+    // create leaves the contract with intended_status "stopped" on some hosts:
+    // the image loads, the box never boots, and the onstart never fires. An
+    // explicit start is harmless when it is already starting, and is the
+    // difference between a running job and an hour of silence.
+    try {
+      const st = vast('start', 'instance', String(id)).trim();
+      console.log(`start: ${st.slice(0, 120)}`);
+      if (/unavailable/i.test(st)) console.log('  host cannot supply the GPU - destroy this one and rent another');
+    } catch (e) { console.log(`start failed: ${String(e.message).slice(0, 120)}`); }
     console.log(`instance ${id} creating; watch with: node tools/vast.js log --id ${id}`);
     return;
   }
@@ -110,7 +119,7 @@ async function main() {
   }
   if (cmd === 'stop') {
     const d = pickInstance(opt('id', null));
-    console.log(vast('destroy', 'instance', String(d.id), '--raw').trim().slice(0, 200));
+    console.log(vast('destroy', 'instance', String(d.id), '--raw', '--explain').trim().slice(0, 200));
     return;
   }
   console.error('commands: offers | rent | status | log | fetch <dir> | stop');

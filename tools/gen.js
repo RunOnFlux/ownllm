@@ -158,10 +158,10 @@ const PROFILES = {
     // loader skipped installs because the name already existed, and a healthy
     // pool told us nothing about which weights it served. The tag is now the
     // answer to "what is running?" - visible in /api/tags on any node.
-    modelName: 'fluxai:tiny-v5', modelStableName: 'fluxai:tiny', bootHdd: 8,
-    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v5',
-    warmUrl: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v5/warm.json',
-    modelSha256: '5c32986f0af7605826ff6beb27478d81a54cc78b1a105dfd512a253079e7769f',
+    modelName: 'fluxai:tiny-v7', modelStableName: 'fluxai:tiny', bootHdd: 8,
+    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v7',
+    warmUrl: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v7/warm.json',
+    modelSha256: '559c2b0d4d4a17e0c241804be0ba778022a32322a8db023321663765f5dae5a5',
   },
   // Docs bot: chat model AND embedding model must both stay resident. With
   // loaded: 1 they evict each other on every single query - embed the question,
