@@ -31,7 +31,10 @@ const LADDERS = (() => {
   const g = {};
   for (const a of APPS) {
     if (a.compose.length !== 1) continue;
-    const key = a.compose[0].repotag;
+    // Keyed by image AND category: the NewGames MinecraftServer shares an image
+    // with the Games Minecraft ladder but is a different product (two instances,
+    // asks for the server type), and mixing them produced two 2000 MB rungs.
+    const key = `${a.compose[0].repotag}|${a.category}`;
     (g[key] = g[key] || []).push(a);
   }
   return Object.values(g)

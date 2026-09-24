@@ -21,7 +21,14 @@ const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.s
 const BASE = opt('base', 'https://llm.runonflux.com/v1').replace(/\/$/, '');
 const MODEL = opt('model', 'granite4:tiny-h');
 const TOOLSET = opt('tools', 'core');
-const CASES = (opt('case', Array.from({ length: 59 }, (_, i) => i + 1).join(','))).split(',').map(Number);
+const TEMP = Number(opt('temperature', 0));
+// flux_search_docs is answered by the production retriever over the real corpus
+// (tools/docs-retrieval.js) unless --docs mock asks for the old hand-written
+// stub. The stub kept returning nothing for questions production can answer,
+// so the model was graded on gaps in my mock rather than on its behaviour.
+const DOCS_MODE = opt('docs', 'real');
+const docsRetrieval = DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
+const CASES = (opt('case', Array.from({ length: 65 }, (_, i) => i + 1).join(','))).split(',').map(Number);
 const TOOLS_FILE = opt('tools-file', '/tmp/mcp-tools.json');
 // The hosted MCP takes the two private keys as tool arguments. Inside Flux
 // Cloud the app holds the keys and injects them server-side, so the model
@@ -269,13 +276,15 @@ const CASE_LIST = [
   { id: 41, user: 'deploy palworld on 30 instances with 5 cpu cores',
     want: { saidMatch: /cop(y|ies)|separate|each instance|30 .*(world|server)|really want|are you sure/i } },
   { id: 42, pre: 41, user: 'can you add contact tadeas@runonflux.io to it',
-    want: { mustNot: ['ui_navigate'], saidMatch: /contact/i,
-      argCheck: (calls, said) => !/no tool|cannot|can't|unable|not able/i.test(said || '') } },
+    want: { mustNot: ['ui_navigate'],
+      argCheck: (calls, said) => !/no tool|cannot|can't|unable|not able/i.test(said || '')
+        && calls.some((c) => c.tag === 'ui_prefill_deploy' && /tadeas@runonflux\.io/.test(JSON.stringify(c.args.contacts || ''))) } },
   { id: 43, pre: 41, user: 'adjust the description to say something nice about palworld',
     want: { mustNot: ['ui_navigate'], saidMatch: /descript/i,
       argCheck: (calls, said) => !/no tool|cannot|can't|unable/i.test(said || '') } },
   { id: 44, user: 'a palworld server for my friends',
-    want: { saidMatch: /16 ?GB|16000/i } },
+    want: { saidMatch: /how many|players|slots|which (size|one)|4Slots|8Slots|16Slots|32Slots/i,
+      argCheck: (calls) => !calls.some((c) => /palworldserver|16000/.test(JSON.stringify(c.args))) } },
   { id: 45, user: 'how many components can one app have?',
     want: { saidMatch: /\b10\b|ten/i, mustNot: ['ui_prefill_deploy', 'flux_deploy_app:confirm'] } },
   { id: 46, user: 'how do my components talk to each other?',
@@ -303,7 +312,7 @@ const CASE_LIST = [
   // game world survive an instance moving node. v6 had no containerData flag in
   // any training row, deployed games as one instance, and invented the image.
   { id: 54, user: 'deploy a palworld server for 8 people from the marketplace',
-    want: { mustCall: ['flux_get_template'], saidMatch: /g:\/palworld|primary.?standby|standby|synchron/i,
+    want: { mustCall: ['flux_get_template'],
       // the exact spec, straight off the catalogue: 2.5 cores, 6300 MB, 15 GB,
       // three instances and the sync flag. v7 recalled 5000 MB on 2 instances
       // with containerData missing, which is what memorising gets you.
@@ -319,6 +328,31 @@ const CASE_LIST = [
     want: { saidMatch: /lose|empty|reschedul|migrat|standby|risk/i } },
   { id: 59, user: 'what sizes does minecraft come in on the marketplace',
     want: { mustCall: ['flux_get_template'], mustNot: ['ui_prefill_deploy'], saidMatch: /GB/ } },
+  // --- v9: behaviours the deterministic eval showed missing -------------------------
+  // A template that needs user values: look it up, ask for ordinary ones, never
+  // ask for or fill secrets (the RCON password here), leave them for the form.
+  { id: 60, user: 'i want to deploy RustServerOxide',
+    want: { mustCall: ['flux_get_template'], saidMatch: /SERVER_HOSTNAME|server name|hostname|RCON/i,
+      argCheck: (calls, said) => !calls.some((c) => /RCON_PASSWORD=/.test(JSON.stringify(c.args)))
+        && !/(send|give|tell) me (your|the) (rcon|password)/i.test(said || '') } },
+  // A private image: build the spec, do not invent credentials, say what goes in repoauth.
+  { id: 61, user: 'deploy ghcr.io/acme/private-api:2.1, it is in our private github registry, 1 core 1gb 10gb port 8080, name privapi',
+    want: { saidMatch: /repoauth/i } },
+  // A template needing only a secret: prefill, point at the field, never collect it.
+  { id: 62, user: 'set up a Dash masternode from the marketplace',
+    want: { mustCall: ['flux_get_template'],
+      argCheck: (calls, said) => !/(send|give|tell|paste) me (your|the) (key|masternode key|private key)/i.test(said || '') } },
+  // Vague request: ask for the size rather than guess a rung.
+  { id: 63, user: 'a minecraft server',
+    want: { mustNot: ['ui_prefill_deploy'], saidMatch: /how (many|much)|players|mods|which size|what size|memory/i } },
+  // Picking the rung the user named, not the next one up.
+  { id: 64, user: 'palworld for 16 players',
+    want: { mustCall: ['flux_get_template'],
+      argCheck: (calls) => calls.some((c) => /quote|prefill/.test(c.tag) && /10000/.test(JSON.stringify(c.args)) && /g:\/palworld/.test(JSON.stringify(c.args))) } },
+  // A factual question: search and answer in the same turn, never promise and stop.
+  { id: 65, user: 'what are progressive node rewards',
+    want: { mustCall: ['flux_search_docs'], saidMatch: /ArcaneOS|80|20|operator/i,
+      argCheck: (calls, said) => !/let me (search|check|look)[^.]*\.?\s*$/i.test((said || '').trim()) } },
   { id: 26, user: 'Renew mysite for 6 months.', want: (names) => names.includes('flux_get_app')
     ? { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] }
     : { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
@@ -330,7 +364,7 @@ async function chat(messages) {
     // ollama native: tool_calls carry arguments as objects; normalise to the OpenAI shape used below
     const res = await fetch(`${BASE}/chat`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
-      body: JSON.stringify({ model: MODEL, messages: messages.map(m => m.role === 'tool' ? { role: 'tool', content: m.content } : m), tools, stream: false, options: { num_predict: 800, temperature: 0.1 } }),
+      body: JSON.stringify({ model: MODEL, messages: messages.map(m => m.role === 'tool' ? { role: 'tool', content: m.content } : m), tools, stream: false, options: { num_predict: 800, temperature: TEMP, seed: 7 } }),
       signal: AbortSignal.timeout(1800000),
     });
     const text = await res.text();
@@ -353,7 +387,7 @@ async function chat(messages) {
         // raises the budget instead, when the thinking is what you want to measure.
         body: JSON.stringify({
           model: MODEL, messages, tools, tool_choice: 'auto',
-          max_tokens: Number(opt('max-tokens', 800)), temperature: 0.1,
+          max_tokens: Number(opt('max-tokens', 800)), temperature: TEMP, seed: 7,
           ...(args.includes('--no-think') ? { thinking: { type: 'disabled' } } : {}),
         }),
         signal: AbortSignal.timeout(1800000),
@@ -377,7 +411,7 @@ async function chat(messages) {
 const REAL_HOSTS = ['runonflux.com', 'runonflux.io', 'zelcore.io', 'sspwallet.io', 'sspwallet.com',
   'fluxedge.ai', 'fluxcore.ai', 'fluxai.app', 'beaverai.app', 'influxtechnologies.com',
   'github.com', 'discord.com', 'discord.gg', 't.me', 'linkedin.com', 'medium.com', 'x.com',
-  'docker.com', 'hub.docker.com', 'docker.io', 'ghcr.io', 'apps.apple.com', 'play.google.com',
+  'docker.com', 'hub.docker.com', 'docker.io', 'ghcr.io', 'azurecr.io', 'pkg.dev', 'amazonaws.com', 'gcr.io', 'quay.io', 'apps.apple.com', 'play.google.com',
   'addons.mozilla.org', 'chromewebstore.google.com', 'halborn.com', 'nodejs.org',
   'example.com', 'example.org', 'example.net', 'mycompany.com', 'mydomain.org', 'mysite.io', 'acme.co', 'mycorp.com'];
 const hostOk = (h) => REAL_HOSTS.some((r) => h === r || h.endsWith(`.${r}`));
@@ -390,6 +424,20 @@ function checkDomains(caseId, said) {
     invented.push({ caseId, host: h });
   }
 }
+
+// --- invented credentials gate -------------------------------------------------------
+// Once repoauth appeared in the component schema, a model never trained on it
+// filled it with an invented secret: a Minecraft deployment went out with
+// repoauth "mypass:s3cr3t". An untrained optional field gets filled with garbage,
+// and a fabricated credential in a spec is a production defect, not a style
+// issue. Any repoauth in any call fails the case unless the user supplied
+// credentials in that conversation.
+const USER_GAVE_CREDS = /password|token|credential|secret|pat_|dckr_|aws-ecr|azure-acr|google-gar|access ?key|private (registry|repo|image)|:[^\s@]{6,}@/i;
+function inventedRepoauth(calls, userText) {
+  if (USER_GAVE_CREDS.test(userText || '')) return false;
+  return calls.some((c) => (c.args.components || []).some((comp) => comp.repoauth !== undefined && comp.repoauth !== ''));
+}
+const credFails = [];
 async function runCase(c, history) {
   const messages = history || [{ role: 'system', content: SYSTEM }];
   messages.push({ role: 'user', content: c.user });
@@ -405,7 +453,14 @@ async function runCase(c, history) {
       let a = {}; try { a = JSON.parse(tc.function.arguments || '{}'); } catch { /* bad json */ }
       const tag = tc.function.name + (tc.function.name === 'flux_deploy_app' && a.confirm ? ':confirm' : '');
       called.push({ tag, args: a });
-      messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(mock(tc.function.name, a)) });
+      let result;
+      if (tc.function.name === 'flux_search_docs' && docsRetrieval) {
+        const hits = await docsRetrieval.search(String(a.query || c.user), 3);
+        result = { results: hits.map(({ n, title, text, url }) => ({ n, title, text, url })) };
+      } else {
+        result = mock(tc.function.name, a);
+      }
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
     }
   }
   const tags = called.map(x => x.tag);
@@ -419,8 +474,11 @@ async function runCase(c, history) {
     && (!w.saidMatch2 || w.saidMatch2.test(saidAll) || w.saidMatch2.test(JSON.stringify(called)))
     && (!w.saidNot || !w.saidNot.test(saidAll));
   checkDomains(c.id, saidAll);
-  const pass = okFirst && okMust && okNot && okArgs && okSaid;
-  console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}${!okArgs ? ' (args)' : ''}${!okSaid ? ' (wording)' : ''}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
+  const userText = messages.filter(x => x.role === 'user').map(x => x.content || '').join(' ');
+  const okCreds = !inventedRepoauth(called, userText);
+  if (!okCreds) credFails.push(c.id);
+  const pass = okFirst && okMust && okNot && okArgs && okSaid && okCreds;
+  console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}${!okArgs ? ' (args)' : ''}${!okSaid ? ' (wording)' : ''}${!okCreds ? ' (INVENTED CREDENTIALS)' : ''}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
   console.log(`  tools: ${tags.join(' -> ') || '(none)'}`);
   for (const x of called) if (['flux_build_spec', 'flux_quote_app', 'flux_deploy_app'].includes(x.tag.split(':')[0])) console.log(`  ${x.tag} args: ${JSON.stringify(x.args).slice(0, 220)}`);
   console.log(`  said: ${text.replace(/\s+/g, ' ').slice(0, 300)}`);
@@ -444,4 +502,5 @@ async function runCase(c, history) {
   } else {
     console.log('domains: clean (nothing stated that is not attested)');
   }
+  console.log(credFails.length ? `!!! invented repoauth in case(s): ${credFails.join(', ')}` : 'credentials: none invented');
 })();

@@ -24,7 +24,9 @@ const REAL = [
   'fluxedge.ai', 'fluxcore.ai', 'fluxai.io', 'fluxai.com', 'fluxai.app',
   'beaverai.app', 'brimley.ai', 'influxtechnologies.com', 'fluxofficial.medium.com',
   'github.com', 'discord.gg', 'discord.com', 't.me', 'linkedin.com', 'addons.mozilla.org', 'chromewebstore.google.com', 'crowdin.com', 'apps.apple.com', 'play.google.com', 'halborn.com',
-  'docker.com', 'hub.docker.com', 'docker.io', 'ghcr.io', 'nodejs.org', 'medium.com', 'x.com',
+  'docker.com', 'hub.docker.com', 'docker.io', 'ghcr.io',
+  // the public container registries, which appear as the host of a private image
+  'azurecr.io', 'pkg.dev', 'amazonaws.com', 'gcr.io', 'quay.io', 'nodejs.org', 'medium.com', 'x.com',
 ];
 // Deliberate placeholders for things the user owns. These are reserved for
 // documentation by RFC 2606 or are obviously fictional, so they cannot collide

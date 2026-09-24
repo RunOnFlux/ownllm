@@ -33,6 +33,11 @@ const COMPONENT = {
     cpu: { type: 'number', description: 'cores, 0.1 steps' },
     ram: { type: 'integer', description: 'MB, multiple of 100' },
     hdd: { type: 'integer', description: 'GB' },
+    // The sync flag lives here and decides whether data survives an instance
+    // moving node. Marketplace templates carry it; copy it across verbatim.
+    commands: { type: 'array', items: { type: 'string' }, description: 'overrides the image CMD (never the ENTRYPOINT)' },
+    repoauth: { type: 'string', description: 'private registry credentials: user:token, or aws-ecr://..., azure-acr://..., google-gar://... Makes the app enterprise.' },
+    containerData: { type: 'string', description: "persistent path, optionally flagged: 'g:' primary/standby, 'r:' replicated, 's:' syncthing. e.g. g:/data" },
   },
 };
 

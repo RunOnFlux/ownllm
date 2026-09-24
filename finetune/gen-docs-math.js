@@ -43,13 +43,30 @@ const row = (docs, q, a) => ({ messages: [
 ] });
 
 /** Each builder returns {docs, q, a}. Numbers differ every time. */
+// Platform constants, stated at their true values in every passage.
+//
+// These exercises used to randomise them: the block time across 30, 45, 60 and
+// 120 seconds, blocks per month across five values, the per-app maximum across
+// 12, 15 and 20 cores, Nimbus's application RAM across six values, and the FLUX
+// payment discount across 5, 10 and 15 percent. The aim was sound, forcing the
+// model to read the number from the passage rather than recall it, but a passage
+// the model is trained on is a statement of fact, so two thirds of these rows
+// taught that the discount is 10 or 15 percent. v4 to v8 all stated 10% with
+// confidence, and this file is where it came from.
+//
+// What varies is what genuinely varies: the term a user picks, the size they ask
+// for, what they have used, the price and the FLUX rate. That keeps each row an
+// arithmetic exercise over a passage while every constant in it is true.
+const TRUE = { blockSecs: 30, blocksPerMonth: 88000, maxExpireBlocks: 1056000, maxExpireMonths: 12,
+  maxCores: 15, maxRam: 59000, maxHdd: 820, nimbusAppCores: 7, nimbusAppRam: 28000, fluxDiscount: 5 };
+
 const BUILDERS = [
   // blocks -> months: the exact shape v3 failed
   () => {
-    const perMonth = pick([80000, 84000, 88000, 90000, 96000]);
-    const months = pick([3, 6, 9, 12, 18, 24]);
-    const max = perMonth * months;
-    const secs = pick([30, 45, 60, 120]);
+    const perMonth = TRUE.blocksPerMonth;
+    const months = TRUE.maxExpireMonths;
+    const max = TRUE.maxExpireBlocks;
+    const secs = TRUE.blockSecs;
     const docs = [
       `Application lifetime\nMinimum expire is 1 block. Maximum expire is ${max.toLocaleString('en-US').replace(/,/g, '')} blocks.\nSince the PON fork a block takes about ${secs} seconds, so ${perMonth} blocks is one month.`,
       `Renewals\nAn application can be renewed at any time before it expires. The new term is added to whatever is left of the current one.`,
@@ -59,8 +76,8 @@ const BUILDERS = [
   },
   // blocks -> days/hours
   () => {
-    const secs = pick([30, 45, 60]);
-    const blocks = pick([2880, 5760, 20000, 44000, 88000]);
+    const secs = TRUE.blockSecs;
+    const blocks = pick([2880, 5760, 20000, 44000, 88000, 176000, 264000]);
     const days = +(blocks * secs / 86400).toFixed(1);
     const docs = [`Block timing\nSince the PON fork a block takes about ${secs} seconds.\nAn application's term is measured in blocks and is set by the expire field.`];
     return { docs, q: `How long is an expire of ${blocks} blocks in days?`,
@@ -93,15 +110,21 @@ const BUILDERS = [
   },
   // unit conversion
   () => {
-    const mb = pick([2500, 5000, 8000, 16000, 28000, 59000]);
-    const docs = [`Node tiers\nA NIMBUS node offers applications 7.0 cores and ${mb} MB.\nA CUMULUS node offers applications 3.0 cores and 5000 MB.`];
-    return { docs, q: `How many GB of RAM does a NIMBUS node give an application?`,
-      a: `A NIMBUS node offers ${mb} MB, which is ${+(mb / 1000).toFixed(1)} GB [1].` };
+    if (rnd() < 0.5) {
+      const mb = TRUE.nimbusAppRam;
+      const docs = [`Node tiers\nA NIMBUS node offers applications ${TRUE.nimbusAppCores}.0 cores and ${mb} MB.\nA CUMULUS node offers applications 3.0 cores and 5000 MB.`];
+      return { docs, q: `How many GB of RAM does a NIMBUS node give an application?`,
+        a: `A NIMBUS node offers applications ${mb} MB, which is ${+(mb / 1000).toFixed(1)} GB [1].` };
+    }
+    const mb = pick([2500, 6300, 9000, 12500, 16000, 48000]);
+    const docs = [`Resources\nRAM is set per component in MB, in multiples of 100. 1 GB is 1000 MB.`];
+    return { docs, q: `My app is set to ${mb} MB of RAM. How many GB is that?`,
+      a: `${mb} MB is ${+(mb / 1000).toFixed(1)} GB [1].` };
   },
   // does it fit: comparison against a limit
   () => {
-    const maxCores = pick([12, 15, 20]); const maxRam = pick([49000, 59000, 64000]);
-    const wantCores = pick([2, 8, 14, 16, 18]); const wantRamGB = pick([8, 32, 48, 64, 72]);
+    const maxCores = TRUE.maxCores; const maxRam = TRUE.maxRam;
+    const wantCores = pick([2, 8, 14, 15, 16, 18]); const wantRamGB = pick([8, 32, 48, 59, 64, 72]);
     const okCores = wantCores <= maxCores; const okRam = wantRamGB * 1000 <= maxRam;
     const docs = [`Application limits\nMaximum per application: ${maxCores} CPU cores, ${maxRam} MB RAM, 820 GB SSD.`,
       `Components\nThe limits apply to the sum of all components in the application.`];
@@ -113,7 +136,7 @@ const BUILDERS = [
   },
   // headroom: how much is left
   () => {
-    const maxRam = pick([49000, 59000, 64000]); const used = pick([12000, 20000, 33000, 41000]);
+    const maxRam = TRUE.maxRam; const used = pick([12000, 20000, 33000, 41000, 52000]);
     const docs = [`Application limits\nMaximum per application: 15 CPU cores, ${maxRam} MB RAM, 820 GB SSD.`,
       `Components\nThe limits apply to the sum of all components in the application.`];
     return { docs, q: `My components already use ${used} MB of RAM. How much more can I add?`,
@@ -121,7 +144,7 @@ const BUILDERS = [
   },
   // discount / FLUX conversion
   () => {
-    const usd = pick([4.5, 9.9, 18.75, 33.6]); const rate = +(0.08 + rnd() * 0.4).toFixed(3); const disc = pick([5, 10, 15]);
+    const usd = pick([4.5, 9.9, 18.75, 33.6]); const rate = +(0.08 + rnd() * 0.4).toFixed(3); const disc = TRUE.fluxDiscount;
     const flux = +(usd / rate * (1 - disc / 100)).toFixed(2);
     const docs = [`Payment\nApplications are priced in USD and paid in FLUX at the market rate, currently $${rate} per FLUX.\nPaying in FLUX gives a ${disc}% discount on the USD price.`];
     return { docs, q: `How much FLUX do I pay for an app that costs ${money(usd)} per month?`,

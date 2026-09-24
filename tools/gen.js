@@ -29,7 +29,57 @@ const arg = (k, d) => {
 const APP = arg('name', 'ownllm');
 const PROFILE = arg('profile', 'standard');
 const OWNER = arg('owner', '196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH');
-const PORT = Number(arg('port', 33000));
+/**
+ * What this app was last generated as.
+ *
+ * The generator's defaults are the right thing for a new app and the wrong thing
+ * for an existing one. Regenerating the live pool for the v7 rollout silently
+ * reverted five settings that had been passed as flags at first deploy and
+ * recorded nowhere: it minted a fresh API key, moved the gate port from 38300
+ * back to the 33000 default, dropped OLLAMA_MAX_LOADED_MODELS from 3 to 2,
+ * reverted the docs bot's CHAT_MODEL from our fine-tune to base granite, and
+ * widened ALLOWED_ORIGINS from an explicit list to "*". Each one would have
+ * broken production, and all five were caught only by diffing against the
+ * deployed spec by hand before signing.
+ *
+ * The API key already had this treatment. Everything else that a regeneration
+ * can silently revert now gets it too: the prior plaintext is the default, an
+ * explicit flag still wins, and --reset-defaults opts out.
+ */
+const RESET_DEFAULTS = argv.includes('--reset-defaults');
+const priorSpec = (() => {
+  if (RESET_DEFAULTS) return null;
+  const dir = path.join(__dirname, '..', 'specs');
+  const api = argv.includes('--api-only');
+  for (const base of [`${APP}-${PROFILE}-${api ? 'api' : 'enterprise'}`, `${APP}-${PROFILE}-api`, `${APP}-${PROFILE}-enterprise`]) {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, `${base}.plaintext.json`), 'utf8')); } catch { /* next */ }
+  }
+  return null;
+})();
+const priorEnvValue = (prefix) => {
+  for (const c of (priorSpec && priorSpec.compose) || []) {
+    const e = (c.environmentParameters || []).find((x) => x.startsWith(`${prefix}=`));
+    if (e) return e.slice(prefix.length + 1);
+  }
+  return null;
+};
+// The published port lives in a ports array rather than an env var.
+const priorPort = (() => {
+  for (const c of (priorSpec && priorSpec.compose) || []) {
+    if (Array.isArray(c.ports) && c.ports.length) return Number(c.ports[0]);
+  }
+  return null;
+})();
+const keptFromPrior = [];
+const keepArg = (flag, prefix, fallback) => {
+  const explicit = arg(flag, null);
+  if (explicit !== null) return explicit;
+  const prev = priorEnvValue(prefix);
+  if (prev !== null) { keptFromPrior.push(`${flag}=${prev.length > 40 ? `${prev.slice(0, 40)}...` : prev}`); return prev; }
+  return fallback;
+};
+const PORT = Number(arg('port', null) ?? priorPort ?? 33000);
+if (arg('port', null) === null && priorPort && priorPort !== 33000) keptFromPrior.push(`port=${priorPort}`);
 const EXPIRE = Number(arg('expire', 88000)); // 88000 blocks = 1 month post-PON (30s blocks)
 const INSTANCES = Number(arg('instances', 1));
 // Enterprise mode: adds the auth gate, encrypts the whole compose on chain, and
@@ -67,7 +117,7 @@ function existingApiKey(specsDir, basename) {
 // identical, which is what makes horizontal scaling and node migration a
 // non-event - there is no dataset to keep in sync.
 const API_ONLY = argv.includes('--api-only');
-const ALLOWED_ORIGINS = arg('allowed-origins', '*');
+const ALLOWED_ORIGINS = keepArg('allowed-origins', 'ALLOWED_ORIGINS', '*');
 if (`ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`.length > 400) throw new Error('--allowed-origins exceeds the 400-char env limit');
 // Adds the grounded docs bot alongside the raw model API, on the next port.
 const DOCSBOT = argv.includes('--docsbot');
@@ -207,6 +257,7 @@ const P = PROFILES[PROFILE];
 // A model can be attached to any profile from the command line, so an existing
 // app (the docs bot, say) can serve our fine-tune without editing a profile.
 if (arg('loaded', '')) P.loaded = Number(arg('loaded', ''));
+else { const prev = priorEnvValue('OLLAMA_MAX_LOADED_MODELS'); if (prev !== null && Number(prev) !== P.loaded) { P.loaded = Number(prev); keptFromPrior.push(`loaded=${prev}`); } }
 if (arg('ram', '')) P.ram = Number(arg('ram', ''));
 if (arg('model-release', '')) {
   P.modelRelease = arg('model-release', '');
@@ -502,7 +553,7 @@ const docsbot = {
   environmentParameters: [
     `UPSTREAM=${ENGINE_URL}`,
     `API_KEY=${API_KEY}`,
-    `CHAT_MODEL=${TERNARY ? (TQ2 ? 'bitnet-2b-4t-tq2' : 'bitnet-2b-4t') : arg('chat-model', 'granite4:tiny-h')}`,
+    `CHAT_MODEL=${TERNARY ? (TQ2 ? 'bitnet-2b-4t-tq2' : 'bitnet-2b-4t') : keepArg('chat-model', 'CHAT_MODEL', 'granite4:tiny-h')}`,
     `EMBED_MODEL=${TERNARY && !TQ2 ? 'bitnet-embedding-270m' : 'granite-embedding:278m'}`,
     // Always in front of the retrieved chunks, so the prompt prefix is
     // identical between requests and the KV cache covers it.
@@ -743,6 +794,12 @@ if (ENTERPRISE || API_ONLY) {
   console.log(`  api key   ${API_KEY}`);
   console.log(`            ${REUSED ? 'reused from the existing spec - deployed instances keep working' : 'NEWLY MINTED - anything already deployed still uses its old key'}`);
   console.log('            (stored only in the .plaintext.json, which .gitignore excludes)');
+}
+if (keptFromPrior.length) {
+  // Say it out loud. A setting silently reverting is the failure this prevents,
+  // and a setting silently persisting is the one it could cause.
+  console.log(`  kept      ${keptFromPrior.join(', ')}`);
+  console.log('            carried over from the previous spec; pass the flag to change one, --reset-defaults for all');
 }
 console.log(`  routing   https://${APP}.app.runonflux.io -> FDM, health-checked across ${spec.instances} instance(s)`);
 console.log(`  expire    ${spec.expire} blocks (~${(spec.expire * 30 / 86400).toFixed(1)} days at 30s blocks)`);

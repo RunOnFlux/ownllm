@@ -187,7 +187,19 @@ function scenario() {
     // check an image exists before quoting it, unless it came from a template
     'checkimage', 'checkimage', 'checkimage', 'checkimage',
     // read the stats before advising on size, rather than guessing
-    'rightsize', 'rightsize', 'rightsize', 'rightsize']);
+    'rightsize', 'rightsize', 'rightsize', 'rightsize',
+    // v9. Measured against a deterministic eval over production retrieval, v8
+    // tied v7 and both invented registry credentials once repoauth was in the
+    // schema. These close the gaps that eval exposed.
+    // 37% of the catalogue needs user-supplied values; ask for the ordinary ones,
+    // never for secrets, which the user types into the form.
+    'mktparams', 'mktparams', 'mktparams', 'mktparams', 'mktparams', 'mktparams', 'mktparams', 'mktparams',
+    // private images: build the spec, tell the user what goes in repoauth, never fill it
+    'privreg', 'privreg', 'privreg', 'privreg', 'privreg',
+    // one instance of something with a save file: quote both, name the risk, respect the choice
+    'oneinstance', 'oneinstance', 'oneinstance', 'oneinstance', 'oneinstance', 'oneinstance',
+    // map a size or player count to the right rung, and ask when neither is given
+    'mktrung', 'mktrung', 'mktrung', 'mktrung', 'mktrung', 'mktrung']);
   return s;
 }
 
@@ -467,6 +479,98 @@ const LANGS = {
  * "rounding 1250 up to 1300" + build_spec, and the harness saw nothing. So the
  * prose moves to the next assistant message, after the tool result.
  */
+/**
+ * Rewrite every tool call into the shape its own row's schema requires.
+ *
+ * v8 was trained on roughly 7,000 calls that contradicted the schema shipped
+ * in the same prompt. The worst were flows written against the UI surface
+ * (flux_quote_app({components, instances})) running on the compact surface,
+ * where the same tool takes flux_quote_app({spec}) and a spec comes from
+ * flux_build_spec. The model learns to obey the schema over the example, so
+ * each contradiction trains the wrong habit rather than the intended one.
+ *
+ * Fixing the ten call sites by hand is how one gets missed. This runs over
+ * every generated row instead, so the guarantee holds for flows written later
+ * too, and finetune/audit-schema.js proves it on the whole corpus.
+ */
+const PRICE_ONLY = new Set(['flux_quote_app', 'flux_validate_spec']);
+function specFromComponents(a) {
+  const comps = a.components || [];
+  return {
+    version: 8, name: a.name || 'app', description: a.description || `${a.name || 'app'}`,
+    compose: comps.map((c) => {
+      const ports = Array.isArray(c.ports) ? c.ports : [];
+      return {
+        name: c.name || 'app', repotag: c.image, ports: ports.map((pp) => 31000 + (pp % 9000)),
+        containerPorts: ports, domains: ports.map(() => ''),
+        environmentParameters: Array.isArray(c.env) ? c.env : [],
+        commands: Array.isArray(c.commands) ? c.commands : [],
+        containerData: c.containerData || '/data',
+        cpu: c.cpu, ram: c.ram, hdd: c.hdd,
+        ...(c.repoauth ? { repoauth: c.repoauth } : {}),
+      };
+    }),
+    instances: a.instances || 3, expire: Math.round((a.months || 1) * 88000),
+    ...(a.geolocation ? { geolocation: a.geolocation } : {}),
+  };
+}
+function normaliseForSurface(messages, tools) {
+  const byName = Object.fromEntries((tools || []).map((t) => [t.function.name, t.function.parameters]));
+  const wantsSpec = (name) => !!(byName[name] && byName[name].properties && byName[name].properties.spec && !byName[name].properties.components);
+  const componentProps = (() => {
+    const b = byName.flux_build_spec || byName.ui_prefill_deploy;
+    return b && b.properties && b.properties.components ? Object.keys(b.properties.components.items.properties) : null;
+  })();
+  const out = [];
+  // Build once, reuse: an agent that has a spec passes that spec to the next
+  // call rather than rebuilding it, and it keeps the app's name.
+  let lastSpec = null; let lastSig = null; let lastName = null;
+  const sig = (comps) => JSON.stringify((comps || []).map((c) => [c.image, c.cpu, c.ram, c.hdd]));
+  for (const m of messages) {
+    if (m.role !== 'assistant' || !m.tool_calls) { out.push(m); continue; }
+    const kept = [];
+    for (const call of m.tool_calls) {
+      let a; try { a = JSON.parse(call.function.arguments); } catch { kept.push(call); continue; }
+      const name = call.function.name;
+      // Components may only carry declared fields; drop anything else rather
+      // than teach an undeclared one.
+      const scrub = (comps) => (componentProps && Array.isArray(comps)
+        ? comps.map((c) => Object.fromEntries(Object.entries(c).filter(([k]) => componentProps.includes(k)))) : comps);
+      if (Array.isArray(a.components)) a.components = scrub(a.components);
+      // Region does not change the price, and the quote schema does not take it.
+      if (name === 'flux_quote_app' && 'geolocation' in a && !(byName.flux_quote_app && byName.flux_quote_app.properties && byName.flux_quote_app.properties.geolocation)) delete a.geolocation;
+      // A private registry is expressed as repoauth on the component; there is
+      // no separate enterprise switch in the build schema.
+      if (name === 'flux_build_spec' && 'enterprise' in a && !(byName.flux_build_spec.properties || {}).enterprise) delete a.enterprise;
+      if (a.name) lastName = a.name;
+      if (name === 'flux_build_spec' && Array.isArray(a.components)) {
+        lastSpec = specFromComponents(a); lastSig = sig(a.components);
+      }
+      if (PRICE_ONLY.has(name) && wantsSpec(name) && Array.isArray(a.components)) {
+        // Compact surface: pass a spec. Reuse the one already built for these
+        // components; build one only if nothing matching exists yet.
+        const want = sig(a.components);
+        let spec = lastSpec && lastSig === want ? { ...lastSpec, instances: a.instances || lastSpec.instances } : null;
+        if (!spec) {
+          const named = { ...a, name: a.name || lastName || 'app' };
+          spec = specFromComponents(named);
+          if (byName.flux_build_spec) {
+            const bc = tc('flux_build_spec', { name: named.name, components: a.components, instances: a.instances || 3 });
+            out.push({ role: 'assistant', content: '', tool_calls: [bc] });
+            out.push(toolMsg(bc.id, { spec }));
+          }
+          lastSpec = spec; lastSig = want;
+        }
+        kept.push({ ...call, function: { name, arguments: JSON.stringify({ spec }) } });
+        continue;
+      }
+      kept.push({ ...call, function: { name, arguments: JSON.stringify(a) } });
+    }
+    out.push({ ...m, tool_calls: kept });
+  }
+  return out;
+}
+
 function fixToolProse(messages) {
   for (let i = 0; i < messages.length; i += 1) {
     const m = messages[i];
@@ -616,6 +720,23 @@ const totals = (comps) => comps.reduce((t, c) => ({ cpu: +(t.cpu + c.cpu).toFixe
 // flux_deploy_app when it is not there, and teaches it the real routes.
 const CONVO = require('./convo');
 const MKT = require('./marketplace');
+// Template parameters that are secrets. These are never asked for in chat; the
+// user types them straight into the form so they never pass through the model.
+// A wallet seed phrase is a secret; a game's SERVER_SEED or WORLD_SEED is a
+// map-generation number and is not, so bare "SEED" is deliberately not matched.
+const isSecretParam = (n) => /KEY|PASS|TOKEN|SECRET|PRIV|AUTH|MNEMONIC|SEED_?PHRASE|REGISTRATION_CODE/i.test(n);
+const SAMPLE = { SERVER_NAME: 'Friday Night', WORLD_NAME: 'midgard', DEFAULT_WORLD_NAME: 'midgard', CLUSTER_NAME: 'our-cluster',
+  SHARD_NAME: 'master', OWNER_ID: '76561198012345678', USER: 'alex', USERNAME: 'alex', DASHBOARD_USERNAME: 'admin',
+  KADENA_ACCOUNT: 'k:alex', TAILSCALE_HOST: 'flux-node', MAX_PLAYERS: '8', EMAIL: 'me@example.com',
+  SERVER_DESCRIPTION: 'friends only, be nice', SERVER_HOSTNAME: 'Friday Night Rust', SERVER_SEED: '1337', WORLD_SEED: '1337' };
+const sampleParam = (n) => SAMPLE[n] || (/NAME|HOST/i.test(n) ? 'myserver' : /DESC/i.test(n) ? 'a server for friends' : /MAIL/i.test(n) ? 'me@example.com' : /SEED/i.test(n) ? '1337' : /ID/i.test(n) ? '12345' : 'default');
+const tmplResultOf = (a) => ({
+  name: a.name, category: a.category, description: a.description, priceUSD: a.priceUSD, instances: a.instances,
+  lockedValues: a.lockedValues, geolocationOptions: a.geolocationOptions,
+  compose: a.compose.map((c) => ({ name: c.name, repotag: c.repotag, ports: c.ports, containerPorts: c.containerPorts,
+    environmentParameters: c.environmentParameters, containerData: c.containerData, cpu: c.cpu, ram: c.ram, hdd: c.hdd,
+    ...(c.userEnvironmentParameters && c.userEnvironmentParameters.length ? { userEnvironmentParameters: c.userEnvironmentParameters } : {}) })),
+});
 const REGION_NAMES = { acNA: 'North America', acEU: 'Europe', acAS: 'Asia', acSA: 'South America', acOC: 'Oceania', acAF: 'Africa' };
 const UI_TOOLS = require('./tools-ui');
 const UI_ROUTES = UI_TOOLS.ROUTES;
@@ -954,7 +1075,19 @@ function build(s) {
       const dom = pick(['shop.example.com', 'app.mycompany.io', 'www.example.org']);
       m.push({ role: 'user', content: pick([`Can I use my own domain ${dom} for ${name}?`, `point ${dom} at ${name}`, `I want ${dom} instead of the runonflux URL`]) });
       m.push({ role: 'assistant', content: `Yes. Put **${dom}** in the app's domains field for the port it should serve, and create a CNAME from ${dom} to ${name}.app.runonflux.io at your DNS provider. The Flux domain manager then routes and issues the certificate. I can update the spec with that domain and quote the change - want me to?` });
-      if (chance(0.5)) { m.push({ role: 'user', content: pick(YES) }); m.push({ role: 'assistant', content: `I need the current spec to change it - one moment.` }); }
+      if (chance(0.5)) {
+        // This used to end on "I need the current spec to change it - one moment."
+        // with nothing after it: a promise to act and then a stop, which is the
+        // habit the model later showed as "Let me search the docs properly." and
+        // no search. Saying you will do something means doing it in the same turn.
+        m.push({ role: 'user', content: pick(YES) });
+        if (has(s, 'flux_get_app')) {
+          const cg = tc('flux_get_app', { name });
+          m.push({ role: 'assistant', content: '', tool_calls: [cg] });
+          m.push(toolMsg(cg.id, { name, instances: 3, compose: [{ name: 'web', repotag: 'nginx:1.27', cpu: 0.5, ram: 500, hdd: 5, ports: [port], domains: [''] }], expire: 88000 }));
+        }
+        m.push({ role: 'assistant', content: `Prepared: **${name}** with **${dom}** on port ${port}, everything else unchanged. A domain does not change the price, so the update costs nothing beyond what is left of your term. Sign it to apply, then create the CNAME from ${dom} to ${name}.app.runonflux.io; the certificate is issued once both are in place.` });
+      }
     } else {
       m.push({ role: 'user', content: pick(['do I need to set up SSL myself?', 'is https included?', 'how do certificates work here?']) });
       m.push({ role: 'assistant', content: 'No setup needed: the .app.runonflux.io address is served over HTTPS with a certificate the network manages, and a custom domain gets one too once its CNAME points at the app. Your container only serves plain HTTP on its port.' });
@@ -1323,6 +1456,152 @@ function build(s) {
       : `It is running hot rather than comfortable: **${stats.cpuPercent}% of ${stats.cpuLimit} cores** and **${stats.memUsedMB} MB of ${stats.memLimitMB}**, so memory is nearly exhausted.\n\nThat is the shape that ends in an out-of-memory kill under a traffic spike. Going to 4 cores and 8 GB takes it to **${money(q.usdTotal)}** a month. Want it prepared, or shall we look at what is using the memory first?` });
     return m;
   }
+  if (F === 'mktparams') {
+    // A template that needs the user to supply values before it will run. 37% of
+    // the catalogue: masternode keys, a Don't Starve cluster token, admin
+    // passwords. v8 prefilled these immediately without collecting anything, so
+    // the deployment would have started and failed.
+    //
+    // Ordinary values (a server name, a world name, a username) are asked for in
+    // chat and filled in. Secrets (keys, passwords, tokens) are never asked for in
+    // chat: they are left for the user to type straight into the form field, so
+    // they never pass through the assistant. Same rule as a seed phrase.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const pool = MKT.APPS.filter((a) => a.compose.some((c) => (c.userEnvironmentParameters || []).some((u) => !u.optional)));
+    const app = pick(pool);
+    const nm = `${app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 11)}${ri(1, 99)}`;
+    m.push({ role: 'user', content: pick([`set up ${app.name} for me`, `i want to deploy ${app.name}`, `deploy ${app.name} from the marketplace, call it ${nm}`]) });
+    const ct = tc('flux_get_template', { name: app.name });
+    m.push({ role: 'assistant', content: '', tool_calls: [ct] });
+    m.push(toolMsg(ct.id, tmplResultOf(app)));
+    const params = app.compose.flatMap((c) => (c.userEnvironmentParameters || []).map((u) => ({ ...u, comp: c.name })));
+    const required = params.filter((u) => !u.optional);
+    const plain = required.filter((u) => !isSecretParam(u.name));
+    const secret = required.filter((u) => isSecretParam(u.name));
+    const askList = plain.map((u) => `- **${u.name}**${u.description ? `: ${u.description}` : ''}`).join('\n');
+    const secretList = secret.map((u) => `**${u.name}**`).join(', ');
+    if (plain.length) {
+      m.push({ role: 'assistant', content: `${app.name} needs a few values from you before it will run.\n\n${askList}${secret.length ? `\n\nIt also needs ${secretList}. Do not send ${secret.length === 1 ? 'that' : 'those'} here: I will leave ${secret.length === 1 ? 'that field' : 'those fields'} empty and you type ${secret.length === 1 ? 'it' : 'them'} straight into the form, so ${secret.length === 1 ? 'it never passes' : 'they never pass'} through me.` : ''}` });
+      const values = Object.fromEntries(plain.map((u) => [u.name, sampleParam(u.name)]));
+      m.push({ role: 'user', content: plain.map((u) => `${u.name.toLowerCase().replace(/_/g, ' ')} ${values[u.name]}`).join(', ') });
+      const comps = app.compose.map((c) => ({
+        name: c.name, image: c.repotag, ports: c.containerPorts,
+        env: [...c.environmentParameters, ...(c.userEnvironmentParameters || []).filter((u) => values[u.name] !== undefined).map((u) => `${u.name}=${values[u.name]}`)],
+        cpu: c.cpu, ram: c.ram, hdd: c.hdd, containerData: c.containerData,
+      }));
+      const cp = tc('ui_prefill_deploy', { name: nm, description: app.description.slice(0, 120), components: comps, instances: app.instances });
+      m.push({ role: 'assistant', content: '', tool_calls: [cp] });
+      m.push(toolMsg(cp.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `**${nm}** is in the form with ${plain.map((u) => u.name).join(', ')} filled in, on ${app.instances} instances${MKT.syncMode(app.compose[0].containerData) === 'g' ? ` with \`containerData: ${app.compose[0].containerData}\`` : ''}.${secret.length ? `\n\nBefore you sign, type ${secretList} into ${secret.length === 1 ? 'its field' : 'their fields'} in the form. I have left ${secret.length === 1 ? 'it' : 'them'} blank on purpose.` : ' Check it and sign.'}` });
+    } else {
+      // only secrets required: prefill everything else, point at the fields
+      const comps = app.compose.map((c) => ({ name: c.name, image: c.repotag, ports: c.containerPorts, env: c.environmentParameters, cpu: c.cpu, ram: c.ram, hdd: c.hdd, containerData: c.containerData }));
+      const cp = tc('ui_prefill_deploy', { name: nm, description: app.description.slice(0, 120), components: comps, instances: app.instances });
+      m.push({ role: 'assistant', content: '', tool_calls: [cp] });
+      m.push(toolMsg(cp.id, { ok: true, at: '/deploy', prefilled: true }));
+      m.push({ role: 'assistant', content: `**${nm}** is in the form on ${app.instances} instances. It needs ${secretList} to run, and ${secret.length === 1 ? 'that is' : 'those are'} secret, so I have not asked for ${secret.length === 1 ? 'it' : 'them'} here. Type ${secret.length === 1 ? 'it' : 'them'} straight into ${secret.length === 1 ? 'its field' : 'their fields'} in the form before you sign.` });
+    }
+    return m;
+  }
+  if (F === 'privreg') {
+    // Private registries. The assistant never puts credentials in a spec itself:
+    // v7 and v8, shown a repoauth field they were never trained on, filled it
+    // with an invented secret ("mypass:s3cr3t") on a public Minecraft image.
+    // The model builds everything else and tells the user exactly what to type
+    // into the repoauth field, in the right format for their registry.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const [reg, img, fmt] = pick([
+      ['GitHub Container Registry', 'ghcr.io/acme/private-api:2.1', '`<github username>:<personal access token with read:packages>`'],
+      ['Docker Hub (private repo)', 'acmecorp/billing:3.0', '`<docker hub username>:<access token>`'],
+      ['AWS ECR', '123456789012.dkr.ecr.eu-west-1.amazonaws.com/api:prod', '`aws-ecr://region=eu-west-1&accessKeyId=<access key id>&secretAccessKey=<secret access key>`'],
+      ['Azure ACR', 'acme.azurecr.io/web:1.4', '`azure-acr://clientId=<client id>&clientSecret=<client secret>&tenantId=<tenant id>`'],
+      ['Google Artifact Registry', 'europe-docker.pkg.dev/acme/apps/worker:5', '`google-gar://keyFile=<base64 of the service account JSON>`'],
+    ]);
+    const nm = `${pick(['api', 'billing', 'web', 'worker'])}${ri(1, 99)}`;
+    const pasted = chance(0.35);
+    m.push({ role: 'user', content: pasted
+      ? `deploy ${img}, it's private. my token is ghp_${Array.from({ length: 12 }, () => 'abcdef0123456789'[ri(0, 15)]).join('')}. 1 core 1gb 10gb, port 8080, name ${nm}`
+      : pick([`deploy ${img} from our private ${reg}, 1 core 1 GB 10 GB, port 8080, call it ${nm}`, `run our private image ${img}, name ${nm}, 1 core and a gig, port 8080`]) });
+    const comps = [{ name: 'app', image: img, ports: [8080], cpu: 1, ram: 1000, hdd: 10 }];
+    const cp = tc('ui_prefill_deploy', { name: nm, description: `${nm} from a private registry`, components: comps, instances: 3 });
+    m.push({ role: 'assistant', content: '', tool_calls: [cp] });
+    m.push(toolMsg(cp.id, { ok: true, at: '/deploy', prefilled: true }));
+    m.push({ role: 'assistant', content: `${pasted ? `I have **not** put that token into the spec, and you should treat it as exposed now that it is in this chat: revoke it and make a new one.\n\n` : ''}**${nm}** is in the form: \`${img}\`, 1 core, 1 GB, 10 GB, port 8080, 3 instances. One field is left for you.\n\nIt is a private ${reg} image, so the nodes need credentials to pull it. In the component's **repoauth** field, enter ${fmt}. Filling that in makes it an enterprise app: the compose section is encrypted and only ArcaneOS nodes can decrypt it, so the credentials are not public.\n\nDo not put them in an environment variable instead; environment parameters are part of the public specification.` });
+    return m;
+  }
+  if (F === 'oneinstance') {
+    // "One instance to save money" on something with a save file. v8 simply
+    // complied, quoting one instance with no word about data loss. The honest
+    // answer quotes both, says what one instance risks, and then respects the
+    // user's decision if they still want it.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const fam = pick(MKT.LADDERS.filter((l) => MKT.syncMode(l[0].compose[0].containerData) === 'g'));
+    const app = fam[Math.min(fam.length - 1, ri(1, 2))];
+    const c0 = app.compose[0];
+    m.push({ role: 'user', content: pick([`i only want one instance of ${app.name} to save money`, `${app.name} but just 1 instance, cheaper`, `can i run ${app.name} on a single instance to cut the cost`]) });
+    const ct = tc('flux_get_template', { name: app.name });
+    m.push({ role: 'assistant', content: '', tool_calls: [ct] });
+    m.push(toolMsg(ct.id, tmplResultOf(app)));
+    const comps = [{ name: c0.name, image: c0.repotag, ports: c0.containerPorts, env: c0.environmentParameters, cpu: c0.cpu, ram: c0.ram, hdd: c0.hdd, containerData: c0.containerData }];
+    const c1 = tc('flux_quote_app', { components: comps, instances: 1 });
+    m.push({ role: 'assistant', content: '', tool_calls: [c1] });
+    const r1 = quoteFor({ compose: [{ cpu: c0.cpu, ram: c0.ram, hdd: c0.hdd }], instances: 1, expire: 88000 }, s.pricing);
+    const q1 = { ...r1, usdTotal: +(r1.usdTotal * 0.8).toFixed(2), flux: +(r1.flux * 0.8).toFixed(2), gDiscount: true };
+    m.push(toolMsg(c1.id, q1));
+    const c3 = tc('flux_quote_app', { components: comps, instances: app.instances });
+    m.push({ role: 'assistant', content: '', tool_calls: [c3] });
+    const r3 = quoteFor({ compose: [{ cpu: c0.cpu, ram: c0.ram, hdd: c0.hdd }], instances: app.instances, expire: 88000 }, s.pricing);
+    const q3 = { ...r3, usdTotal: +(r3.usdTotal * 0.8).toFixed(2), flux: +(r3.flux * 0.8).toFixed(2), gDiscount: true };
+    m.push(toolMsg(c3.id, q3));
+    m.push({ role: 'assistant', content: `You can, and here is the trade before you decide:\n\n- 1 instance: **${money(q1.usdTotal)}** a month\n- ${app.instances} instances: **${money(q3.usdTotal)}** a month\n\nThe extra instances are not extra servers. With \`containerData: ${c0.containerData}\` only one runs; the others hold a synchronised copy of ${c0.containerData.slice(2)}. On a single instance there is nothing to fail over to, so the first time the network moves it to another node, the world comes back **empty**.\n\nIf you would rather save the money and keep your own backups, one instance is a fair choice. Which do you want?` });
+    const insist = chance(0.5);
+    m.push({ role: 'user', content: insist ? pick(['one is fine, i will back it up myself', 'still one please']) : pick(['ok, the full set then', `fine, ${app.instances} it is`]) });
+    const inst = insist ? 1 : app.instances;
+    const nm = `${app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 11)}${ri(1, 99)}`;
+    const cp = tc('ui_prefill_deploy', { name: nm, description: app.description.slice(0, 120), components: comps, instances: inst });
+    m.push({ role: 'assistant', content: '', tool_calls: [cp] });
+    m.push(toolMsg(cp.id, { ok: true, at: '/deploy', prefilled: true }));
+    m.push({ role: 'assistant', content: insist
+      ? `Done: **${nm}** on 1 instance, **${money(q1.usdTotal)}** a month. Since there is no standby, set the Backup and Restore tab to write to FluxDrive on a schedule; that is your only copy if the node goes away.`
+      : `**${nm}** is in the form on ${app.instances} instances, **${money(q3.usdTotal)}** a month. Check it and sign.` });
+    return m;
+  }
+  if (F === 'mktrung') {
+    // Picking the right size. "About 9 GB" means the 9 GB rung, not the next one
+    // up; a player count maps to a rung; when neither is given, ask rather than
+    // guess. v8 took "about 9gb" and deployed the 16 GB Minecraft.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const ladder = pick(MKT.LADDERS);
+    const fam = ladder[0].name.replace(/\d+(GB|Slots)?$/i, '');
+    const target = ladder[Math.floor(rnd() * ladder.length)];
+    const tc0 = target.compose[0];
+    const isSlots = /Slots/i.test(target.name);
+    const sizeWord = isSlots ? `${target.name.match(/(\d+)Slots/i)[1]} players` : `about ${Math.round(tc0.ram / 1000)}gb`;
+    const vague = chance(0.3);
+    m.push({ role: 'user', content: vague ? pick([`a ${fam.toLowerCase()} server`, `set up ${fam.toLowerCase()}`]) : pick([`${fam.toLowerCase()} server, ${sizeWord}`, `i need ${fam.toLowerCase()} for ${sizeWord}`]) });
+    const cs = tc('flux_get_template', { search: fam.toLowerCase() });
+    m.push({ role: 'assistant', content: '', tool_calls: [cs] });
+    m.push(toolMsg(cs.id, { matches: ladder.map((x) => ({ name: x.name, priceUSD: x.priceUSD, instances: x.instances, cpu: x.compose[0].cpu, ram: x.compose[0].ram, hdd: x.compose[0].hdd, containerData: x.compose[0].containerData })) }));
+    if (vague) {
+      m.push({ role: 'assistant', content: `${fam} comes in ${ladder.length} sizes, from ${ladder[0].name} to ${ladder[ladder.length - 1].name}. ${isSlots ? 'How many players will be on it at once?' : 'Roughly how much memory, or how many players and whether you use mods?'} That decides the size, and I would rather ask than guess.` });
+      return m;
+    }
+    const ct = tc('flux_get_template', { name: target.name });
+    m.push({ role: 'assistant', content: '', tool_calls: [ct] });
+    m.push(toolMsg(ct.id, tmplResultOf(target)));
+    const comps = [{ name: tc0.name, image: tc0.repotag, ports: tc0.containerPorts, env: tc0.environmentParameters, cpu: tc0.cpu, ram: tc0.ram, hdd: tc0.hdd, containerData: tc0.containerData }];
+    const cq = tc('flux_quote_app', { components: comps, instances: target.instances });
+    m.push({ role: 'assistant', content: '', tool_calls: [cq] });
+    const rq = quoteFor({ compose: [{ cpu: tc0.cpu, ram: tc0.ram, hdd: tc0.hdd }], instances: target.instances, expire: 88000 }, s.pricing);
+    const q = MKT.syncMode(tc0.containerData) === 'g' ? { ...rq, usdTotal: +(rq.usdTotal * 0.8).toFixed(2), flux: +(rq.flux * 0.8).toFixed(2), gDiscount: true } : rq;
+    m.push(toolMsg(cq.id, q));
+    m.push({ role: 'assistant', content: `**${target.name}** is the match: ${+tc0.cpu.toFixed(1)} cores, ${ramWords(tc0.ram)}, ${tc0.hdd} GB on ${target.instances} instances with \`containerData: ${tc0.containerData}\`, **${money(q.usdTotal)}** a month (≈ ${q.flux} FLUX). What should I call it?` });
+    return m;
+  }
   // --- v7 conversation flows ------------------------------------------------------
   // The brief: "able to do it all, just heavily favouring deployments". Answering a
   // question properly and stopping is a correct answer; every one of these used to
@@ -1494,7 +1773,10 @@ function build(s) {
         ...(c.userEnvironmentParameters && c.userEnvironmentParameters.length ? { userEnvironmentParameters: c.userEnvironmentParameters } : {}),
       })),
     });
-    const app = ladder ? ladder[Math.floor(rnd() * ladder.length)] : pick(MKT.APPS);
+    // Apps that need the user to supply values go through mktparams, which asks
+    // for them. Prefilling those here taught "deploy a masternode without its key".
+    const noInput = MKT.APPS.filter((a) => !a.compose.some((c) => (c.userEnvironmentParameters || []).some((u) => !u.optional)));
+    const app = ladder ? ladder[Math.floor(rnd() * ladder.length)] : pick(noInput);
     const c0 = app.compose[0];
     const mode = MKT.syncMode(c0.containerData);
     const family = app.name.replace(/\d+(GB|Slots)?$/i, '') || app.name;
@@ -2673,11 +2955,11 @@ async function paraphrase(text) {
     while (jobs.length) {
       jobs.pop();
       let s = scenario();
-      let messages = fixToolProse(build(s));
+      let messages = normaliseForSurface(fixToolProse(build(s)), s.surface.tools);
       for (let tries = 0; tries < 8; tries += 1) {
         const key = JSON.stringify(messages);
         if (!seen.has(key)) { seen.add(key); break; }
-        dup += 1; s = scenario(); messages = fixToolProse(build(s));
+        dup += 1; s = scenario(); messages = normaliseForSurface(fixToolProse(build(s)), s.surface.tools);
       }
       stats.flows[s.flow] = (stats.flows[s.flow] || 0) + 1; stats.surfaces[s.surface.kind] = (stats.surfaces[s.surface.kind] || 0) + 1;
       const first = messages.find((x) => x.role === 'user');
