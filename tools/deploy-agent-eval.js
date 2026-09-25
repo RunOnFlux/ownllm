@@ -100,7 +100,11 @@ function mock(name, a) {
     const slim = (x) => ({ name: x.name, category: x.category, priceUSD: x.priceUSD, instances: x.instances,
       geolocationOptions: x.geolocationOptions,
       compose: x.compose.map((c) => ({ name: c.name, repotag: c.repotag, ports: c.ports, containerPorts: c.containerPorts,
-        environmentParameters: c.environmentParameters, containerData: c.containerData, cpu: c.cpu, ram: c.ram, hdd: c.hdd })) });
+        environmentParameters: c.environmentParameters, containerData: c.containerData, cpu: c.cpu, ram: c.ram, hdd: c.hdd,
+        // The values the user must supply. Omitting them meant a model asked to
+        // deploy RustServerOxide was never told it needs a hostname and an RCON
+        // password, so it could not ask. The production tool must return these.
+        ...(c.userEnvironmentParameters && c.userEnvironmentParameters.length ? { userEnvironmentParameters: c.userEnvironmentParameters } : {}) })) });
     if (a.name) {
       const hit = cat.find((x) => x.name.toLowerCase() === String(a.name).toLowerCase());
       return hit ? slim(hit) : { error: `no template named "${a.name}"`, hint: 'use search or category to list what exists' };
@@ -418,11 +422,17 @@ const REAL_HOSTS = ['runonflux.com', 'runonflux.io', 'zelcore.io', 'sspwallet.io
   'example.com', 'example.org', 'example.net', 'mycompany.com', 'mydomain.org', 'mysite.io', 'acme.co', 'mycorp.com'];
 const hostOk = (h) => REAL_HOSTS.some((r) => h === r || h.endsWith(`.${r}`));
 const invented = [];
-function checkDomains(caseId, said) {
-  for (const m of String(said || '').matchAll(/\b([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+)\b/gi)) {
+// A domain a tool returned in this conversation is attested: repeating it is
+// quoting the source, which is exactly the rule the model is trained on. v9
+// said rustmaps.com while deploying a Rust server, and was flagged, although
+// that address is in the template's own parameter description.
+const HOST_RE = /\b([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+)\b/gi;
+const isHost = (h) => /\.(com|io|org|net|ai|app|co|gg|dev|cloud|me|xyz|online)$/.test(h);
+function checkDomains(caseId, said, toolText) {
+  const fromTools = new Set([...String(toolText || '').matchAll(HOST_RE)].map((m) => m[1].toLowerCase()));
+  for (const m of String(said || '').matchAll(HOST_RE)) {
     const h = m[1].toLowerCase();
-    if (!/\.(com|io|org|net|ai|app|co|gg|dev|cloud|me|xyz|online)$/.test(h)) continue;
-    if (hostOk(h)) continue;
+    if (!isHost(h) || hostOk(h) || fromTools.has(h)) continue;
     invented.push({ caseId, host: h });
   }
 }
@@ -475,7 +485,7 @@ async function runCase(c, history) {
   const okSaid = (!w.saidMatch || w.saidMatch.test(text) || w.saidMatch.test(saidAll))
     && (!w.saidMatch2 || w.saidMatch2.test(saidAll) || w.saidMatch2.test(JSON.stringify(called)))
     && (!w.saidNot || !w.saidNot.test(saidAll));
-  checkDomains(c.id, saidAll);
+  checkDomains(c.id, saidAll, messages.filter(x => x.role === 'tool').map(x => x.content || '').join(' '));
   const userText = messages.filter(x => x.role === 'user').map(x => x.content || '').join(' ');
   const okCreds = !inventedRepoauth(called, userText);
   if (!okCreds) credFails.push(c.id);

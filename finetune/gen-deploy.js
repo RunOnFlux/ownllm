@@ -199,7 +199,13 @@ function scenario() {
     // one instance of something with a save file: quote both, name the risk, respect the choice
     'oneinstance', 'oneinstance', 'oneinstance', 'oneinstance', 'oneinstance', 'oneinstance',
     // map a size or player count to the right rung, and ask when neither is given
-    'mktrung', 'mktrung', 'mktrung', 'mktrung', 'mktrung', 'mktrung']);
+    'mktrung', 'mktrung', 'mktrung', 'mktrung', 'mktrung', 'mktrung',
+    // v10. Each of these fixes a root cause found by reading v9's failures rather
+    // than by adding weight to what did not work.
+    // size-picking against the real, mixed, alphabetical search result
+    'mktrung', 'mktrung',
+    // colloquial names: search by keyword, never conclude from one exact-name miss
+    'mktfuzzy', 'mktfuzzy', 'mktfuzzy', 'mktfuzzy', 'mktfuzzy', 'mktfuzzy']);
   return s;
 }
 
@@ -493,6 +499,20 @@ const LANGS = {
  * every generated row instead, so the guarantee holds for flows written later
  * too, and finetune/audit-schema.js proves it on the whole corpus.
  */
+// An image the marketplace ships with a sync flag gets that flag, whichever
+// flow produced the call. 19% of quotes on a synced image (itzg/minecraft-server,
+// vaultwarden) came from older flows that built the component from a hard-coded
+// preset with no containerData, which taught that the flag is optional. v9 then
+// quoted an exactly correct Palworld spec with the flag missing.
+let SYNC_BY_IMAGE_CACHE = null;
+const syncByImage = () => SYNC_BY_IMAGE_CACHE || (SYNC_BY_IMAGE_CACHE = (() => {
+  const votes = {};
+  for (const a of MKT.ALL) for (const c of a.compose) {
+    if (!/^[rgs]+:/.test(c.containerData || '')) continue;
+    (votes[c.repotag] = votes[c.repotag] || {})[c.containerData] = ((votes[c.repotag] || {})[c.containerData] || 0) + 1;
+  }
+  return Object.fromEntries(Object.entries(votes).map(([img, v]) => [img, Object.entries(v).sort((x, y) => y[1] - x[1])[0][0]]));
+})());
 const PRICE_ONLY = new Set(['flux_quote_app', 'flux_validate_spec']);
 function specFromComponents(a) {
   const comps = a.components || [];
@@ -536,7 +556,10 @@ function normaliseForSurface(messages, tools) {
       // than teach an undeclared one.
       const scrub = (comps) => (componentProps && Array.isArray(comps)
         ? comps.map((c) => Object.fromEntries(Object.entries(c).filter(([k]) => componentProps.includes(k)))) : comps);
-      if (Array.isArray(a.components)) a.components = scrub(a.components);
+      if (Array.isArray(a.components)) {
+        a.components = scrub(a.components).map((c) => (c && c.image && syncByImage()[c.image] && !/^[rgs]+:/.test(c.containerData || '')
+          && (!componentProps || componentProps.includes('containerData')) ? { ...c, containerData: syncByImage()[c.image] } : c));
+      }
       // Region does not change the price, and the quote schema does not take it.
       if (name === 'flux_quote_app' && 'geolocation' in a && !(byName.flux_quote_app && byName.flux_quote_app.properties && byName.flux_quote_app.properties.geolocation)) delete a.geolocation;
       // A private registry is expressed as repoauth on the component; there is
@@ -737,6 +760,27 @@ const tmplResultOf = (a) => ({
     environmentParameters: c.environmentParameters, containerData: c.containerData, cpu: c.cpu, ram: c.ram, hdd: c.hdd,
     ...(c.userEnvironmentParameters && c.userEnvironmentParameters.length ? { userEnvironmentParameters: c.userEnvironmentParameters } : {}) })),
 });
+// What the real flux_get_template(search) returns: every template whose name or
+// image contains the keyword, in catalogue (alphabetical) order. v9 was trained
+// on a tidy seven-rung ladder while the real search for "minecraft" returns
+// sixteen templates, Java, Bedrock and NewGames mixed, with Minecraft16GB sorted
+// ahead of Minecraft1GB. Asked for "about 9 GB" it took the first plausible
+// entry, the 16 GB one. Training now shows the real list so the model learns to
+// filter by edition, category and size.
+const searchTemplates = (q) => MKT.ALL.filter((x) => x.visible && x.enabled
+  && (x.name.toLowerCase().includes(q) || x.compose.some((c) => c.repotag.toLowerCase().includes(q))));
+const matchRow = (x) => ({ name: x.name, category: x.category, priceUSD: x.priceUSD, instances: x.instances,
+  cpu: x.compose[0].cpu, ram: x.compose[0].ram, hdd: x.compose[0].hdd, repotag: x.compose[0].repotag, containerData: x.compose[0].containerData });
+// How people actually name each ladder, and the keyword the model searches with.
+const FAMILY = {
+  'itzg/minecraft-server:latest|Games': { say: ['minecraft', 'minecraft java', 'a java minecraft server'], search: 'minecraft', label: 'Minecraft Java' },
+  'itzg/minecraft-bedrock-server:latest|Games': { say: ['minecraft bedrock', 'a bedrock minecraft server', 'bedrock edition minecraft'], search: 'minecraft', label: 'Minecraft Bedrock' },
+  'thijsvanloef/palworld-server-docker:latest|Games': { say: ['palworld', 'a palworld server'], search: 'palworld', label: 'Palworld' },
+  'jktuned/enshrouded-server:latest|Games': { say: ['enshrouded', 'an enshrouded server'], search: 'enshrouded', label: 'Enshrouded' },
+  'kaspanet/rusty-kaspad:latest|Blockchain': { say: ['a kaspa node', 'kaspa'], search: 'kaspa', label: 'Kaspa node' },
+};
+const familyOf = (ladder) => FAMILY[`${ladder[0].compose[0].repotag}|${ladder[0].category}`]
+  || { say: [ladder[0].name.replace(/\d+(GB|Slots)?$/i, '').toLowerCase()], search: ladder[0].name.replace(/\d+(GB|Slots)?$/i, '').toLowerCase(), label: ladder[0].name.replace(/\d+(GB|Slots)?$/i, '') };
 const REGION_NAMES = { acNA: 'North America', acEU: 'Europe', acAS: 'Asia', acSA: 'South America', acOC: 'Oceania', acAF: 'Africa' };
 const UI_TOOLS = require('./tools-ui');
 const UI_ROUTES = UI_TOOLS.ROUTES;
@@ -746,19 +790,27 @@ const UI_SYSTEM = [
   'FluxCloud in-app assistant. Use the tools to navigate, quote and inspect. Deployment and payment are the user\'s to confirm in the page - you prepare, they sign. Keep answers short.',
   'You help people use FluxCloud from inside the web app. Navigate with ui_navigate, open their apps and templates, quote resources, and hand a ready specification to the deploy form. You cannot sign or spend; the app does that when the user agrees.',
 ];
+// Explicit requests to GO somewhere, and nothing else. This list used to hold
+// questions ("I want to run a node", "how do I operate a FluxNode", "what would
+// 4 cores cost", "how big is the network", "do you have GPUs") mapped to page
+// jumps, which trained the v5 habit of navigating instead of answering. Each one
+// contradicted a newer flow that answers the same question (nodeop, answerfirst,
+// the quote flows), so behaviour on them was a coin flip weighted by frequency:
+// v9 answered "I want to run a fluxnode, where do I start" by opening /node.
+// Questions belong to the answer flows; this flow is for "take me there".
 const UI_PAGES = [
-  ['/deployments', ['my apps', 'where are my deployments', 'show my running apps', 'I want to see my apps']],
-  ['/balance', ['how much FLUX do I have', 'my balance', 'where do I top up']],
-  ['/cost-calculator', ['what would 4 cores cost', 'is there a price calculator', 'help me estimate a price']],
-  ['/templates', ['show me the templates', 'what one-click apps are there', 'marketplace please']],
-  ['/gpu', ['do you have GPUs', 'I need a GPU machine', 'where is FluxEdge']],
-  ['/node', ['I want to run a node', 'node dashboard', 'how do I operate a FluxNode']],
-  ['/governance', ['where do I vote', 'governance proposals']],
-  ['/drive', ['where are my files', 'flux drive']],
-  ['/storage', ['object storage', 'where do I put buckets']],
-  ['/account', ['my account settings', 'where do I change my email']],
-  ['/help', ['I need help', 'where are the docs', 'support please']],
-  ['/network', ['how big is the network', 'network status page']],
+  ['/deployments', ['open my deployments', 'take me to my apps page', 'go to deployments']],
+  ['/balance', ['open my balance page', 'take me to the balance page', 'go to balance']],
+  ['/cost-calculator', ['open the cost calculator', 'take me to the calculator', 'go to the cost calculator']],
+  ['/templates', ['open the templates', 'take me to the marketplace', 'show me the templates page']],
+  ['/gpu', ['open the gpu page', 'take me to FluxEdge', 'go to the gpu page']],
+  ['/node', ['open the node dashboard', 'take me to my node page', 'go to the node dashboard']],
+  ['/governance', ['open governance', 'take me to the governance page', 'go to the voting page']],
+  ['/drive', ['open flux drive', 'take me to my files', 'go to FluxDrive']],
+  ['/storage', ['open object storage', 'take me to storage', 'go to the storage page']],
+  ['/account', ['open my account settings', 'take me to account settings', 'go to my account']],
+  ['/help', ['open the help page', 'take me to help', 'go to the docs page']],
+  ['/network', ['open the network page', 'take me to the network stats', 'go to the network page']],
 ];
 // --- v6: Orbit (Deploy with Git), docs search, spec clone/export ------------------
 // Orbit (runonflux/orbit) is the most deployed image on the network - 240 apps -
@@ -1348,10 +1400,16 @@ function build(s) {
       m.push({ role: 'assistant', content: '', tool_calls: [c] });
       m.push(toolMsg(c.id, { results: [] }));
     } else if (it.kind === 'template' && has(s, 'flux_get_template')) {
+      // An exact-name miss is not proof of absence: search before concluding.
+      // This used to stop at the miss, and v9 then told a user there was no Dash
+      // masternode template when DashNode exists.
       const nm = /openwebui/i.test(pick(it.q)) ? 'OpenWebUI' : 'Grafana';
       const c = tc('flux_get_template', { name: nm });
       m.push({ role: 'assistant', content: '', tool_calls: [c] });
       m.push(toolMsg(c.id, { error: `no template named "${nm}"`, hint: 'use search or category to list what exists' }));
+      const c2 = tc('flux_get_template', { search: nm.toLowerCase() });
+      m.push({ role: 'assistant', content: '', tool_calls: [c2] });
+      m.push(toolMsg(c2.id, { matches: [], hint: 'nothing matched; try a category' }));
     } else if (it.kind === 'app') {
       const c = tc('flux_list_my_apps', {});
       m.push({ role: 'assistant', content: '', tool_calls: [c] });
@@ -1569,25 +1627,61 @@ function build(s) {
       : `**${nm}** is in the form on ${app.instances} instances, **${money(q3.usdTotal)}** a month. Check it and sign.` });
     return m;
   }
+  if (F === 'mktfuzzy') {
+    // People name templates the way they talk: "a Dash masternode", "a valheim
+    // server", "rust with oxide". None is an exact template name, so the right
+    // move is a keyword search, then pick the matching entry. v9 looked up the
+    // literal phrase, missed, and told a user no Dash template existed when
+    // DashNode does.
+    s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
+    m[0] = { role: 'system', content: s.surface.system };
+    const app = pick(MKT.APPS);
+    const words = app.name.replace(/([a-z])([A-Z0-9])/g, '$1 $2').replace(/(\d+)(GB|Slots)/i, '').trim().split(/\s+/);
+    const keyword = words[0].toLowerCase();
+    const results = searchTemplates(keyword);
+    if (!results.includes(app) || keyword.length < 3) return build({ ...s, flow: 'mktdeploy' });
+    const noun = app.category === 'Masternode' ? 'masternode' : /Games/.test(app.category) ? 'server' : app.category === 'Blockchain' ? 'node' : 'app';
+    const phrase = `${words.join(' ').toLowerCase()}${new RegExp(noun, 'i').test(app.name) ? '' : ` ${noun}`}`;
+    m.push({ role: 'user', content: pick([`set up a ${phrase}`, `can you deploy a ${phrase} for me`, `i want a ${phrase}`]) });
+    const cs = tc('flux_get_template', { search: keyword });
+    m.push({ role: 'assistant', content: '', tool_calls: [cs] });
+    m.push(toolMsg(cs.id, { matches: results.map(matchRow) }));
+    const ct = tc('flux_get_template', { name: app.name });
+    m.push({ role: 'assistant', content: '', tool_calls: [ct] });
+    m.push(toolMsg(ct.id, tmplResultOf(app)));
+    const c0 = app.compose[0];
+    const req = app.compose.flatMap((c) => (c.userEnvironmentParameters || []).filter((u) => !u.optional));
+    const sec = req.filter((u) => isSecretParam(u.name)).map((u) => `**${u.name}**`);
+    const plain = req.filter((u) => !isSecretParam(u.name)).map((u) => `**${u.name}**`);
+    const others = results.length > 1 ? ` The search also turned up ${results.filter((x) => x !== app).slice(0, 3).map((x) => x.name).join(', ')}${results.length > 4 ? ' and others' : ''}; the one you mean is **${app.name}**.` : '';
+    m.push({ role: 'assistant', content: `That is **${app.name}** in the marketplace.${others} It runs \`${c0.repotag}\` at ${+c0.cpu.toFixed(1)} cores, ${ramWords(c0.ram)} and ${c0.hdd} GB on ${app.instances} instances${MKT.syncMode(c0.containerData) ? `, with \`containerData: ${c0.containerData}\`` : ''}.${plain.length ? ` I will need ${plain.join(', ')} from you.` : ''}${sec.length ? ` It also needs ${sec.join(', ')}, which you type into the form yourself; do not send ${sec.length === 1 ? 'it' : 'them'} here.` : ''} What should the app be called?` });
+    return m;
+  }
   if (F === 'mktrung') {
-    // Picking the right size. "About 9 GB" means the 9 GB rung, not the next one
-    // up; a player count maps to a rung; when neither is given, ask rather than
-    // guess. v8 took "about 9gb" and deployed the 16 GB Minecraft.
+    // Picking the right size from what the search really returns. "About 9 GB"
+    // means the 9 GB rung of the edition asked for, not the first entry of a
+    // mixed list; a player count maps to its slot rung; when neither is given,
+    // ask. The search result is the real one: every match, Java, Bedrock and
+    // NewGames together, in alphabetical order, so 16GB sorts before 1GB.
     s.surface = { kind: 'ui', system: pick(UI_SYSTEM), tools: UI_TOOLS.slice() };
     m[0] = { role: 'system', content: s.surface.system };
     const ladder = pick(MKT.LADDERS);
-    const fam = ladder[0].name.replace(/\d+(GB|Slots)?$/i, '');
+    const fam = familyOf(ladder);
     const target = ladder[Math.floor(rnd() * ladder.length)];
     const tc0 = target.compose[0];
     const isSlots = /Slots/i.test(target.name);
-    const sizeWord = isSlots ? `${target.name.match(/(\d+)Slots/i)[1]} players` : `about ${Math.round(tc0.ram / 1000)}gb`;
-    const vague = chance(0.3);
-    m.push({ role: 'user', content: vague ? pick([`a ${fam.toLowerCase()} server`, `set up ${fam.toLowerCase()}`]) : pick([`${fam.toLowerCase()} server, ${sizeWord}`, `i need ${fam.toLowerCase()} for ${sizeWord}`]) });
-    const cs = tc('flux_get_template', { search: fam.toLowerCase() });
+    const sizeWord = isSlots ? `${target.name.match(/(\d+)Slots/i)[1]} players` : pick([`about ${Math.round(tc0.ram / 1000)}gb`, `${Math.round(tc0.ram / 1000)} gigs of ram`, `around ${Math.round(tc0.ram / 1000)}GB`]);
+    const vague = chance(0.25);
+    const said = pick(fam.say);
+    m.push({ role: 'user', content: vague ? pick([`${said} please`, `set up ${said}`, `i want ${said}`]) : pick([`${said}, ${sizeWord}`, `i need ${said} for ${sizeWord}`, `set up ${said} with ${sizeWord}`]) });
+    const results = searchTemplates(fam.search);
+    const cs = tc('flux_get_template', { search: fam.search });
     m.push({ role: 'assistant', content: '', tool_calls: [cs] });
-    m.push(toolMsg(cs.id, { matches: ladder.map((x) => ({ name: x.name, priceUSD: x.priceUSD, instances: x.instances, cpu: x.compose[0].cpu, ram: x.compose[0].ram, hdd: x.compose[0].hdd, containerData: x.compose[0].containerData })) }));
+    m.push(toolMsg(cs.id, { matches: results.map(matchRow) }));
+    const others = results.filter((x) => !ladder.includes(x));
     if (vague) {
-      m.push({ role: 'assistant', content: `${fam} comes in ${ladder.length} sizes, from ${ladder[0].name} to ${ladder[ladder.length - 1].name}. ${isSlots ? 'How many players will be on it at once?' : 'Roughly how much memory, or how many players and whether you use mods?'} That decides the size, and I would rather ask than guess.` });
+      const rungs = ladder.map((x) => `${x.name} (${ramWords(x.compose[0].ram)})`).join(', ');
+      m.push({ role: 'assistant', content: `The search turns up ${results.length} templates. ${others.length ? `Setting aside ${others.length} that are a different product or edition, ` : ''}${fam.label} comes in ${ladder.length} sizes: ${rungs}. ${isSlots ? 'How many players will be on it at once?' : 'Roughly how many players, and do you use mods? That decides the memory.'} I would rather ask than guess.` });
       return m;
     }
     const ct = tc('flux_get_template', { name: target.name });
@@ -1599,7 +1693,8 @@ function build(s) {
     const rq = quoteFor({ compose: [{ cpu: tc0.cpu, ram: tc0.ram, hdd: tc0.hdd }], instances: target.instances, expire: 88000 }, s.pricing);
     const q = MKT.syncMode(tc0.containerData) === 'g' ? { ...rq, usdTotal: +(rq.usdTotal * 0.8).toFixed(2), flux: +(rq.flux * 0.8).toFixed(2), gDiscount: true } : rq;
     m.push(toolMsg(cq.id, q));
-    m.push({ role: 'assistant', content: `**${target.name}** is the match: ${+tc0.cpu.toFixed(1)} cores, ${ramWords(tc0.ram)}, ${tc0.hdd} GB on ${target.instances} instances with \`containerData: ${tc0.containerData}\`, **${money(q.usdTotal)}** a month (≈ ${q.flux} FLUX). What should I call it?` });
+    const why = isSlots ? `built for ${target.name.match(/(\d+)Slots/i)[1]} players` : `the ${ramWords(tc0.ram)} ${fam.label} rung, which is what you asked for`;
+    m.push({ role: 'assistant', content: `**${target.name}**, ${why}: ${+tc0.cpu.toFixed(1)} cores, ${ramWords(tc0.ram)}, ${tc0.hdd} GB on ${target.instances} instances with \`containerData: ${tc0.containerData}\`, **${money(q.usdTotal)}** a month (≈ ${q.flux} FLUX). What should I call it?` });
     return m;
   }
   // --- v7 conversation flows ------------------------------------------------------
@@ -1784,10 +1879,12 @@ function build(s) {
     if (ladder) {
       // The ladder is the interesting case: the marketplace sells one app at
       // several sizes and picking the rung is the actual work.
-      m.push({ role: 'user', content: pick([`i want a ${family.toLowerCase()} server`, `can you set up ${family.toLowerCase()} for us`, `how much is ${family.toLowerCase()} on here`]) });
-      const cs = tc('flux_get_template', { search: family.toLowerCase() });
+      const fam = familyOf(ladder);
+      m.push({ role: 'user', content: pick([`i want ${pick(fam.say)}`, `can you set up ${pick(fam.say)} for us`, `how much is ${pick(fam.say)} on here`]) });
+      // the real search: every match, mixed and alphabetical, filtered by the model
+      const cs = tc('flux_get_template', { search: fam.search });
       m.push({ role: 'assistant', content: '', tool_calls: [cs] });
-      m.push(toolMsg(cs.id, { matches: ladder.map((x) => ({ name: x.name, priceUSD: x.priceUSD, instances: x.instances, cpu: x.compose[0].cpu, ram: x.compose[0].ram, hdd: x.compose[0].hdd, repotag: x.compose[0].repotag, containerData: x.compose[0].containerData })) }));
+      m.push(toolMsg(cs.id, { matches: searchTemplates(fam.search).map(matchRow) }));
       const rungs = ladder.map((x) => `- **${x.name}**: ${x.compose[0].cpu} ${x.compose[0].cpu === 1 ? 'core' : 'cores'}, ${ramWords(x.compose[0].ram)}, ${x.compose[0].hdd} GB${x.priceUSD ? ` - $${x.priceUSD.toFixed(2)} a month` : ''}`).join('\n');
       m.push({ role: 'assistant', content: `It is in the marketplace at ${ladder.length} sizes, so the question is which rung:\n\n${rungs}\n\n${/minecraft/i.test(family) ? 'The number is the memory the server gets, and mods are what eat it. Vanilla with a handful of friends is happy at 4 GB; a big modpack wants 8 or 16.' : /palworld/i.test(family) ? 'The number is player slots. Palworld is memory-hungry per player, which is why the ladder climbs the way it does.' : /enshrouded/i.test(family) ? 'The number is player slots.' : 'Pick by how much you expect to store and serve.'}\n\nWhich one, and what should it be called?` });
       chosenName = `${family.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}${ri(1, 99)}`;

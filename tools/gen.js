@@ -90,7 +90,10 @@ const ENTERPRISE = argv.includes('--enterprise');
 const REGISTRY = arg('registry', 'ghcr.io/runonflux');
 // Read from images/gate/VERSION, the same file CI tags the image with, so a
 // generated spec can never point at a version that was never published.
-const GATE_VERSION = fs.readFileSync(path.join(__dirname, '..', 'images', 'gate', 'VERSION'), 'utf8').trim();
+// --gate-version pins the image tag explicitly. Needed when VERSION has been
+// bumped for a build CI has not produced yet: a spec naming an unbuilt image
+// leaves every node unable to pull it.
+const GATE_VERSION = arg('gate-version', null) || fs.readFileSync(path.join(__dirname, '..', 'images', 'gate', 'VERSION'), 'utf8').trim();
 /**
  * The real key only ever lands in the .plaintext.json (gitignored) that feeds
  * the encrypter - never in the envelope that goes on chain.
@@ -208,10 +211,10 @@ const PROFILES = {
     // loader skipped installs because the name already existed, and a healthy
     // pool told us nothing about which weights it served. The tag is now the
     // answer to "what is running?" - visible in /api/tags on any node.
-    modelName: 'fluxai:tiny-v7', modelStableName: 'fluxai:tiny', bootHdd: 8,
-    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v7',
-    warmUrl: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v7/warm.json',
-    modelSha256: '559c2b0d4d4a17e0c241804be0ba778022a32322a8db023321663765f5dae5a5',
+    modelName: 'fluxai:tiny-v9', modelStableName: 'fluxai:tiny', bootHdd: 8,
+    modelRelease: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v9',
+    warmUrl: 'https://github.com/RunOnFlux/ownllm/releases/download/model-v9/warm.json',
+    modelSha256: '39c0f770cd8ff06fbc2fe9dcf3449adfffd1849f5814add9422ceb34b0d8dfe5',
   },
   // Docs bot: chat model AND embedding model must both stay resident. With
   // loaded: 1 they evict each other on every single query - embed the question,
