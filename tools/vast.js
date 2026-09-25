@@ -31,6 +31,9 @@ if (!KEY) { console.error('no vast.ai key: put it in ~/.vast.key or VAST_API_KEY
 const CLI = path.join(__dirname, '..', 'finetune', '.venv-vast', 'bin', 'vastai');
 if (!fs.existsSync(CLI)) { console.error('vastai CLI missing; python3 -m venv finetune/.venv-vast && finetune/.venv-vast/bin/pip install vastai'); process.exit(1); }
 const vast = (...a) => execFileSync(CLI, [...a, '--api-key', KEY], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+// destroy asks "are you sure? [y/N]" on stdin and aborts on no answer, so a
+// destroy without input silently leaves the instance billing.
+const destroy = (id) => execFileSync(CLI, ['destroy', 'instance', String(id), '--api-key', KEY], { encoding: 'utf8', input: 'y\n' });
 // status_msg carries raw control characters, which JSON.parse rejects
 const parse = (s) => JSON.parse(s.replace(/[\x00-\x1f]/g, (c) => (c === '\n' || c === '\t' || c === '\r' ? ' ' : '')));
 const port8080 = (d) => ((d.ports || {})['8080/tcp'] || [{}])[0].HostPort;
@@ -117,12 +120,39 @@ async function main() {
     }
     return;
   }
+  if (cmd === 'watch') {
+    // Poll a running job and, the moment it reports DONE, download its artefacts
+    // and destroy the instance. v9 finished at 17:07 and the box then idled,
+    // billing, until someone looked the next morning: about eight hours and $8,
+    // half the run's cost, for nothing. Start this right after rent.
+    //   node tools/vast.js watch <out dir> --id <instance> [--every 300]
+    const outDir = args.find((x) => !x.startsWith('--') && !/^\d+$/.test(x)) || 'runs/latest';
+    const id = opt('id', null); const every = Number(opt('every', 300)) * 1000;
+    if (!id) throw new Error('--id <instance> required');
+    for (;;) {
+      let d;
+      try { d = one(id); } catch (e) { console.log(`${new Date().toISOString()} instance ${id} gone: ${e.message.slice(0, 80)}`); return; }
+      let log = '';
+      if (port8080(d)) { try { log = await (await fetch(`${base(d)}/log.txt`, { signal: AbortSignal.timeout(30000) })).text(); } catch { /* not up yet */ } }
+      const failed = /TRAINING FAILED/.test(log);
+      if (/\bDONE\s*$/m.test(log) || failed) {
+        console.log(`${new Date().toISOString()} job ${failed ? 'FAILED' : 'done'}; fetching to ${outDir}`);
+        execFileSync(process.execPath, [__filename, 'fetch', outDir, '--id', String(id)], { stdio: 'inherit' });
+        console.log(destroy(id).trim().split('\n').pop());
+        console.log(`${new Date().toISOString()} instance ${id} destroyed`);
+        return;
+      }
+      const prog = (log.match(/(\d+)\/(\d+) \[[\d:]+<([\d:]+)/g) || []).pop() || d.actual_status;
+      console.log(`${new Date().toISOString()} ${prog}`);
+      await new Promise((r) => setTimeout(r, every));
+    }
+  }
   if (cmd === 'stop') {
     const d = pickInstance(opt('id', null));
-    console.log(vast('destroy', 'instance', String(d.id), '--raw', '--explain').trim().slice(0, 200));
+    console.log(destroy(d.id).trim().split('\n').pop());
     return;
   }
-  console.error('commands: offers | rent | status | log | fetch <dir> | stop');
+  console.error('commands: offers | rent | status | log | fetch <dir> | watch <dir> --id N | stop');
   process.exit(1);
 }
 main().catch((e) => { console.error(e.message.slice(0, 300)); process.exit(1); });

@@ -29,7 +29,9 @@ const TEMP = Number(opt('temperature', 0));
 const DOCS_MODE = opt('docs', 'real');
 const docsRetrieval = DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
 const CASES = (opt('case', Array.from({ length: 65 }, (_, i) => i + 1).join(','))).split(',').map(Number);
-const TOOLS_FILE = opt('tools-file', '/tmp/mcp-tools.json');
+// The MCP tool list ships in the repo; /tmp is cleared between sessions and the
+// eval failed every case with ENOENT when it was.
+const TOOLS_FILE = opt('tools-file', require('node:path').join(__dirname, '..', 'finetune', 'tools.json'));
 // The hosted MCP takes the two private keys as tool arguments. Inside Flux
 // Cloud the app holds the keys and injects them server-side, so the model
 // must never see key parameters: with them in the schema the careful models
