@@ -113,10 +113,23 @@ async function main() {
     const get = async (url, dest) => {
       for (let attempt = 1; attempt <= 4; attempt += 1) {
         try {
-          const r = await fetch(url, { signal: AbortSignal.timeout(3600000) });
-          if (!r.ok) { console.log(`skip ${url}: ${r.status}`); return; }
+          // A stall timeout, not a total one. The old one-hour cap killed v10's
+          // 4.2 GB GGUF at 0.71 MB/s, a download that needs ~95 minutes and was
+          // progressing the whole time, and every retry restarted from zero, so
+          // it could never finish. Abort only when no bytes arrive for STALL_MS.
+          const STALL_MS = 5 * 60 * 1000;
+          const ac = new AbortController();
+          let timer = setTimeout(() => ac.abort(), STALL_MS);
+          const bump = () => { clearTimeout(timer); timer = setTimeout(() => ac.abort(), STALL_MS); };
+          const r = await fetch(url, { signal: ac.signal });
+          if (!r.ok) { clearTimeout(timer); console.log(`skip ${url}: ${r.status}`); return; }
           const want = Number(r.headers.get('content-length')) || null;
-          await pipeline(Readable.fromWeb(r.body), fs.createWriteStream(dest));   // GGUFs are > 2 GB: stream, never buffer
+          // skip a file already fully downloaded by an earlier run
+          if (want && fs.existsSync(dest) && fs.statSync(dest).size === want) { clearTimeout(timer); ac.abort(); console.log(`${dest} already complete, ${(want / 1048576).toFixed(1)} MB`); return; }
+          const { Transform } = require('node:stream');
+          const watchdog = new Transform({ transform(chunk, _e, cb) { bump(); cb(null, chunk); } });
+          await pipeline(Readable.fromWeb(r.body), watchdog, fs.createWriteStream(dest));   // GGUFs are > 2 GB: stream, never buffer
+          clearTimeout(timer);
           const got = fs.statSync(dest).size;
           if (want && got !== want) throw new Error(`short read: ${got} of ${want} bytes`);
           console.log(`${dest} ${(got / 1048576).toFixed(1)} MB${want ? ' verified' : ''}`);
