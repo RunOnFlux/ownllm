@@ -57,6 +57,10 @@ if (!KEY) { console.error('FLUX_LLM_KEY required'); process.exit(1); }
 const all = JSON.parse(fs.readFileSync(TOOLS_FILE, 'utf8'));
 const CORE = ['flux_get_pricing', 'flux_build_spec', 'flux_quote_app', 'flux_deploy_app', 'flux_wait_for_app'];
 const UI = args.includes('--ui');
+// --harness: the decision layer in tools/harness.js - tools that answer with the
+// decision made, and a check on every reply before the user sees it.
+const HARNESS = args.includes('--harness');
+const harness = HARNESS ? require('./harness') : null;
 const tools = UI ? require('../finetune/tools-ui') : COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
   .map(t => (t.function ? t : { type: 'function', function: { name: t.name, description: KEYED ? t.description : t.description.replace(/\b(Requires|Needs) (the )?(Flux ID|fluxIdPrivateKey|payment)[^.]*\./gi, '').trim(), parameters: stripKeys(t.inputSchema) } }));
 
@@ -454,15 +458,42 @@ async function runCase(c, history) {
   const messages = history || [{ role: 'system', content: SYSTEM }];
   messages.push({ role: 'user', content: c.user });
   const called = [];
+  const warnings = []; let checked = false; let harnessNote = ''; let mustAsk = false; let jsonRetry = false;
+  const templates = new Map();
   let turns = 0; let ms = 0; let prompt = 0; let text = '';
-  for (; turns < 6; turns += 1) {
-    const r = await chat(messages);
+  for (; turns < 7; turns += 1) {
+    let r;
+    try { r = await chat(messages); } catch (err) {
+      // a malformed tool call is rejected by the server; the harness asks once more
+      if (!HARNESS || jsonRetry || !/invalid tool call arguments/.test(err.message)) throw err;
+      jsonRetry = true; harnessNote += ' json-retry';
+      messages.push({ role: 'system', content: 'Checker: your last tool call had invalid JSON arguments. Call the tool again with complete, valid JSON and only the fields you need.' });
+      continue;
+    }
     ms += r.ms; prompt += r.usage.prompt_tokens || 0;
     messages.push(r.msg);
     const calls = r.msg.tool_calls || [];
-    if (!calls.length) { text = r.msg.content || ''; break; }
+    if (!calls.length) {
+      text = r.msg.content || '';
+      if (!HARNESS) break;
+      const verdict = harness.checkReply(text, { warnings, mustAsk });
+      if (verdict.ok) break;
+      if (!checked && turns < 6) {
+        // one retry with the reason; the rejected reply stays out of what the user sees
+        checked = true; harnessNote = 'retried';
+        messages.pop();
+        messages.push({ role: 'system', content: `Checker: ${verdict.feedback}` });
+        continue;
+      }
+      text = verdict.repair(text); r.msg.content = text; harnessNote += ' repaired';
+      break;
+    }
     for (const tc of calls) {
       let a = {}; try { a = JSON.parse(tc.function.arguments || '{}'); } catch { /* bad json */ }
+      if (HARNESS) {
+        const rep = harness.repairCall(tc.function.name, a, { templates });
+        if (rep.fixed.length) { a = rep.args; tc.function.arguments = JSON.stringify(a); harnessNote += ` fixed(${rep.fixed.join('; ')})`; }
+      }
       const tag = tc.function.name + (tc.function.name === 'flux_deploy_app' && a.confirm ? ':confirm' : '');
       called.push({ tag, args: a });
       let result;
@@ -471,6 +502,13 @@ async function runCase(c, history) {
         result = { results: hits.map(({ n, title, text, url }) => ({ n, title, text, url })) };
       } else {
         result = mock(tc.function.name, a);
+      }
+      if (HARNESS) {
+        result = harness.enrichTool(tc.function.name, a, result, { userText: c.user });
+        if (result && Array.isArray(result.warnings)) warnings.push(...result.warnings);
+        harness.noteTemplates(result, templates);
+        if (result && result.sizes) mustAsk = true;
+        if (result && result.recommended) mustAsk = false;
       }
       messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
     }
@@ -491,14 +529,14 @@ async function runCase(c, history) {
   if (!okCreds) credFails.push(c.id);
   const pass = okFirst && okMust && okNot && okArgs && okSaid && okCreds;
   console.log(`\ncase ${c.id} ${pass ? 'PASS' : 'FAIL'}${!okArgs ? ' (args)' : ''}${!okSaid ? ' (wording)' : ''}${!okCreds ? ' (INVENTED CREDENTIALS)' : ''}  ${(ms / 1000).toFixed(0)}s, ${turns + 1} model turns, ${prompt} prompt tok`);
-  console.log(`  tools: ${tags.join(' -> ') || '(none)'}`);
+  console.log(`  tools: ${tags.join(' -> ') || '(none)'}${harnessNote ? `  [harness:${harnessNote}]` : ''}`);
   for (const x of called) if (['flux_build_spec', 'flux_quote_app', 'flux_deploy_app'].includes(x.tag.split(':')[0])) console.log(`  ${x.tag} args: ${JSON.stringify(x.args).slice(0, 220)}`);
   console.log(`  said: ${text.replace(/\s+/g, ' ').slice(0, 300)}`);
   return { pass, messages };
 }
 
 (async () => {
-  console.log(`=== ${MODEL} via ${BASE}, ${tools.length} tools${COMPACT ? ' (compact, trained surface)' : KEYED ? ' (keyed)' : ' (keyless)'}${NATIVE ? ' [native api]' : ''} (~${Math.round(JSON.stringify(tools).length / 4)} tok of schema)`);
+  console.log(`=== ${MODEL}${HARNESS ? ' +harness' : ''} via ${BASE}, ${tools.length} tools${COMPACT ? ' (compact, trained surface)' : KEYED ? ' (keyed)' : ' (keyless)'}${NATIVE ? ' [native api]' : ''} (~${Math.round(JSON.stringify(tools).length / 4)} tok of schema)`);
   const results = {}; const hist = {};
   for (const c of CASE_LIST.filter(x => CASES.includes(x.id))) {
     try {
