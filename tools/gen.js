@@ -518,6 +518,9 @@ const hubEnv = HUB_ONLY ? [
   // thinks too: with five tool schemas it produced no answer at all in 800. A client that
   // wants it passes reasoning_effort (OpenAI) or think (ollama) itself.
   `THINK_OFF=${arg('think-off', 'qwen3.5:0.8b,qwen3.5:2b,qwen3:8b,gemma4:12b,granite4.2:3b')}`,
+  // The decision layer (images/hub/harness.js) on the Flux AI assistant's turns:
+  // tool results carry the decision, tool calls are repaired, replies checked.
+  `HARNESS_MODELS=${arg('harness-models', 'fluxai:tiny')}`,
   `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
   // Discovery hosts, tried in order. --seeds adds FluxOS nodes by IP
   // (tools/hub-seeds.js) for an instance whose node cannot resolve the API

@@ -38,6 +38,10 @@
  *                  small reasoning model on CPU otherwise spends its whole
  *                  budget thinking and answers nothing
  *   ALLOWED_ORIGINS hostnames allowed to call from a browser ("*" = any)
+ *   HARNESS_MODELS models whose /v1/chat/completions turns go through the
+ *                  decision layer in harness.js: tool results enriched with the
+ *                  decision, tool calls repaired, replies checked (retried once
+ *                  when not streamed, repaired in the stream when streamed)
  *   PUBLIC_KEY_NAME name of a key the front page hands out (a demo key with
  *                  tight KEY_LIMITS); empty = the page shows none
  *
@@ -61,6 +65,8 @@ const KEY_BURST = Number(process.env.KEY_BURST || 20);
 const KEY_CONCURRENCY = Number(process.env.KEY_CONCURRENCY || 6);
 const PUBLIC_IP_RPM = Number(process.env.PUBLIC_IP_RPM || 8);
 const PUBLIC_IP_BURST = Number(process.env.PUBLIC_IP_BURST || 4);
+const harness = require('./harness');
+const HARNESS_MODELS = new Set((process.env.HARNESS_MODELS || '').split(',').map(s => s.trim()).filter(Boolean));
 const THINK_OFF = new Set((process.env.THINK_OFF || '').split(',').map(s => s.trim()).filter(Boolean));
 const REVOKED = new Set((process.env.REVOKED || '').split(',').map(s => s.trim()).filter(Boolean));
 const EWMA = 0.3;
@@ -519,6 +525,11 @@ const server = http.createServer(async (req, res) => {
   // Usage in the last chunk of a stream, so tokens can be counted here and the
   // client gets them too. Harmless for clients that ignore it.
   if (isV1 && streaming && path === '/v1/chat/completions' && !body.stream_options) body.stream_options = { include_usage: true };
+  // The decision layer: tool results in the conversation are enriched in place
+  // before the model reads them; the reply is checked on the way back.
+  const useHarness = HARNESS_MODELS.has(modelId) && path === '/v1/chat/completions' && Array.isArray(body.messages);
+  let hctx = null;
+  if (useHarness) { try { hctx = harness.prepare(body.messages); } catch (err) { console.log(`harness prepare failed: ${err.message.slice(0, 100)}`); } }
   const payload = JSON.stringify(body);
 
   acct.inflight += 1; acct.requests += 1; acct.last = now;
@@ -573,6 +584,16 @@ const server = http.createServer(async (req, res) => {
           try { upstream.destroy(); } catch { /* ignore */ }
           continue;
         }
+        if (hctx && !streaming) {
+          // Buffered so the reply can be checked, retried once and repaired.
+          const first = await upstream.text().catch(() => '');
+          const out = await harnessTurn(upstream.status, first, { ip, pool, body, hctx, modelId });
+          if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+          res.end(out.text);
+          countUsage(out.text.slice(-4096), acct, per);
+          if (out.note) console.log(`${modelId} ${ip}: harness ${out.note}`);
+          return;
+        }
         if (upstream.status >= 400) {
           // Already committed to a 200: relay the error in the body.
           const text = await upstream.text().catch(() => '');
@@ -583,14 +604,22 @@ const server = http.createServer(async (req, res) => {
           return streamError(upstream.status, `upstream ${upstream.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
         }
         let tail = '';
-        for await (const chunk of upstream.body) {
-          if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
-          res.write(chunk);
-          // Keep only the end of the response for token accounting: the
-          // usage object is in the final chunk (SSE) or the final line
-          // (ndjson) or the whole body (non-stream JSON).
-          tail = (tail + chunk.toString('utf8')).slice(-4096);
+        const sse = hctx && streaming && isV1
+          ? harness.createSseTransformer(hctx, (str) => { if (!res.writableEnded) res.write(str); }, { onCut: () => { console.log(`${modelId} ${ip}: harness cut a repeating stream`); try { upstream.destroy(); } catch { /* ignore */ } } })
+          : null;
+        try {
+          for await (const chunk of upstream.body) {
+            if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+            if (sse) sse.push(chunk.toString('utf8')); else res.write(chunk);
+            // Keep only the end of the response for token accounting: the
+            // usage object is in the final chunk (SSE) or the final line
+            // (ndjson) or the whole body (non-stream JSON).
+            tail = (tail + chunk.toString('utf8')).slice(-4096);
+          }
+        } catch (err) {
+          if (!(sse && sse.cut)) throw err;   // destroyed on purpose after a cut
         }
+        if (sse) sse.end();
         if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
         res.end();
         if (!tail.trim()) console.log(`${modelId} ${ip}: upstream ${upstream.status} ended with an empty body after ${Date.now() - started} ms`);
@@ -625,6 +654,52 @@ const server = http.createServer(async (req, res) => {
     if (visitor) visitor.inflight -= 1;
   }
 });
+
+/**
+ * One non-streamed turn through the decision layer. A tool call is repaired;
+ * a reply that fails the check goes back to the same instance once with the
+ * reason (its KV cache holds the conversation, so the retry pays only for the
+ * new words), and whatever still fails is repaired in code. A malformed tool
+ * call rejected by the engine gets the same single retry.
+ */
+async function bufferedUpstream(ip, pool, obj) {
+  const payload = JSON.stringify(obj);
+  const r = await upstreamRequest(`http://${ip}:${pool.port}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), Authorization: `Bearer ${pool.key}` },
+    body: payload, timeoutMs: 1800000,
+  });
+  return { status: r.status, text: await r.text().catch(() => '') };
+}
+async function harnessTurn(status, text, { ip, pool, body, hctx }) {
+  const retryWith = async (note) => bufferedUpstream(ip, pool, { ...body, stream: false, messages: [...body.messages, { role: 'system', content: `Checker: ${note}` }] });
+  if (status >= 400) {
+    if (!/invalid tool call arguments/.test(text)) return { text, note: '' };
+    const r = await retryWith('your last tool call had invalid JSON arguments. Call the tool again with complete, valid JSON and only the fields you need.');
+    status = r.status; text = r.text;
+    if (status >= 400) return { text, note: 'json retry failed' };
+  }
+  const read = (t) => { try { const j = JSON.parse(t); return { j, msg: j.choices && j.choices[0] && j.choices[0].message }; } catch { return {}; } };
+  let { j, msg } = read(text);
+  if (!msg) return { text, note: '' };
+  if (msg.tool_calls && msg.tool_calls.length) {
+    const fixed = harness.repairMessage(msg, hctx);
+    return { text: fixed.length ? JSON.stringify(j) : text, note: fixed.length ? `fixed ${fixed.join('; ')}` : '' };
+  }
+  const v = harness.checkReply(msg.content || '', hctx);
+  if (v.ok) return { text, note: '' };
+  const r = await retryWith(v.feedback).catch(() => null);
+  const second = r && r.status < 400 ? read(r.text) : {};
+  if (second.msg) {
+    if (second.msg.tool_calls && second.msg.tool_calls.length) { harness.repairMessage(second.msg, hctx); return { text: JSON.stringify(second.j), note: 'retried' }; }
+    const v2 = harness.checkReply(second.msg.content || '', hctx);
+    if (v2.ok) return { text: r.text, note: 'retried' };
+    second.msg.content = v2.repair(second.msg.content || '');
+    return { text: JSON.stringify(second.j), note: 'retried, repaired' };
+  }
+  msg.content = v.repair(msg.content || '');
+  return { text: JSON.stringify(j), note: 'repaired' };
+}
 
 /** Pull prompt/completion token counts out of the response tail, any format. */
 function countUsage(tail, acct, per) {
