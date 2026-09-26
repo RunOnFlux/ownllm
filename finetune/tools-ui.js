@@ -163,6 +163,12 @@ module.exports = [
     } },
   { type: 'function',
     function: {
+      name: 'flux_diagnose_app',
+      description: 'Why an app restarted, crashed or went down: the last restart and its reason, memory and disk use against their limits, and the end of the log, for each component. Call it first for any "why did it restart / crash / stop / go down" question, and answer from its diagnosis.',
+      parameters: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, component: { type: 'string' } } },
+    } },
+  { type: 'function',
+    function: {
       name: 'flux_search_docs',
       description: 'Search the Flux, Zelcore and SSP documentation. Use this for any factual question about how Flux works - products, limits, prices, features - and answer from what it returns, with citations. Do not answer such questions from memory.',
       parameters: { type: 'object', required: ['query'], properties: { query: { type: 'string' } } },

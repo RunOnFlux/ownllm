@@ -100,7 +100,80 @@ function quoteWarnings(args, userText) {
   return w;
 }
 
+// --- diagnosis ----------------------------------------------------------------------------------
+// flux_diagnose_app returns raw facts per component (see docs/flux-diagnose-app.md):
+// the last exit (time, exit code, OOM flag), restart count, memory peak against
+// the limit, disk use against hdd, the end of the log. The cause is decided
+// here, not by the model: asked "why did palworld-friends restart?", v10 read
+// only the log, saw "Killed" and answered "most likely running out of disk".
+const ceilTo = (n, step) => Math.ceil(n / step) * step;
+function playersOf(comp) {
+  const env = (comp.env || comp.environmentParameters || []).join(' ');
+  const e = env.match(/(?:MAX_)?PLAYERS=(\d+)/i);
+  if (e) return Number(e[1]);
+  const l = (comp.logTail || []).join('\n').match(/\((\d+)\s*\/\s*\d+\)/g);
+  return l ? Number(l[l.length - 1].match(/\d+/)[0]) : null;
+}
+// The marketplace RAM for this image at the player count, when it sells slot sizes.
+function catalogueRamFor(image, players) {
+  if (!players) return null;
+  const img = String(image || '').replace(/:latest$/, '');
+  const rungs = CATALOGUE.filter((x) => slotsOf(x) && x.compose.some((c) => String(c.repotag).replace(/:latest$/, '') === img))
+    .sort((a, b) => slotsOf(a) - slotsOf(b));
+  const rung = rungs.find((x) => slotsOf(x) >= players) || rungs[rungs.length - 1];
+  return rung ? { ramMB: ramOf(rung), name: rung.name, slots: slotsOf(rung) } : null;
+}
+const at = (t) => (t ? `${String(t).slice(11, 16)} UTC` : 'recently');
+function diagnoseComponent(c) {
+  const lim = c.limits || {};
+  const last = (c.state && c.state.lastExit) || null;
+  const mem = c.memory || {}; const disk = c.disk || {};
+  const log = (c.logTail || []).join('\n');
+  const nearMem = mem.peakMB && lim.ramMB && mem.peakMB >= 0.95 * lim.ramMB;
+  if ((last && (last.oomKilled || (last.exitCode === 137 && nearMem))) || (!last && nearMem && /killed|out of memory/i.test(log))) {
+    const players = playersOf(c);
+    const cat = catalogueRamFor(c.image, players);
+    const ram = Math.min(59000, ceilTo(Math.max(lim.ramMB * 1.5, cat ? cat.ramMB : 0), 1000));
+    return { component: c.name, cause: 'out of memory',
+      detail: `It used its whole ${lim.ramMB} MB memory limit${mem.peakAt ? ` (peak ${mem.peakMB} MB at ${at(mem.peakAt)})` : ''} and was killed${last ? ` at ${at(last.at)}` : ''}; Flux restarted it.`,
+      fix: { field: 'ram', from: lim.ramMB, to: ram,
+        why: cat ? `${players} players; the marketplace sizes ${cat.slots} players at ${cat.ramMB} MB, so ${ram} MB leaves headroom.` : `${ram} MB is half as much again as the limit it hit.` } };
+  }
+  if ((disk.usedGB && lim.hddGB && disk.usedGB >= 0.95 * lim.hddGB) || /no space left on device/i.test(log)) {
+    const hdd = ceilTo((lim.hddGB || 10) * 1.5, 5);
+    return { component: c.name, cause: 'disk full',
+      detail: `Its disk is full (${disk.usedGB || '?'} of ${lim.hddGB} GB)${last ? `; it stopped at ${at(last.at)}` : ''} and could not write.`,
+      fix: { field: 'hdd', from: lim.hddGB, to: hdd, why: `${hdd} GB is half as much again as the disk it filled.` } };
+  }
+  if (last && last.exitCode === 0) {
+    return { component: c.name, cause: 'exited on its own',
+      detail: `The process finished by itself at ${at(last.at)} (exit code 0) and Flux started it again. That is the app's own behaviour, not a failure of the node.` };
+  }
+  if (last && last.exitCode) {
+    const errLine = (c.logTail || []).slice().reverse().find((l) => /error|exception|fatal|panic|not set|denied|refused|cannot|failed/i.test(l));
+    return { component: c.name, cause: 'crashed',
+      detail: `The app crashed at ${at(last.at)} (exit code ${last.exitCode})${c.state.restartCount > 2 ? ` and has restarted ${c.state.restartCount} times` : ''}.${errLine ? ` The log's last error: "${errLine.trim().slice(0, 160)}"` : ''}` };
+  }
+  if (c.state && c.state.startedAt && !last) {
+    const synced = /^[grs]:/.test(String(c.containerData || ''));
+    return { component: c.name, cause: 'moved to another node',
+      detail: `No crash was recorded: this instance started fresh at ${at(c.state.startedAt)}, which is what a reschedule to another node looks like.${synced ? '' : ' Its data has no g: or r: flag, so it started with an empty volume.'}` };
+  }
+  return null;
+}
+function diagnose(result) {
+  const comps = Array.isArray(result.components) ? result.components : [];
+  const found = comps.map(diagnoseComponent).filter(Boolean);
+  if (!found.length) return { ...result, diagnosis: { cause: 'no restart recorded', detail: 'Every component is running with no recorded crash, memory or disk problem.' } };
+  const d = found[0];
+  const next = d.fix
+    ? `Before answering, quote the fix with flux_quote_app: the same app with ${d.fix.field} ${d.fix.to} on ${d.component}. Then give the cause, the fix and what it adds, and ask whether to prepare the change.`
+    : 'Answer with this cause and what the user can do about it.';
+  return { ...result, diagnosis: { ...d, ...(result.usdPerMonth ? { currentUsdPerMonth: result.usdPerMonth } : {}) }, next };
+}
+
 function enrichTool(name, args, result, ctx) {
+  if (name === 'flux_diagnose_app' && result && typeof result === 'object' && !result.error && !result.diagnosis) return diagnose(result);
   const listed = result && (Array.isArray(result) ? result : result.matches || result.templates || result.results);
   if (name === 'flux_get_template' && Array.isArray(listed) && listed.length) {
     const byName = new Map(CATALOGUE.map((x) => [String(x.name).toLowerCase(), x]));
@@ -120,6 +193,13 @@ function enrichTool(name, args, result, ctx) {
     return result;
   }
   if ((name === 'flux_quote_app' || name === 'ui_prefill_deploy') && result && typeof result === 'object' && !result.error) {
+    const base = ctx.baseline && ctx.baseline.usd;
+    const monthly = Number(result.usdPerMonth);
+    if (name === 'flux_quote_app' && base && monthly && !result.change && Math.abs(monthly - base) >= 0.01) {
+      const addM = +(monthly - base).toFixed(2); const addD = +(addM / 30).toFixed(2);
+      result = { ...result, change: { fromUsdPerMonth: base, addsUsdPerMonth: addM, addsUsdPerDay: addD },
+        say: `${addM > 0 ? 'Adds' : 'Saves'} about $${Math.abs(addD).toFixed(2)} per day ($${Math.abs(addM).toFixed(2)} per month); the new total is $${monthly.toFixed(2)} per month.` };
+    }
     const seen = ctx.seenWarnings || new Set();
     // Already enriched (a client that echoes what the model saw): its warnings
     // were given then, so they count as said.
@@ -196,6 +276,21 @@ const WARNING_SIGNS = [
   [/private registry image/, /repoauth|credential/i],
 ];
 
+// How a reply names each diagnosed cause, and how it would claim a different one.
+const CAUSE_SIGNS = {
+  'out of memory': /memory|\bram\b|oom/i,
+  'disk full': /disk|space|storage/i,
+  crashed: /crash|error|exit/i,
+  'exited on its own': /exit|finished|on its own|by itself/i,
+  'moved to another node': /moved|reschedul|migrat|another node|different node/i,
+  'no restart recorded': /no (restart|crash)|running|nothing/i,
+};
+const CAUSE_CLAIMS = {
+  'out of memory': /ran out of memory|out of memory|memory limit|oom[- ]?kill/i,
+  'disk full': /out of (disk|space)|disk (was |is |got )?full|no space left/i,
+  'moved to another node': /moved to another node|rescheduled to/i,
+};
+
 // Money and discounts the reply states that nothing in the conversation gave it.
 // v10 told a user a private-registry app "gets the enterprise discount": there
 // is none, and no tool said so. A figure is sourced when it appears in a tool
@@ -205,7 +300,8 @@ function numbersIn(s) {
 }
 function unsourced(text, source) {
   const have = numbersIn(source);
-  const ok = (n) => have.has(n.toFixed(2)) || have.has((n / 12).toFixed(2));
+  const perDay = new Set([...have].map((v) => (Number(v) / 30).toFixed(2)));
+  const ok = (n) => have.has(n.toFixed(2)) || have.has((n / 12).toFixed(2)) || perDay.has(n.toFixed(2));
   const bad = [];
   for (const m of String(text || '').matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s?(?:USD|usd|dollars)\b/g)) {
     const n = Number((m[1] || m[2]).replace(/,/g, ''));
@@ -225,8 +321,11 @@ function dropSentences(text, bad) {
 // The hub sees one model turn per request with the whole conversation in it.
 // prepare() enriches every tool result in place (the model reads the decision)
 // and returns what checking this turn's reply needs.
-function prepare(messages) {
-  const ctx = { templates: new Map(), warnings: [], mustAsk: false, sourceText: '', userText: '', seenWarnings: new Set() };
+const DIAG_INTENT = /\b(restart(ed|s|ing)?|reboot(ed)?|crash(ed|es|ing)?|went down|goes down|is down|keeps? (dying|restarting|crashing)|stopped working|(was|got) killed|oom|offline|not responding)\b/i;
+function prepare(messages, tools) {
+  const ctx = { templates: new Map(), warnings: [], mustAsk: false, sourceText: '', userText: '', seenWarnings: new Set(),
+    baseline: {}, diagnosis: null, change: null, knownApps: new Set(),
+    canDiagnose: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_diagnose_app') };
   if (!Array.isArray(messages)) return ctx;
   const calls = new Map();
   let lastUser = -1;
@@ -248,25 +347,73 @@ function prepare(messages) {
     let parsed; try { parsed = JSON.parse(m.content); } catch { source.push(m.content); return; }
     let out = parsed;
     if (call) {
-      try { out = enrichTool(call.name, call.args, parsed, { userText, seenWarnings: ctx.seenWarnings }); } catch { out = parsed; }
+      try { out = enrichTool(call.name, call.args, parsed, { userText, seenWarnings: ctx.seenWarnings, baseline: ctx.baseline }); } catch { out = parsed; }
+      if (out && out.diagnosis && out.diagnosis.currentUsdPerMonth) ctx.baseline.usd = out.diagnosis.currentUsdPerMonth;
       if (out !== parsed) m.content = JSON.stringify(out);
     }
     noteTemplates(out, ctx.templates);
+    for (const list of [out && out.yourApps, out && out.apps]) {
+      if (Array.isArray(list)) for (const a of list) { const n = typeof a === 'string' ? a : a && a.name; if (n) ctx.knownApps.add(String(n)); }
+    }
     source.push(m.content);
     if (i > lastUser && out && typeof out === 'object') {
       if (Array.isArray(out.warnings)) ctx.warnings.push(...out.warnings);
       if (out.sizes) ctx.mustAsk = true;
       if (out.recommended) ctx.mustAsk = false;
+      if (out.diagnosis) { ctx.diagnosis = out.diagnosis; ctx.diagApp = out; }
+      if (out.change) ctx.change = { ...out.change, say: out.say };
     }
   });
   ctx.userText = userText;
+  // A "why did it restart" turn goes to the diagnosis tool before anything else.
+  ctx.mustDiagnose = ctx.canDiagnose && DIAG_INTENT.test(userText) && !ctx.diagnosis;
   ctx.sourceText = source.join('\n');
   return ctx;
+}
+
+// The tool call the harness makes itself when the model will not: a diagnosed
+// fix that has not been priced. v10 named the right fix and never quoted it, even
+// when told to on a retry, so the price the user needs never existed.
+function forcedCall(ctx) {
+  if (!ctx || !ctx.diagnosis || !ctx.diagnosis.fix || ctx.change || !ctx.diagApp || !ctx.baseline || !ctx.baseline.usd) return null;
+  const f = ctx.diagnosis.fix;
+  const components = (ctx.diagApp.components || []).map((c) => ({
+    name: c.name, image: c.image, cpu: (c.limits || {}).cpu, ram: (c.limits || {}).ramMB, hdd: (c.limits || {}).hddGB,
+    ...(c.containerData ? { containerData: c.containerData } : {}),
+    ...(c.name === ctx.diagnosis.component ? { [f.field]: f.to } : {}),
+  }));
+  return { id: `harness_quote_${Date.now().toString(36)}`, type: 'function',
+    function: { name: 'flux_quote_app', arguments: JSON.stringify({ components, instances: ctx.diagApp.instances || 3 }) } };
 }
 
 // Repair the tool calls of an OpenAI-shaped assistant message in place.
 function repairMessage(msg, ctx) {
   const fixed = [];
+  if (ctx && ctx.mustDiagnose && msg && Array.isArray(msg.tool_calls)) {
+    const tc = msg.tool_calls.find((t) => /^flux_get_app(_logs|_stats)?$/.test(t.function.name));
+    if (tc && !msg.tool_calls.some((t) => t.function.name === 'flux_diagnose_app')) {
+      let a = {}; try { a = JSON.parse(tc.function.arguments || '{}'); } catch { /* keep {} */ }
+      if (a.name) {
+        fixed.push(`${tc.function.name} -> flux_diagnose_app`);
+        tc.function.name = 'flux_diagnose_app';
+        tc.function.arguments = JSON.stringify({ name: a.name, ...(a.component ? { component: a.component } : {}) });
+        msg.tool_calls = [tc];
+      }
+    }
+  }
+  // A name the account does not have, when the user's message names one it
+  // does: v10 asked to diagnose "minecraft" for "my minecraft server mcworld".
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (ctx && ctx.knownApps && ctx.knownApps.size) {
+    const said = norm(ctx.userText);
+    for (const tc of (msg && msg.tool_calls) || []) {
+      if (!/^flux_(diagnose_app|get_app(_logs|_stats)?)$/.test(tc.function.name)) continue;
+      let a; try { a = JSON.parse(tc.function.arguments || '{}'); } catch { continue; }
+      if (!a.name || [...ctx.knownApps].some((k) => norm(k) === norm(a.name))) continue;
+      const hit = [...ctx.knownApps].sort((x, y) => y.length - x.length).find((k) => norm(k).length >= 3 && said.includes(norm(k)));
+      if (hit) { fixed.push(`app name ${a.name} -> ${hit}`); a.name = hit; tc.function.arguments = JSON.stringify(a); }
+    }
+  }
   for (const tc of (msg && msg.tool_calls) || []) {
     let a; try { a = JSON.parse(tc.function.arguments || '{}'); } catch { continue; }
     const rep = repairCall(tc.function.name, a, ctx);
@@ -284,6 +431,7 @@ function repairMessage(msg, ctx) {
 const LAG = 240;
 function createSseTransformer(ctx, write, { onCut } = {}) {
   let buf = ''; let text = ''; let sent = 0; let done = false; let cut = false; let base = null;
+  const pending = forcedCall(ctx);
   const tools = []; const held = [];
   const chunk = (delta) => `data: ${JSON.stringify({ ...(base || { object: 'chat.completion.chunk' }), choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`;
   const flushText = (upto) => { if (upto > sent) { write(chunk({ content: text.slice(sent, upto) })); sent = upto; } };
@@ -305,6 +453,7 @@ function createSseTransformer(ctx, write, { onCut } = {}) {
     }
     if (typeof d.content === 'string' && d.content && !cut) {
       text += d.content;
+      if (pending) return;                                   // held: a forced call may replace it
       const c = repetitionCut(text);
       if (c >= 0) { cut = true; text = `${text.slice(0, c).replace(/[,\s]+$/, '')}.`; flushText(Math.min(text.length, Math.max(sent, c))); if (onCut) onCut(); }
       else flushText(text.length - LAG);
@@ -313,11 +462,13 @@ function createSseTransformer(ctx, write, { onCut } = {}) {
   }
   function finish() {
     if (done) return; done = true;
+    if (!tools.length && pending) tools.push({ index: 0, ...pending });
     if (tools.length) {
       const msg = { tool_calls: tools.filter(Boolean) };
       repairMessage(msg, ctx);
-      flushText(text.length);
+      if (!pending) flushText(text.length);
       write(chunk({ tool_calls: msg.tool_calls }));
+      for (let i = 0; i < held.length; i += 1) held[i] = held[i].replace('"finish_reason":"stop"', '"finish_reason":"tool_calls"');
     } else {
       let final = text;
       const v = checkReply(text, { ...ctx, sourceText: ctx.sourceText });
@@ -363,6 +514,34 @@ function checkReply(text, ctx) {
       repairs.push((t) => `${t.trim()}\n\nNote: ${w}`);
     }
   }
+  if (ctx.mustDiagnose) {
+    problems.push('The user asked why their app restarted or went down. Call flux_diagnose_app with the app name first and answer from its diagnosis; do not guess a cause.');
+    repairs.push((t) => t);
+  }
+  if (ctx.diagnosis && ctx.diagnosis.cause) {
+    const cause = ctx.diagnosis.cause;
+    const said = CAUSE_SIGNS[cause];
+    const wrong = Object.entries(CAUSE_CLAIMS).filter(([k]) => k !== cause).find(([, re]) => re.test(text));
+    if ((said && !said.test(text)) || wrong) {
+      problems.push(`The diagnosis says the cause is "${cause}": ${ctx.diagnosis.detail} State that cause${wrong ? `, not ${wrong[0]}` : ''}.`);
+      const fix = ctx.diagnosis.fix ? ` Raising ${ctx.diagnosis.fix.field === 'ram' ? 'memory' : 'disk'} to ${ctx.diagnosis.fix.to} ${ctx.diagnosis.fix.field === 'ram' ? 'MB' : 'GB'} fixes it: ${ctx.diagnosis.fix.why}` : '';
+      repairs.push((t) => `${cause[0].toUpperCase()}${cause.slice(1)}: ${ctx.diagnosis.detail}${fix}${wrong ? '' : `\n\n${t.trim()}`}`);
+    }
+  }
+  if (ctx.diagnosis && ctx.diagnosis.fix && !ctx.change && ctx.baseline && ctx.baseline.usd) {
+    const f = ctx.diagnosis.fix;
+    problems.push(`Before answering, call flux_quote_app for the fix - the same app with ${f.field} ${f.to} on ${ctx.diagnosis.component} - so you can say what it adds.`);
+    repairs.push((t) => t);
+  }
+  if (ctx.change) {
+    const addD = Math.abs(ctx.change.addsUsdPerDay).toFixed(2); const addM = Math.abs(ctx.change.addsUsdPerMonth).toFixed(2);
+    const total = ctx.change.fromUsdPerMonth + ctx.change.addsUsdPerMonth;
+    const totalAsDelta = new RegExp(`\\$\\s?${total.toFixed(2).replace('.', '\\.')}[^.]{0,25}\\b(more|extra|increase)|\\b(adds?|more|extra|increase)\\b[^.]{0,25}\\$\\s?${total.toFixed(2).replace('.', '\\.')}`, 'i');
+    if (!(text.includes(addD) || text.includes(addM)) || totalAsDelta.test(text)) {
+      problems.push(`State what the change adds, not the new total as if it were the increase: ${ctx.change.say}`);
+      repairs.push((t) => `${dropSentences(t, [`$${total.toFixed(2)}`]).trim()}\n\n${ctx.change.say}`);
+    }
+  }
   if (ctx.sourceText !== undefined) {
     const bad = unsourced(text, ctx.sourceText);
     if (bad.length) {
@@ -374,4 +553,4 @@ function checkReply(text, ctx) {
   return { ok: false, feedback: problems.join(' '), repair: (t) => repairs.reduce((acc, f) => f(acc), t) };
 }
 
-module.exports = { prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };
+module.exports = { forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };

@@ -28,7 +28,7 @@ const TEMP = Number(opt('temperature', 0));
 // so the model was graded on gaps in my mock rather than on its behaviour.
 const DOCS_MODE = opt('docs', 'real');
 const docsRetrieval = DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
-const CASES = (opt('case', Array.from({ length: 65 }, (_, i) => i + 1).join(','))).split(',').map(Number);
+const CASES = (opt('case', Array.from({ length: 70 }, (_, i) => i + 1).join(','))).split(',').map(Number);
 // The MCP tool list ships in the repo; /tmp is cleared between sessions and the
 // eval failed every case with ENOENT when it was.
 const TOOLS_FILE = opt('tools-file', require('node:path').join(__dirname, '..', 'finetune', 'tools.json'));
@@ -76,6 +76,29 @@ const SYSTEM = UI ? UI_SYSTEM : COMPACT ? 'You are Flux AI, the assistant inside
   + 'Be brief. Use tools rather than guessing numbers.'
   + (KEYED ? '' : ' The user is signed in; their Flux ID and payment are handled by the app, so never ask for keys or addresses.');
 
+// flux_diagnose_app: raw facts per component, the shape docs/flux-diagnose-app.md
+// asks the backend for. The harness decides the cause from these.
+const priceOf = (cpu, ram, hdd, inst) => Number(Math.max(0.99, (cpu * 0.9 + (ram / 1000) * 0.75 + hdd * 0.12) * inst).toFixed(2));
+let lastDiag = null;
+const DIAG = {
+  palworldfriends: { name: 'palworldfriends', instances: 3, components: [{ name: 'palworld', image: 'thijsvanloef/palworld-server-docker:latest',
+    limits: { cpu: 2.5, ramMB: 8000, hddGB: 15 }, containerData: 'g:/palworld/Pal/Saved', env: ['PLAYERS=12'],
+    state: { status: 'running', startedAt: '2026-09-27T14:02:33Z', restartCount: 1, lastExit: { at: '2026-09-27T14:02:31Z', exitCode: 137, oomKilled: true } },
+    memory: { currentMB: 3100, peakMB: 7998, peakAt: '2026-09-27T14:02:12Z' }, disk: { usedGB: 6.1 }, logTail: ['[14:01:58] Player joined (12/32)', '[14:02:11] Saving world...', 'Killed'] }] },
+  pgmain: { name: 'pgmain', instances: 3, components: [{ name: 'db', image: 'postgres:16', limits: { cpu: 2, ramMB: 4000, hddGB: 20 }, containerData: 'r:/var/lib/postgresql/data',
+    state: { status: 'restarting', startedAt: '2026-09-27T09:40:02Z', restartCount: 7, lastExit: { at: '2026-09-27T09:39:58Z', exitCode: 1, oomKilled: false } },
+    memory: { currentMB: 900, peakMB: 1900 }, disk: { usedGB: 19.9 }, logTail: ['LOG:  checkpoint starting', 'PANIC:  could not write to file "pg_wal/xlogtemp.52": No space left on device'] }] },
+  apibackend: { name: 'apibackend', instances: 3, components: [{ name: 'api', image: 'ghcr.io/acme/api:3.2', limits: { cpu: 1, ramMB: 1000, hddGB: 5 },
+    state: { status: 'restarting', startedAt: '2026-09-27T11:05:10Z', restartCount: 14, lastExit: { at: '2026-09-27T11:05:08Z', exitCode: 1, oomKilled: false } },
+    memory: { currentMB: 60, peakMB: 140 }, disk: { usedGB: 0.4 }, logTail: ['> api@3.2.0 start', '> node server.js', 'Error: DATABASE_URL is not set', '    at config (/app/config.js:12:11)'] }] },
+  mcworld: { name: 'mcworld', instances: 1, components: [{ name: 'minecraft', image: 'itzg/minecraft-server:latest', limits: { cpu: 2, ramMB: 4000, hddGB: 50 }, containerData: '/data',
+    state: { status: 'running', startedAt: '2026-09-27T03:12:44Z', restartCount: 0 }, memory: { currentMB: 2100, peakMB: 2600 }, disk: { usedGB: 1.2 },
+    logTail: ['[03:13:20] Preparing level "world"', '[03:13:41] Done (21.2s)! For help, type "help"'] }] },
+  cronjob1: { name: 'cronjob1', instances: 3, components: [{ name: 'job', image: 'acme/report-job:1.4', limits: { cpu: 0.5, ramMB: 500, hddGB: 2 },
+    state: { status: 'running', startedAt: '2026-09-27T12:00:03Z', restartCount: 96, lastExit: { at: '2026-09-27T12:00:01Z', exitCode: 0, oomKilled: false } },
+    memory: { currentMB: 80, peakMB: 120 }, disk: { usedGB: 0.1 }, logTail: ['report written to /out/report-2026-09-27-1145.csv', 'done'] }] },
+};
+
 // What the mocked tools answer. Enough for the model to take the next step.
 const SPEC = { version: 8, name: 'nginxdemo', description: 'nginx', owner: 'FLUXID', compose: [{ name: 'web', repotag: 'nginx:latest', ports: [80], containerPorts: [80], domains: [''], environmentParameters: [], commands: [], containerData: '/data', cpu: 1, ram: 1000, hdd: 10 }], instances: 3, expire: 88000 };
 function mock(name, a) {
@@ -91,6 +114,18 @@ function mock(name, a) {
     let ram = num(r.ram ?? r.memory ?? a.ram); if (ram !== undefined && ram <= 64) ram *= 1000; // GB given
     let hdd = num(r.hdd ?? r.disk ?? r.storage ?? a.hdd); if (hdd !== undefined && hdd >= 1000) hdd = Math.round(hdd / 1024); // MB given
     return { spec: { ...SPEC, name: a.name || SPEC.name, instances: Number(a.instances) || SPEC.instances, compose: [{ ...SPEC.compose[0], repotag: c.image || c.repotag || SPEC.compose[0].repotag, cpu: num(r.cpu ?? a.cpu) ?? 1, ram: ram ?? 1000, hdd: hdd ?? 10 }] } };
+  }
+  if (name === 'flux_diagnose_app') {
+    const d = DIAG[String(a.name || '').toLowerCase().replace(/[^a-z0-9]/g, '')];
+    if (!d) return { error: `no app named "${a.name}"`, yourApps: Object.keys(DIAG) };
+    lastDiag = d;
+    const c = d.components[0];
+    return { ...d, usdPerMonth: priceOf(c.limits.cpu, c.limits.ramMB, c.limits.hddGB, d.instances) };
+  }
+  if (name === 'flux_quote_app' && lastDiag && Array.isArray(a.components)) {
+    const base = lastDiag.components[0].limits; const c = a.components[0] || {};
+    const inst = Number(a.instances) || lastDiag.instances;
+    return { usdPerMonth: priceOf(c.cpu ?? base.cpu, c.ram ?? base.ramMB, c.hdd ?? base.hddGB, inst), instances: inst, period: '1 month' };
   }
   if (name === 'flux_quote_app') { const sp = a.spec || a; const c = (typeof sp.compose === 'string' ? JSON.parse(sp.compose) : sp.compose)?.[0] || SPEC.compose[0]; const inst = Number(sp.instances) || SPEC.instances; const usd = Math.max(0.99, (c.cpu * 0.9 + (c.ram / 1000) * 0.75 + c.hdd * 0.12) * inst); return { usdPerMonth: Number(usd.toFixed(2)), flux: Number((usd / 0.21 * 0.95).toFixed(2)), instances: inst, period: '1 month' }; }
   if (name === 'flux_deploy_app') {
@@ -361,6 +396,19 @@ const CASE_LIST = [
   { id: 64, user: 'palworld for 16 players',
     want: { mustCall: ['flux_get_template'],
       argCheck: (calls) => calls.some((c) => /quote|prefill/.test(c.tag) && /10000/.test(JSON.stringify(c.args)) && /g:\/palworld/.test(JSON.stringify(c.args))) } },
+  // --- diagnosis: why an app restarted. The cause comes from flux_diagnose_app,
+  // never from a guess; a fix is priced as what it adds.
+  { id: 66, user: 'why did palworld-friends restart?',
+    want: { mustCall: ['flux_diagnose_app'], mustNot: ['ui_prefill_deploy'], saidMatch: /memory|\bram\b/i, saidNot: /out of (disk|space)|disk (is |was )?full/i,
+      argCheck: (calls, said) => calls.some((c) => c.tag === 'flux_quote_app' && /12000/.test(JSON.stringify(c.args))) && /adds?|extra|more/i.test(said || '') } },
+  { id: 67, user: 'my database pgmain keeps crashing, why?',
+    want: { mustCall: ['flux_diagnose_app'], saidMatch: /disk|space|storage/i, saidNot: /out of memory|memory limit/i } },
+  { id: 68, user: 'why did apibackend go down?',
+    want: { mustCall: ['flux_diagnose_app'], mustNot: ['flux_quote_app', 'ui_prefill_deploy'], saidMatch: /DATABASE_URL/ } },
+  { id: 69, user: 'my minecraft server mcworld restarted and my world is gone',
+    want: { mustCall: ['flux_diagnose_app'], saidMatch: /moved|another node|reschedul|migrat/i, saidMatch2: /g:|sync|replicat|three instances|3 instances/i } },
+  { id: 70, user: 'why does cronjob1 keep restarting',
+    want: { mustCall: ['flux_diagnose_app'], mustNot: ['flux_quote_app'], saidMatch: /exit|finish|on its own|by itself|completes/i } },
   // A factual question: search and answer in the same turn, never promise and stop.
   { id: 65, user: 'what are progressive node rewards',
     want: { mustCall: ['flux_search_docs'], saidMatch: /ArcaneOS|80|20|operator/i,
@@ -457,6 +505,7 @@ function inventedRepoauth(calls, userText) {
 }
 const credFails = [];
 async function runCase(c, history) {
+  if (!history) lastDiag = null;
   const messages = history || [{ role: 'system', content: SYSTEM }];
   messages.push({ role: 'user', content: c.user });
   const called = [];
@@ -464,7 +513,7 @@ async function runCase(c, history) {
   let turns = 0; let ms = 0; let prompt = 0; let text = '';
   for (; turns < 7; turns += 1) {
     let r;
-    if (HARNESS) hctx = harness.prepare(messages);
+    if (HARNESS) hctx = harness.prepare(messages, tools);
     try { r = await chat(messages); } catch (err) {
       // a malformed tool call is rejected by the server; the harness asks once more
       if (!HARNESS || jsonRetry || !/invalid tool call arguments/.test(err.message)) throw err;
@@ -476,6 +525,10 @@ async function runCase(c, history) {
     if (HARNESS) { const fixed = harness.repairMessage(r.msg, hctx); if (fixed.length) harnessNote += ` fixed(${fixed.join('; ')})`; }
     messages.push(r.msg);
     const calls = r.msg.tool_calls || [];
+    if (!calls.length && HARNESS) {
+      const forced = harness.forcedCall(hctx);
+      if (forced) { r.msg.content = ''; r.msg.tool_calls = [forced]; calls.push(forced); harnessNote += ' forced-quote'; }
+    }
     if (!calls.length) {
       text = r.msg.content || '';
       if (!HARNESS) break;

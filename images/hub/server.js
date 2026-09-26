@@ -529,7 +529,7 @@ const server = http.createServer(async (req, res) => {
   // before the model reads them; the reply is checked on the way back.
   const useHarness = HARNESS_MODELS.has(modelId) && path === '/v1/chat/completions' && Array.isArray(body.messages);
   let hctx = null;
-  if (useHarness) { try { hctx = harness.prepare(body.messages); } catch (err) { console.log(`harness prepare failed: ${err.message.slice(0, 100)}`); } }
+  if (useHarness) { try { hctx = harness.prepare(body.messages, body.tools); } catch (err) { console.log(`harness prepare failed: ${err.message.slice(0, 100)}`); } }
   const payload = JSON.stringify(body);
 
   acct.inflight += 1; acct.requests += 1; acct.last = now;
@@ -685,6 +685,12 @@ async function harnessTurn(status, text, { ip, pool, body, hctx }) {
   if (msg.tool_calls && msg.tool_calls.length) {
     const fixed = harness.repairMessage(msg, hctx);
     return { text: fixed.length ? JSON.stringify(j) : text, note: fixed.length ? `fixed ${fixed.join('; ')}` : '' };
+  }
+  const forced = harness.forcedCall(hctx);
+  if (forced) {
+    msg.content = ''; msg.tool_calls = [forced];
+    if (j.choices[0].finish_reason) j.choices[0].finish_reason = 'tool_calls';
+    return { text: JSON.stringify(j), note: 'forced quote of the diagnosed fix' };
   }
   const v = harness.checkReply(msg.content || '', hctx);
   if (v.ok) return { text, note: '' };
