@@ -62,13 +62,25 @@ const UI = args.includes('--ui');
 // on the tool calls that come back, checkReply() on the final reply. Formerly: tools that answer with the
 // decision made, and a check on every reply before the user sees it.
 const HARNESS = args.includes('--harness');
+// --web: exactly what fluxcloud-web sends - its tools and system prompt, built
+// from its own source (FLUXCLOUD_WEB, default ~/repos/fluxcloud-web), its turn
+// limit, its stop after a prefill, and its tools' result shapes.
+const WEB = args.includes('--web');
+const WEB_SRC = process.env.FLUXCLOUD_WEB || require('node:path').join(require('node:os').homedir(), 'repos', 'fluxcloud-web');
+function loadWeb(file) {
+  const out = require('node:path').join(require('node:os').tmpdir(), `eval-web-${require('node:path').basename(file, '.ts')}.cjs`);
+  require('node:child_process').execFileSync('npx', ['--yes', 'esbuild@0.25.0', require('node:path').join(WEB_SRC, file), '--bundle', '--format=cjs', '--log-level=error', `--outfile=${out}`, '--external:@/*'], { stdio: 'inherit' });
+  return require(out);
+}
+const WEB_TOOLS = WEB ? loadWeb('src/features/deploy/agent/tools.ts').TOOLS : null;
+const WEB_PROMPT = WEB ? loadWeb('src/features/deploy/agent/prompt.ts').AGENT_SYSTEM_PROMPT : null;
 const harness = HARNESS ? require('./harness') : null;
-const tools = UI ? require('../finetune/tools-ui') : COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
+const tools = WEB ? WEB_TOOLS : UI ? require('../finetune/tools-ui') : COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
   .map(t => (t.function ? t : { type: 'function', function: { name: t.name, description: KEYED ? t.description : t.description.replace(/\b(Requires|Needs) (the )?(Flux ID|fluxIdPrivateKey|payment)[^.]*\./gi, '').trim(), parameters: stripKeys(t.inputSchema) } }));
 
 const UI_SYSTEM = 'You are the assistant inside FluxCloud. You can move the user around the app, price things and look up their apps with the tools. '
   + 'You never deploy or pay: build the specification, prefill the deploy form with ui_prefill_deploy, and the user reviews the quote and signs. Be brief.';
-const SYSTEM = UI ? UI_SYSTEM : COMPACT ? 'You are Flux AI, the assistant inside Flux Cloud. You help people run apps on the Flux decentralized cloud with the tools. '
+const SYSTEM = WEB ? WEB_PROMPT : UI ? UI_SYSTEM : COMPACT ? 'You are Flux AI, the assistant inside Flux Cloud. You help people run apps on the Flux decentralized cloud with the tools. '
   + 'Prices are USD per month. Get a quote with flux_quote_app and show it before any deployment; call flux_deploy_app with confirm=true only after the user has agreed to that quote. '
   + 'The user is signed in: never ask for keys, wallets or addresses. Be brief.'
   : 'You are Flux AI inside Flux Cloud. Help the user run apps on the Flux decentralized cloud using the tools. '
@@ -418,7 +430,7 @@ const CASE_LIST = [
     : { mustCall: ['flux_quote_app'], mustNot: ['flux_deploy_app:confirm'] } },
 ];
 
-async function chat(messages) {
+async function chat(messages, toolList = tools) {
   const t0 = Date.now();
   if (NATIVE) {
     // ollama native: tool_calls carry arguments as objects; normalise to the OpenAI shape used below
@@ -446,7 +458,7 @@ async function chat(messages) {
         // 799 of 800 output tokens thinking and returned nothing); --max-tokens
         // raises the budget instead, when the thinking is what you want to measure.
         body: JSON.stringify({
-          model: MODEL, messages, tools, tool_choice: 'auto',
+          model: MODEL, messages, ...(toolList.length ? { tools: toolList, tool_choice: 'auto' } : {}),
           max_tokens: Number(opt('max-tokens', 800)), temperature: TEMP, seed: 7,
           ...(args.includes('--no-think') ? { thinking: { type: 'disabled' } } : {}),
         }),
@@ -504,6 +516,12 @@ function inventedRepoauth(calls, userText) {
   return calls.some((c) => (c.args.components || []).some((comp) => comp.repoauth !== undefined && comp.repoauth !== ''));
 }
 const credFails = [];
+// The web app's result shapes where they differ from the mocks' MCP-like ones.
+function webShape(name, a, r) {
+  if (name === 'flux_quote_app' && r && r.usdPerMonth !== undefined) return { usd: r.usdPerMonth, flux: r.flux ?? null, instances: r.instances, months: 1 };
+  if (name === 'ui_prefill_deploy') return { ok: true, awaiting_user_review: true, name: a.name || '', corrected: 0, note: 'The specification is on screen for the user to review, sign and pay for. It is not deployed.' };
+  return r;
+}
 async function runCase(c, history) {
   if (!history) lastDiag = null;
   const messages = history || [{ role: 'system', content: SYSTEM }];
@@ -511,10 +529,13 @@ async function runCase(c, history) {
   const called = [];
   let checked = false; let harnessNote = ''; let jsonRetry = false; let hctx = null;
   let turns = 0; let ms = 0; let prompt = 0; let text = '';
-  for (; turns < 7; turns += 1) {
+  // fluxcloud-web allows 4 model turns and sends the last one without tools.
+  const maxTurns = WEB ? 4 : 7;
+  for (; turns < maxTurns; turns += 1) {
     let r;
-    if (HARNESS) hctx = harness.prepare(messages, tools);
-    try { r = await chat(messages); } catch (err) {
+    const toolList = WEB && turns === maxTurns - 1 ? [] : tools;
+    if (HARNESS) hctx = harness.prepare(messages, toolList);
+    try { r = await chat(messages, toolList); } catch (err) {
       // a malformed tool call is rejected by the server; the harness asks once more
       if (!HARNESS || jsonRetry || !/invalid tool call arguments/.test(err.message)) throw err;
       jsonRetry = true; harnessNote += ' json-retry';
@@ -534,7 +555,7 @@ async function runCase(c, history) {
       if (!HARNESS) break;
       const verdict = harness.checkReply(text, hctx);
       if (verdict.ok) break;
-      if (!checked && turns < 6) {
+      if (!checked && turns < maxTurns - 1) {
         // one retry with the reason; the rejected reply stays out of what the user sees
         checked = true; harnessNote = 'retried';
         messages.pop();
@@ -555,8 +576,12 @@ async function runCase(c, history) {
       } else {
         result = mock(tc.function.name, a);
       }
+      if (WEB) result = webShape(tc.function.name, a, result);
       messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
     }
+    // fluxcloud-web ends the exchange at a prefill: the next move is the
+    // person's click, and what the model said alongside the call is the answer.
+    if (WEB && calls.some((tc) => tc.function.name === 'ui_prefill_deploy')) { text = r.msg.content || ''; break; }
   }
   const tags = called.map(x => x.tag);
   const w = (typeof c.want === 'function' ? c.want(tools.map((t) => t.function.name)) : c.want) || {};

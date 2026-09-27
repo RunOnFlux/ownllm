@@ -9,7 +9,12 @@ Without this tool the model guesses: asked "why did palworld-friends restart?",
 it read only the log, saw `Killed`, and answered "most likely running out of
 disk" for an app that had hit its memory limit.
 
-## Tool definition (already in `finetune/tools-ui.js`)
+**Implemented** in fluxcloud-web (`src/features/deploy/agent/lookups.ts`,
+`diagnoseApp` / `componentFacts`), which runs the assistant's tools in the
+browser as the signed-in owner. A `g:` app is read on its primary instance:
+the standbys run no container.
+
+## Tool definition (in `finetune/tools-ui.js` and fluxcloud-web `tools.ts`)
 
 ```json
 {
@@ -103,3 +108,10 @@ apps (out of memory, disk full, crash loop, reschedule, clean exit):
 FLUX_LLM_KEY=x node tools/deploy-agent-eval.js --base http://localhost:11434/v1 \
   --model fluxai-tinyh-v10 --ui --harness --case 66,67,68,69,70
 ```
+
+## Documentation search
+
+`flux_search_docs` in the web app posts `{query, k}` to the docs bot's
+retrieval-only endpoint through the router (`ownllmrouter.../search`, docs bot
+1.4.40): the passages `/ask` would answer from, `{results: [{n, title, text,
+url}]}`, with no generation. Public like `/ask`, and rate limited the same way.

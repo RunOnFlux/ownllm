@@ -36,7 +36,7 @@ function wantedSize(text) {
   return { gb: gb ? Number(gb[1]) : null, players: players ? Number(players[1]) : null, bedrock: /bedrock|pocket|console|xbox|playstation|switch/.test(t) };
 }
 
-const slim = (x) => ({ name: x.name, category: x.category, priceUSD: x.priceUSD, instances: x.instances,
+const slim = (x) => ({ name: x.name, ...(x.template ? { template: x.template, tier: x.tier } : {}), category: x.category, priceUSD: x.priceUSD, instances: x.instances,
   compose: x.compose.map((c) => ({ name: c.name, repotag: c.repotag, ports: c.ports, containerPorts: c.containerPorts,
     environmentParameters: c.environmentParameters, containerData: c.containerData, cpu: c.cpu, ram: c.ram, hdd: c.hdd,
     ...(c.userEnvironmentParameters && c.userEnvironmentParameters.length ? { userEnvironmentParameters: c.userEnvironmentParameters } : {}) })) });
@@ -61,6 +61,38 @@ function pickSize(matches, want) {
     return byRam.find((x) => ramOf(x) >= want.gb * 1000 * 0.95) || byRam[byRam.length - 1];
   }
   return null;
+}
+
+// Every size a template result offers, each shaped like a catalogue entry so
+// pickSize can compare them. The marketplace sells games two ways: one listing
+// per size (Minecraft9GB, 3 instances; in the shipped snapshot) and one listing
+// with tiers inside it (MinecraftServer: "Minecraft 8GB" at $4.99 on 2
+// instances), which is how the web app's flux_get_template returns them. A tier
+// is the template's compose with that tier's resources and environment.
+function sizeOptions(listed) {
+  const byName = new Map(CATALOGUE.map((x) => [String(x.name).toLowerCase(), x]));
+  const out = [];
+  for (const t of listed) {
+    if (!t || typeof t !== 'object') continue;
+    const tiers = Array.isArray(t.tiers) ? t.tiers : [];
+    if (tiers.length && Array.isArray(t.compose)) {
+      for (const tier of tiers) {
+        out.push({
+          name: `${t.name} ${tier.name}`.trim(), template: t.name, tier: tier.name, category: t.category,
+          priceUSD: tier.priceUSD ?? tier.price ?? t.priceUSD, instances: tier.instances ?? t.instances,
+          compose: t.compose.map((c) => {
+            const tc = (tier.components || []).find((k) => k.name === c.name) || {};
+            return { ...c, cpu: tc.cpu ?? c.cpu, ram: tc.ram ?? c.ram, hdd: tc.hdd ?? c.hdd,
+              environmentParameters: tc.environmentParameters && tc.environmentParameters.length ? tc.environmentParameters : c.environmentParameters };
+          }),
+        });
+      }
+      continue;
+    }
+    const full = byName.get(String(t.name || t.slug || '').toLowerCase()) || (Array.isArray(t.compose) ? t : null);
+    if (full) out.push(full);
+  }
+  return out;
 }
 
 // --- tool results with the decision made --------------------------------------------------
@@ -174,27 +206,30 @@ function diagnose(result) {
 
 function enrichTool(name, args, result, ctx) {
   if (name === 'flux_diagnose_app' && result && typeof result === 'object' && !result.error && !result.diagnosis) return diagnose(result);
-  const listed = result && (Array.isArray(result) ? result : result.matches || result.templates || result.results);
+  const listed = result && (Array.isArray(result) ? result : result.matches || result.templates || result.results
+    || (result.compose ? [result] : null));
   if (name === 'flux_get_template' && Array.isArray(listed) && listed.length) {
-    const byName = new Map(CATALOGUE.map((x) => [String(x.name).toLowerCase(), x]));
-    const full = listed.map((m) => byName.get(String(m.name || m.slug || '').toLowerCase())).filter(Boolean);
-    if (!full.length) return result;
+    const options = sizeOptions(listed);
+    if (!options.length) return result;
     const want = wantedSize(ctx.userText);
-    const pick = pickSize(full, want);
+    const pick = pickSize(options, want);
     // A long list of near-identical sizes is what sent v10 into a loop reciting
     // prices. Give one answer when the user named a size, a compact ladder when not.
-    const ladder = full.map((x) => ({ name: x.name, priceUSD: x.priceUSD, ramMB: ramOf(x), ...(slotsOf(x) ? { slots: slotsOf(x) } : {}) }));
+    const ladder = options.map((x) => ({ name: x.name, priceUSD: x.priceUSD, ramMB: ramOf(x), ...(slotsOf(x) ? { slots: slotsOf(x) } : {}) }));
     if (pick) {
       return { recommended: slim(pick),
-        decision: `The user asked for ${want.players ? `${want.players} players` : `about ${want.gb} GB`}; ${pick.name} is the marketplace size that fits. Use its image, ports, cpu, ram, hdd, containerData and instances exactly.`,
+        decision: `The user asked for ${want.players ? `${want.players} players` : `about ${want.gb} GB`}; ${pick.name} is the marketplace size that fits${pick.priceUSD ? ` ($${pick.priceUSD} a month)` : ''}. Use its image, ports, cpu, ram, hdd, containerData and instances exactly.`,
         otherSizes: ladder.filter((x) => x.name !== pick.name).slice(0, 8) };
     }
-    if (full.length > 3) return { sizes: ladder, note: 'Several sizes exist. Name them briefly and ask which the user wants, or look one up by name.' };
+    // Tiers of one game are always a size choice; separate flat listings are
+    // one only when there are several of them (two could be different apps).
+    if (options.length > 3 || (options.length > 1 && options.some((o) => o.tier))) return { sizes: ladder.slice(0, 16), note: 'Several sizes exist. Name them briefly and ask which the user wants, or look one up by name.' };
     return result;
   }
   if ((name === 'flux_quote_app' || name === 'ui_prefill_deploy') && result && typeof result === 'object' && !result.error) {
     const base = ctx.baseline && ctx.baseline.usd;
-    const monthly = Number(result.usdPerMonth);
+    // The web app's quote says {usd, months}; the MCP and the eval say usdPerMonth.
+    const monthly = Number(result.usdPerMonth ?? (result.usd !== undefined ? result.usd / (Number(result.months) || 1) : NaN));
     if (name === 'flux_quote_app' && base && monthly && !result.change && Math.abs(monthly - base) >= 0.01) {
       const addM = +(monthly - base).toFixed(2); const addD = +(addM / 30).toFixed(2);
       result = { ...result, change: { fromUsdPerMonth: base, addsUsdPerMonth: addM, addsUsdPerDay: addD },
@@ -321,7 +356,10 @@ function dropSentences(text, bad) {
 // The hub sees one model turn per request with the whole conversation in it.
 // prepare() enriches every tool result in place (the model reads the decision)
 // and returns what checking this turn's reply needs.
-const DIAG_INTENT = /\b(restart(ed|s|ing)?|reboot(ed)?|crash(ed|es|ing)?|went down|goes down|is down|keeps? (dying|restarting|crashing)|stopped working|(was|got) killed|oom|offline|not responding)\b/i;
+// Something that happened to an app, not a hypothetical: "why did it restart",
+// "it keeps crashing", "is down". "If the node goes offline do I lose the
+// world" is a question about Flux, answered from the docs, not a diagnosis.
+const DIAG_INTENT = /\b(why (did|does|is|was|has|do)\b[^?]{0,60}\b(restart|reboot|crash|down|die|stop|offline|kill)|restarted|rebooted|crashed|went down|is down|keeps? (dying|restarting|crashing|going down)|stopped working|(was|got) killed|oom[- ]?killed|is offline|not responding)/i;
 function prepare(messages, tools) {
   const ctx = { templates: new Map(), warnings: [], mustAsk: false, sourceText: '', userText: '', seenWarnings: new Set(),
     baseline: {}, diagnosis: null, change: null, knownApps: new Set(),

@@ -761,7 +761,7 @@ http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   // /ask is open in public mode; the model API and everything else is not.
-  const isPublicAsk = PUBLIC_ASK && req.url.startsWith('/ask');
+  const isPublicAsk = PUBLIC_ASK && (req.url.startsWith('/ask') || req.url.startsWith('/search'));
   if (!isPublicAsk && !authorized(req)) return send(401, { error: 'unauthorized' });
   // Public, unauthenticated /ask is rate limited per IP (applied below, after
   // small talk, which costs nothing). Declared here, in handler scope: the
@@ -769,6 +769,26 @@ http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
   const limitByIp = isPublicAsk && !authorized(req);
   if (!ready) return send(503, { error: 'index not ready', detail: status });
+
+  // Retrieval only: the passages /ask would answer from, with no generation.
+  // The FluxCloud assistant's flux_search_docs tool reads these and writes the
+  // answer itself, so one question costs an embedding, not a second model run.
+  if (req.url.startsWith('/search')) {
+    try {
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const query = String(body.query || '').trim().slice(0, 500);
+      if (!query) return send(400, { error: 'no query' });
+      if (limitByIp && rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
+      const k = Math.min(5, Math.max(1, Number(body.k) || 3));
+      const [qvec] = await embed([query]);
+      const hits = retrieve(qvec, query).slice(0, k);
+      return send(200, { results: hits.map((h, i) => ({
+        n: i + 1, title: h.heading || h.source, text: String(h.text || '').replace(/\s+/g, ' ').slice(0, 700), url: h.url || undefined,
+      })) });
+    } catch (err) {
+      return send(500, { error: `search failed: ${String(err.message).slice(0, 120)}` });
+    }
+  }
 
   try {
     const body = JSON.parse((await readBody(req)) || '{}');
