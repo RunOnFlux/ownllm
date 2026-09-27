@@ -66,6 +66,7 @@ const KEY_CONCURRENCY = Number(process.env.KEY_CONCURRENCY || 6);
 const PUBLIC_IP_RPM = Number(process.env.PUBLIC_IP_RPM || 8);
 const PUBLIC_IP_BURST = Number(process.env.PUBLIC_IP_BURST || 4);
 const harness = require('./harness');
+const HARNESS_MAX_TOKENS = Number(process.env.HARNESS_MAX_TOKENS || 1500);
 const HARNESS_MODELS = new Set((process.env.HARNESS_MODELS || '').split(',').map(s => s.trim()).filter(Boolean));
 const THINK_OFF = new Set((process.env.THINK_OFF || '').split(',').map(s => s.trim()).filter(Boolean));
 const REVOKED = new Set((process.env.REVOKED || '').split(',').map(s => s.trim()).filter(Boolean));
@@ -530,6 +531,11 @@ const server = http.createServer(async (req, res) => {
   const useHarness = HARNESS_MODELS.has(modelId) && path === '/v1/chat/completions' && Array.isArray(body.messages);
   let hctx = null;
   if (useHarness) { try { hctx = harness.prepare(body.messages, body.tools); } catch (err) { console.log(`harness prepare failed: ${err.message.slice(0, 100)}`); } }
+  // A cap on the assistant's turns when the client sets none. Without one a
+  // model looping inside a tool call's arguments ran until the context was
+  // full and the engine asserted; with one it ends as a malformed call the
+  // harness recovers from. 1500 is well above any real specification.
+  if (useHarness && body.max_tokens == null && body.max_completion_tokens == null) body.max_tokens = HARNESS_MAX_TOKENS;
   const payload = JSON.stringify(body);
 
   acct.inflight += 1; acct.requests += 1; acct.last = now;
@@ -597,6 +603,26 @@ const server = http.createServer(async (req, res) => {
         if (upstream.status >= 400) {
           // Already committed to a 200: relay the error in the body.
           const text = await upstream.text().catch(() => '');
+          // A malformed tool call on a streamed turn: the web assistant streams,
+          // and relaying the engine's refusal failed the person's whole turn.
+          // Ask once more (not streamed), then stream the answer through the
+          // same checks a streamed reply gets.
+          if (hctx && streaming && isV1 && /invalid tool call arguments/.test(text)) {
+            const r = await bufferedUpstream(ip, pool, { ...body, stream: false, messages: [...body.messages,
+              { role: 'system', content: 'Checker: your last tool call had invalid JSON arguments. Call the tool again with complete, valid JSON and only the fields you need.' }] }).catch(() => null);
+            let j = null; try { j = r && r.status < 400 ? JSON.parse(r.text) : null; } catch { j = null; }
+            const forced = !(j && j.choices) ? harness.forcedCall(hctx) : null;
+            if (forced) j = { choices: [{ index: 0, message: { role: 'assistant', content: '', tool_calls: [forced] }, finish_reason: 'tool_calls' }] };
+            if (j && j.choices) {
+              if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+              const sse = harness.createSseTransformer(hctx, (str) => { if (!res.writableEnded) res.write(str); });
+              sse.push(harness.completionToSse(j)); sse.end();
+              res.end();
+              if (r && r.text) countUsage(r.text.slice(-4096), acct, per);
+              console.log(`${modelId} ${ip}: harness retried a malformed tool call on a streamed turn`);
+              return;
+            }
+          }
           console.log(`${modelId} ${ip}: upstream ${upstream.status} after ${Date.now() - started} ms: ${text.slice(0, 120)}`);
           let msg = text.slice(0, 300); try { msg = JSON.parse(text).error?.message || JSON.parse(text).error || msg; } catch { /* raw */ }
           acct.errors += 1;
@@ -677,7 +703,11 @@ async function harnessTurn(status, text, { ip, pool, body, hctx }) {
     if (!/invalid tool call arguments/.test(text)) return { text, note: '' };
     const r = await retryWith('your last tool call had invalid JSON arguments. Call the tool again with complete, valid JSON and only the fields you need.');
     status = r.status; text = r.text;
-    if (status >= 400) return { text, note: 'json retry failed' };
+    if (status >= 400) {
+      const forced = harness.forcedCall(hctx);
+      if (!forced) return { text, note: 'json retry failed' };
+      return { text: JSON.stringify({ object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: '', tool_calls: [forced] }, finish_reason: 'tool_calls' }] }), note: 'json retry failed; forced the quote' };
+    }
   }
   const read = (t) => { try { const j = JSON.parse(t); return { j, msg: j.choices && j.choices[0] && j.choices[0].message }; } catch { return {}; } };
   let { j, msg } = read(text);

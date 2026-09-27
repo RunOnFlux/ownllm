@@ -27,7 +27,19 @@ const TEMP = Number(opt('temperature', 0));
 // stub. The stub kept returning nothing for questions production can answer,
 // so the model was graded on gaps in my mock rather than on its behaviour.
 const DOCS_MODE = opt('docs', 'real');
-const docsRetrieval = DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
+// --docs live: the production docs bot's /search through the router - the
+// passages the web assistant actually gets. The local reproduction ('real')
+// drifted: for "do I lose the world" it ranked the multiple-mounts reference
+// first where production ranks the g: facts section first.
+const DOCS_URL = process.env.DOCS_URL || 'https://ownllmrouter.app.runonflux.io/search';
+const docsRetrieval = DOCS_MODE === 'live'
+  ? { search: async (query, k) => {
+      const res = await fetch(DOCS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://cloud.runonflux.com' }, body: JSON.stringify({ query, k }) });
+      const body = await res.json().catch(() => ({}));
+      if (!Array.isArray(body.results)) throw new Error(`docs search: ${JSON.stringify(body).slice(0, 120)}`);
+      return body.results;
+    } }
+  : DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
 const CASES = (opt('case', Array.from({ length: 70 }, (_, i) => i + 1).join(','))).split(',').map(Number);
 // The MCP tool list ships in the repo; /tmp is cleared between sessions and the
 // eval failed every case with ENOENT when it was.
@@ -74,6 +86,7 @@ function loadWeb(file) {
 }
 const WEB_TOOLS = WEB ? loadWeb('src/features/deploy/agent/tools.ts').TOOLS : null;
 const WEB_PROMPT = WEB ? loadWeb('src/features/deploy/agent/prompt.ts').AGENT_SYSTEM_PROMPT : null;
+const WEB_MAX_TURNS = WEB ? Number((/export const MAX_TURNS = (\d+)/.exec(require('node:fs').readFileSync(require('node:path').join(WEB_SRC, 'src/features/deploy/agent/run.ts'), 'utf8')) || [])[1] || 4) : 0;
 const harness = HARNESS ? require('./harness') : null;
 const tools = WEB ? WEB_TOOLS : UI ? require('../finetune/tools-ui') : COMPACT ? require('../finetune/tools-compact') : (TOOLSET === 'full' ? all : all.filter(t => CORE.includes(t.name)))
   .map(t => (t.function ? t : { type: 'function', function: { name: t.name, description: KEYED ? t.description : t.description.replace(/\b(Requires|Needs) (the )?(Flux ID|fluxIdPrivateKey|payment)[^.]*\./gi, '').trim(), parameters: stripKeys(t.inputSchema) } }));
@@ -459,7 +472,10 @@ async function chat(messages, toolList = tools) {
         // raises the budget instead, when the thinking is what you want to measure.
         body: JSON.stringify({
           model: MODEL, messages, ...(toolList.length ? { tools: toolList, tool_choice: 'auto' } : {}),
-          max_tokens: Number(opt('max-tokens', 800)), temperature: TEMP, seed: 7,
+          // fluxcloud-web sends no max_tokens; an 800 cap cut a Palworld quote's
+          // copied environment list mid-JSON, a failure production never has.
+          // --web sends what the page sends (no cap); with --harness the hub adds its 1500.
+          ...(WEB ? (HARNESS ? { max_tokens: 1500 } : {}) : { max_tokens: Number(opt('max-tokens', 800)) }), temperature: TEMP, seed: 7,
           ...(args.includes('--no-think') ? { thinking: { type: 'disabled' } } : {}),
         }),
         signal: AbortSignal.timeout(1800000),
@@ -529,18 +545,26 @@ async function runCase(c, history) {
   const called = [];
   let checked = false; let harnessNote = ''; let jsonRetry = false; let hctx = null;
   let turns = 0; let ms = 0; let prompt = 0; let text = '';
-  // fluxcloud-web allows 4 model turns and sends the last one without tools.
-  const maxTurns = WEB ? 4 : 7;
+  // fluxcloud-web's own limit, read from its source; its last turn has no tools.
+  const maxTurns = WEB ? WEB_MAX_TURNS : 7;
   for (; turns < maxTurns; turns += 1) {
     let r;
     const toolList = WEB && turns === maxTurns - 1 ? [] : tools;
     if (HARNESS) hctx = harness.prepare(messages, toolList);
     try { r = await chat(messages, toolList); } catch (err) {
       // a malformed tool call is rejected by the server; the harness asks once more
-      if (!HARNESS || jsonRetry || !/invalid tool call arguments/.test(err.message)) throw err;
-      jsonRetry = true; harnessNote += ' json-retry';
-      messages.push({ role: 'system', content: 'Checker: your last tool call had invalid JSON arguments. Call the tool again with complete, valid JSON and only the fields you need.' });
-      continue;
+      if (HARNESS && jsonRetry && /invalid tool call arguments/.test(err.message)) {
+        // as the hub does: a second malformed call falls back to the forced one
+        const forced = harness.forcedCall(hctx);
+        if (!forced) throw err;
+        r = { msg: { role: 'assistant', content: '', tool_calls: [forced] }, usage: {}, ms: 0 };
+        harnessNote += ' forced-after-json';
+      } else if (!HARNESS || jsonRetry || !/invalid tool call arguments/.test(err.message)) throw err;
+      if (!r) {
+        jsonRetry = true; harnessNote += ' json-retry';
+        messages.push({ role: 'system', content: 'Checker: your last tool call had invalid JSON arguments. Call the tool again with complete, valid JSON and only the fields you need.' });
+        continue;
+      }
     }
     ms += r.ms; prompt += r.usage.prompt_tokens || 0;
     if (HARNESS) { const fixed = harness.repairMessage(r.msg, hctx); if (fixed.length) harnessNote += ` fixed(${fixed.join('; ')})`; }

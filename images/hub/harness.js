@@ -223,7 +223,7 @@ function enrichTool(name, args, result, ctx) {
     }
     // Tiers of one game are always a size choice; separate flat listings are
     // one only when there are several of them (two could be different apps).
-    if (options.length > 3 || (options.length > 1 && options.some((o) => o.tier))) return { sizes: ladder.slice(0, 16), note: 'Several sizes exist. Name them briefly and ask which the user wants, or look one up by name.' };
+    if (options.length > 3 || (options.length > 1 && options.some((o) => o.tier))) return { sizes: ladder.slice(0, 16) };   // no note: v10 read "several sizes exist, name them briefly" out loud; the size question is enforced by checkReply
     return result;
   }
   if ((name === 'flux_quote_app' || name === 'ui_prefill_deploy') && result && typeof result === 'object' && !result.error) {
@@ -399,6 +399,8 @@ function prepare(messages, tools) {
       if (out.sizes) ctx.mustAsk = true;
       if (out.recommended) ctx.mustAsk = false;
       if (out.diagnosis) { ctx.diagnosis = out.diagnosis; ctx.diagApp = out; }
+      if (out.recommended) ctx.recommended = out.recommended;
+      if (call && call.name === 'flux_quote_app' && !out.error) ctx.quoted = true;
       if (out.change) ctx.change = { ...out.change, say: out.say };
     }
   });
@@ -413,6 +415,20 @@ function prepare(messages, tools) {
 // fix that has not been priced. v10 named the right fix and never quoted it, even
 // when told to on a retry, so the price the user needs never existed.
 function forcedCall(ctx) {
+  // A template picked for the user this turn and not priced yet: quote it from
+  // the template itself. v10 looped inside the quote's arguments, copying the
+  // Palworld environment list until the output ran out, so the price never came.
+  if (ctx && ctx.recommended && !ctx.quoted && !ctx.diagnosis) {
+    const r = ctx.recommended;
+    const components = (r.compose || []).map((c) => ({
+      name: c.name, image: c.repotag, ports: c.ports || [], cpu: c.cpu, ram: c.ram, hdd: c.hdd,
+      ...(c.containerData ? { containerData: c.containerData } : {}),
+    }));
+    if (components.length) {
+      return { id: `harness_quote_${Date.now().toString(36)}`, type: 'function',
+        function: { name: 'flux_quote_app', arguments: JSON.stringify({ components, instances: r.instances || 3 }) } };
+    }
+  }
   if (!ctx || !ctx.diagnosis || !ctx.diagnosis.fix || ctx.change || !ctx.diagApp || !ctx.baseline || !ctx.baseline.usd) return null;
   const f = ctx.diagnosis.fix;
   const components = (ctx.diagApp.components || []).map((c) => ({
@@ -532,6 +548,23 @@ function createSseTransformer(ctx, write, { onCut } = {}) {
   };
 }
 
+// A non-streamed completion as the SSE a streamed one would have sent, so a
+// reply the hub had to fetch again (a malformed tool call retried) reaches a
+// streaming client in the shape it asked for, through the same transformer.
+function completionToSse(j) {
+  const msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+  const base = { id: j.id || `chatcmpl-${Date.now().toString(36)}`, object: 'chat.completion.chunk', created: j.created || Math.floor(Date.now() / 1000), model: j.model };
+  const ev = (o) => `data: ${JSON.stringify({ ...base, ...o })}\n\n`;
+  let out = '';
+  if (msg.content) out += ev({ choices: [{ index: 0, delta: { role: 'assistant', content: msg.content }, finish_reason: null }] });
+  if (Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+    out += ev({ choices: [{ index: 0, delta: { tool_calls: msg.tool_calls.map((tc, i) => ({ index: i, id: tc.id, type: 'function', function: tc.function })) }, finish_reason: null }] });
+  }
+  out += ev({ choices: [{ index: 0, delta: {}, finish_reason: msg.tool_calls && msg.tool_calls.length ? 'tool_calls' : 'stop' }] });
+  if (j.usage) out += ev({ choices: [], usage: j.usage });
+  return `${out}data: [DONE]\n\n`;
+}
+
 // Returns { ok } or { ok: false, feedback, repair } where feedback goes back to
 // the model for one retry and repair(text) is applied if the retry fails too.
 function checkReply(text, ctx) {
@@ -591,4 +624,4 @@ function checkReply(text, ctx) {
   return { ok: false, feedback: problems.join(' '), repair: (t) => repairs.reduce((acc, f) => f(acc), t) };
 }
 
-module.exports = { forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };
+module.exports = { completionToSse, forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };
