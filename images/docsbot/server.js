@@ -784,6 +784,7 @@ http.createServer(async (req, res) => {
       const hits = retrieve(qvec, query).slice(0, k);
       return send(200, { results: hits.map((h, i) => ({
         n: i + 1, title: h.heading || h.source, text: String(h.text || '').replace(/\s+/g, ' ').slice(0, 700), url: h.url || undefined,
+        tier: h.tier || undefined, source: h.source || undefined,
       })) });
     } catch (err) {
       return send(500, { error: `search failed: ${String(err.message).slice(0, 120)}` });

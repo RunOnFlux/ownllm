@@ -25,3 +25,16 @@ Application price = declared cpu, ram and hdd per component x instances x period
 
 ## Where things are <https://docs.runonflux.com/>
 Flux Cloud: https://cloud.runonflux.com - docs: https://docs.runonflux.com - node dashboard and rewards: https://cloud.runonflux.com/dashboards - API: https://api.runonflux.io - support: https://docs.runonflux.com/resources/socials
+
+## What SSP Wallet is <https://sspwallet.io>
+SSP Wallet is a true two-factor, self-custody crypto wallet, and it is fully open source.
+- **Two devices, two keys:** the SSP Wallet browser extension holds one private key and the SSP Key app on your phone holds a second one.
+- **2-of-2 multisignature:** every transaction is built in the extension and must be signed by both keys, so one stolen or lost device cannot move funds.
+- Each device has its own seed phrase; there is no cloud backup. Losing one device does not lose the funds (see "SSP Wallet: lost a device").
+- SSP Wallet can sign Flux Cloud deployments, like Zelcore and MetaMask. Documentation: docs.sspwallet.io.
+
+## What Zelcore is <https://zelcore.io>
+Zelcore is a non-custodial (self-custody) multi-asset wallet from InFlux Technologies, the company behind Flux, available on the web (zelcore.io), on Windows, macOS and Linux, and on Android and iOS.
+- It holds many coins and accounts from a single seed phrase, and lets you own, trade and manage digital assets.
+- In the Flux ecosystem it signs Flux Cloud deployments, manages FluxNode collateral, claims Parallel Assets and stakes FLUX on Titan.
+- Zelcore holds no keys: a lost seed phrase cannot be recovered by anyone (see "Zelcore accounts and recovery").

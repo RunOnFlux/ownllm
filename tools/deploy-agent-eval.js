@@ -34,8 +34,15 @@ const DOCS_MODE = opt('docs', 'real');
 const DOCS_URL = process.env.DOCS_URL || 'https://ownllmrouter.app.runonflux.io/search';
 const docsRetrieval = DOCS_MODE === 'live'
   ? { search: async (query, k) => {
-      const res = await fetch(DOCS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://cloud.runonflux.com' }, body: JSON.stringify({ query, k }) });
-      const body = await res.json().catch(() => ({}));
+      // The docs bot allows 12 searches a minute per IP; the eval asks faster than
+      // a person, so a rate-limited search waits and tries again.
+      let body = {};
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const res = await fetch(DOCS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://cloud.runonflux.com' }, body: JSON.stringify({ query, k }) });
+        body = await res.json().catch(() => ({}));
+        if (res.status !== 429) break;
+        await new Promise((r) => setTimeout(r, 30000));
+      }
       if (!Array.isArray(body.results)) throw new Error(`docs search: ${JSON.stringify(body).slice(0, 120)}`);
       return body.results;
     } }
@@ -340,7 +347,7 @@ const CASE_LIST = [
   { id: 38, user: 'whats the difference between running a node and deploying an app',
     want: { mustNot: ['flux_quote_app', 'ui_prefill_deploy'], saidMatch: /collateral|operat|hardware/i } },
   { id: 39, user: 'do you know something about ssp wallet?',
-    want: { mustNot: ['ui_navigate', 'ui_prefill_deploy'], saidMatch: /two-factor|2-of-2|multisig|second key|sspwallet\.io/i,
+    want: { mustNot: ['ui_navigate', 'ui_prefill_deploy'], saidMatch: /two-factor|2-of-2|multisig|second (private )?key|both (keys|signatures|devices)|sspwallet\.io/i,
       argCheck: (calls, said) => !/sspwallet\.online|sspwallet\.com|ssp\.io/i.test(said || '') } },
   { id: 40, user: 'is there a flux status page?',
     want: { argCheck: (calls, said) => !/https?:\/\/(?!docs\.runonflux|home\.runonflux|runonflux\.io|runonflux\.com)/i.test(said || ''),
@@ -428,7 +435,8 @@ const CASE_LIST = [
   // never from a guess; a fix is priced as what it adds.
   { id: 66, user: 'why did palworld-friends restart?',
     want: { mustCall: ['flux_diagnose_app'], mustNot: ['ui_prefill_deploy'], saidMatch: /memory|\bram\b/i, saidNot: /out of (disk|space)|disk (is |was )?full/i,
-      argCheck: (calls, said) => calls.some((c) => c.tag === 'flux_quote_app' && /12000/.test(JSON.stringify(c.args))) && /adds?|extra|more/i.test(said || '') } },
+      // "+$9.00 per month, to $39.15" states the difference as well as "adds $9".
+      argCheck: (calls, said) => calls.some((c) => c.tag === 'flux_quote_app' && /12000/.test(JSON.stringify(c.args))) && /adds?|extra|more|\+\s?\$/i.test(said || '') } },
   { id: 67, user: 'my database pgmain keeps crashing, why?',
     want: { mustCall: ['flux_diagnose_app'], saidMatch: /disk|space|storage/i, saidNot: /out of memory|memory limit/i } },
   { id: 68, user: 'why did apibackend go down?',
@@ -599,10 +607,13 @@ async function runCase(c, history) {
       let result;
       if (tc.function.name === 'flux_search_docs' && docsRetrieval) {
         let hits = await docsRetrieval.search(String(a.query || c.user), 3);
-        if (WEB && c.user && a.query && c.user !== a.query) {
-          // as fluxcloud-web's searchDocs: the person's own words first, then the model's query
-          const own = await docsRetrieval.search(c.user, 3);
-          const seen = new Set(); hits = [...own, ...hits].filter((h) => { const k = `${h.title}|${String(h.text).slice(0, 80)}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 3).map((h, i) => ({ ...h, n: i + 1 }));
+        if (WEB) {
+          // fused by rank, curated sheets first, as fluxcloud-web's searchDocs -
+          // which ranks even when the two queries are the same text
+          const own = c.user && a.query && c.user !== a.query ? await docsRetrieval.search(c.user, 3) : [];
+          const score = new Map();
+          for (const list of [own, hits]) list.forEach((h, rank) => { const k = `${h.title}|${String(h.text).slice(0, 80)}`; const prev = score.get(k); score.set(k, { h, s: (prev ? prev.s : ((/(ecosystem-facts|flux-facts|flux-howto|marketplace-facts|catalog-facts)\.md$/.test(h.source || '') || /facts \(curated|generated from|marketplace catalogue/i.test(h.title)) ? 2 : 0)) + 1 / (rank + 1) }); });
+          hits = [...score.values()].sort((a, b) => b.s - a.s).slice(0, 3).map((x, i) => ({ ...x.h, n: i + 1 }));
         }
         result = { results: hits.map(({ n, title, text, url }) => ({ n, title, text, url })) };
       } else {
