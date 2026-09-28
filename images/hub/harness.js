@@ -482,15 +482,23 @@ function repairMessage(msg, ctx) {
 // reaches the user; tool calls are held and repaired before they are sent; at
 // the end a missing warning or size question is appended, and the finish and
 // usage chunks follow. write(str) sends raw SSE to the client.
+//
+// With retry (feedback => Promise<completion JSON | null>), a turn the checker
+// has something specific to enforce - a warning to pass on, a size question, a
+// diagnosis to state, a change to price - is held rather than streamed, so a
+// reply that fails the check can be asked for again, as a non-streamed turn
+// is. Streaming could only append a repair; the eval's scores assume the retry.
 const LAG = 240;
-function createSseTransformer(ctx, write, { onCut } = {}) {
-  let buf = ''; let text = ''; let sent = 0; let done = false; let cut = false; let base = null;
+const mustCheck = (ctx) => Boolean(ctx && ((ctx.warnings && ctx.warnings.length) || ctx.mustAsk || ctx.mustDiagnose || ctx.diagnosis || ctx.change));
+function createSseTransformer(ctx, write, { onCut, retry } = {}) {
+  let buf = ''; let text = ''; let sent = 0; let cut = false; let base = null; let finishing = null;
   const pending = forcedCall(ctx);
+  const hold = Boolean(retry) && mustCheck(ctx);
   const tools = []; const held = [];
   const chunk = (delta) => `data: ${JSON.stringify({ ...(base || { object: 'chat.completion.chunk' }), choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`;
   const flushText = (upto) => { if (upto > sent) { write(chunk({ content: text.slice(sent, upto) })); sent = upto; } };
   function event(data) {
-    if (data === '[DONE]') return finish();
+    if (data === '[DONE]') { finish(); return; }
     let j; try { j = JSON.parse(data); } catch { write(`data: ${data}\n\n`); return; }
     if (!base && j.id) base = { id: j.id, object: j.object || 'chat.completion.chunk', created: j.created, model: j.model };
     const ch = j.choices && j.choices[0];
@@ -507,22 +515,46 @@ function createSseTransformer(ctx, write, { onCut } = {}) {
     }
     if (typeof d.content === 'string' && d.content && !cut) {
       text += d.content;
-      if (pending) return;                                   // held: a forced call may replace it
+      if (pending || hold) return;                           // held: a forced call or a retry may replace it
       const c = repetitionCut(text);
       if (c >= 0) { cut = true; text = `${text.slice(0, c).replace(/[,\s]+$/, '')}.`; flushText(Math.min(text.length, Math.max(sent, c))); if (onCut) onCut(); }
       else flushText(text.length - LAG);
     }
     if (ch.finish_reason) held.push(data);
   }
-  function finish() {
-    if (done) return; done = true;
+  function finish() { if (!finishing) finishing = settle(); return finishing; }
+  async function settle() {
     if (!tools.length && pending) tools.push({ index: 0, ...pending });
+    if (!tools.length && hold) {
+      // Check the whole reply first; ask once more when it fails.
+      const v = checkReply(text, ctx);
+      if (!v.ok) {
+        let second = null;
+        try { second = await retry(v.feedback); } catch { second = null; }
+        const msg = second && second.choices && second.choices[0] && second.choices[0].message;
+        if (msg && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+          msg.tool_calls.forEach((tc, i) => tools.push({ index: i, id: tc.id, type: 'function', function: tc.function }));
+          text = '';
+        } else if (msg && typeof msg.content === 'string') {
+          const v2 = checkReply(msg.content, ctx);
+          text = v2.ok ? msg.content : v2.repair(msg.content);
+        } else {
+          text = v.repair(text);
+        }
+      }
+      if (!tools.length) {
+        const c = repetitionCut(text);
+        if (c >= 0) text = `${text.slice(0, c).replace(/[,\s]+$/, '')}.`;
+      }
+    }
     if (tools.length) {
       const msg = { tool_calls: tools.filter(Boolean) };
       repairMessage(msg, ctx);
       if (!pending) flushText(text.length);
       write(chunk({ tool_calls: msg.tool_calls }));
       for (let i = 0; i < held.length; i += 1) held[i] = held[i].replace('"finish_reason":"stop"', '"finish_reason":"tool_calls"');
+    } else if (hold) {
+      flushText(text.length);                                // already checked and settled above
     } else {
       let final = text;
       const v = checkReply(text, { ...ctx, sourceText: ctx.sourceText });
@@ -543,7 +575,7 @@ function createSseTransformer(ctx, write, { onCut } = {}) {
         else if (line.startsWith(':')) write(`${line}\n\n`);   // keepalive comments pass through
       }
     },
-    end() { if (buf.trim().startsWith('data:')) event(buf.trim().slice(5).trim()); finish(); },
+    end() { if (buf.trim().startsWith('data:')) event(buf.trim().slice(5).trim()); return finish(); },
     get cut() { return cut; },
   };
 }

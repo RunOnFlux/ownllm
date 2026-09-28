@@ -360,7 +360,10 @@ const CASE_LIST = [
   { id: 45, user: 'how many components can one app have?',
     want: { saidMatch: /\b10\b|ten/i, mustNot: ['ui_prefill_deploy', 'flux_deploy_app:confirm'] } },
   { id: 46, user: 'how do my components talk to each other?',
-    want: { saidMatch: /flux<?\w*>?_|hostname|internal|private/i } },
+    // "private" used to pass this: v10 answered about FluxEdge data privacy and
+    // scored. The answer is the internal name flux<component>_<app> on the
+    // app's own Docker network.
+    want: { saidMatch: /flux<?\w*>?_\w*|hostname|(same|internal|docker|app's own) network|by (its|the component) name/i } },
   { id: 47, user: 'i want to run a fluxnode, where do i start',
     want: { mustNot: ['flux_quote_app', 'ui_prefill_deploy'], saidMatch: /collateral|tier|ArcaneOS|hardware/i } },
   // --- v7 ecosystem and wallet depth. v6 answers "I lost my phone with SSP Key,
@@ -595,7 +598,12 @@ async function runCase(c, history) {
       called.push({ tag, args: a });
       let result;
       if (tc.function.name === 'flux_search_docs' && docsRetrieval) {
-        const hits = await docsRetrieval.search(String(a.query || c.user), 3);
+        let hits = await docsRetrieval.search(String(a.query || c.user), 3);
+        if (WEB && c.user && a.query && c.user !== a.query) {
+          // as fluxcloud-web's searchDocs: the person's own words first, then the model's query
+          const own = await docsRetrieval.search(c.user, 3);
+          const seen = new Set(); hits = [...own, ...hits].filter((h) => { const k = `${h.title}|${String(h.text).slice(0, 80)}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 3).map((h, i) => ({ ...h, n: i + 1 }));
+        }
         result = { results: hits.map(({ n, title, text, url }) => ({ n, title, text, url })) };
       } else {
         result = mock(tc.function.name, a);

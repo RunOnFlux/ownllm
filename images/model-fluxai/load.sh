@@ -25,8 +25,17 @@ until curl -sf "$U/api/tags" >/dev/null 2>&1; do sleep 5; done
 # (the hub routes to "fluxai:tiny"), so "is the name present?" would skip every
 # upgrade. The marker records which sha256 this volume last installed.
 MARKER=/tmp/installed.sha256
+STABLE=${MODEL_STABLE_NAME:-}
 if curl -sf "$U/api/tags" | grep -q "\"$NAME\"" && [ "$(cat "$MARKER" 2>/dev/null)" = "$WANT" ] && [ -n "$WANT" ]; then
   echo "$NAME already installed at $WANT"
+  # The stable name is what clients ask for. It went missing on five docs bot
+  # engines while the versioned one stayed, and this early exit never put it
+  # back, so those instances never became ready. Re-create it from the same
+  # blob when it is absent (no download, no disk).
+  if [ -n "$STABLE" ] && [ "$STABLE" != "$NAME" ] && ! curl -sf "$U/api/tags" | grep -q "\"$STABLE\""; then
+    echo "restoring $STABLE"
+    curl -s "$U/api/copy" -d "{\"source\":\"$NAME\",\"destination\":\"$STABLE\"}" >/dev/null
+  fi
   exit 0
 fi
 
@@ -45,6 +54,19 @@ if [ -n "$WANT" ] && [ "$GOT" != "$WANT" ]; then
   echo "FAILED checksum: got $GOT want $WANT"; exit 1
 fi
 echo "model $GOT verified ($(wc -c < "$GGUF") bytes)"
+
+# Make room first. Every release adds a 4.2 GB blob to the engine's volume and
+# nothing removed the old ones: the v10 rollout found v5, v6, v7 and v9 on a
+# 20 GB volume, and the upload failed on 22 of 40 nodes. Keep the version this
+# release installs and the one the stable name serves now (the fallback while
+# this installs); delete every other versioned tag of this model.
+BASE=${NAME%-v*}
+KEEP=$(curl -sf "$U/api/tags" | tr '{' '\n' | grep "\"name\":\"${STABLE:-$BASE}\"" | grep -o '"digest":"[^"]*"' | head -1)
+for old in $(curl -sf "$U/api/tags" | tr '{' '\n' | grep "\"name\":\"$BASE-v[0-9]*\"" | { if [ -n "$KEEP" ]; then grep -v "$KEEP"; else cat; fi; } | grep -o '"name":"[^"]*"' | cut -d'"' -f4); do
+  [ "$old" = "$NAME" ] && continue
+  echo "removing $old"
+  curl -s -X DELETE "$U/api/delete" -d "{\"model\":\"$old\"}" >/dev/null || true
+done
 
 echo "uploading blob"
 curl -sf -X POST -H 'Content-Type: application/octet-stream' -T "$GGUF" "$U/api/blobs/sha256:$GOT" >/dev/null \

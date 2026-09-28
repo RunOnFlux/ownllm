@@ -317,7 +317,9 @@ const bootCmd = P.modelRelease
   // needs its embedder); MODEL_NAME is the one that comes from our release.
   ? 'apk add -q --no-cache curl; U=$ENGINE_URL; until curl -sf $U/api/tags >/dev/null 2>&1; do sleep 5; done'
     + '; for m in $MODELS; do [ "$m" = "$MODEL_NAME" ] && continue; curl -s $U/api/pull -d \'{"model":"\'$m\'"}\' | tail -c 120; done'
-    + '; curl -sfL $MODEL_RELEASE/load.sh -o /tmp/l.sh && sh /tmp/l.sh || echo FAILEDINSTALL'
+    // Retried every 10 minutes: one failed download (a GitHub read cut short)
+    // left a pool node parked on the old model until someone restarted it.
+    + '; until curl -sfL $MODEL_RELEASE/load.sh -o /tmp/l.sh && sh /tmp/l.sh; do echo FAILEDINSTALL; sleep 600; done'
     + '; while :; do sleep 3600; done'
   : 'apk add -q --no-cache curl; U=' + ENGINE_URL
   + '; until curl -sf $U/api/tags >/dev/null 2>&1; do sleep 5; done'

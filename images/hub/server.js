@@ -616,7 +616,7 @@ const server = http.createServer(async (req, res) => {
             if (j && j.choices) {
               if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
               const sse = harness.createSseTransformer(hctx, (str) => { if (!res.writableEnded) res.write(str); });
-              sse.push(harness.completionToSse(j)); sse.end();
+              sse.push(harness.completionToSse(j)); await sse.end();
               res.end();
               if (r && r.text) countUsage(r.text.slice(-4096), acct, per);
               console.log(`${modelId} ${ip}: harness retried a malformed tool call on a streamed turn`);
@@ -631,7 +631,15 @@ const server = http.createServer(async (req, res) => {
         }
         let tail = '';
         const sse = hctx && streaming && isV1
-          ? harness.createSseTransformer(hctx, (str) => { if (!res.writableEnded) res.write(str); }, { onCut: () => { console.log(`${modelId} ${ip}: harness cut a repeating stream`); try { upstream.destroy(); } catch { /* ignore */ } } })
+          ? harness.createSseTransformer(hctx, (str) => { if (!res.writableEnded) res.write(str); }, {
+            onCut: () => { console.log(`${modelId} ${ip}: harness cut a repeating stream`); try { upstream.destroy(); } catch { /* ignore */ } },
+            // a held turn that failed the check is asked for once more, on the same instance
+            retry: async (feedback) => {
+              console.log(`${modelId} ${ip}: harness retrying a held streamed turn`);
+              const r = await bufferedUpstream(ip, pool, { ...body, stream: false, messages: [...body.messages, { role: 'system', content: `Checker: ${feedback}` }] });
+              return r.status < 400 ? JSON.parse(r.text) : null;
+            },
+          })
           : null;
         try {
           for await (const chunk of upstream.body) {
@@ -645,7 +653,7 @@ const server = http.createServer(async (req, res) => {
         } catch (err) {
           if (!(sse && sse.cut)) throw err;   // destroyed on purpose after a cut
         }
-        if (sse) sse.end();
+        if (sse) await sse.end();
         if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
         res.end();
         if (!tail.trim()) console.log(`${modelId} ${ip}: upstream ${upstream.status} ended with an empty body after ${Date.now() - started} ms`);
