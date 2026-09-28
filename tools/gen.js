@@ -536,8 +536,8 @@ const hubEnv = HUB_ONLY ? [
   // (tools/hub-seeds.js) for an instance whose node cannot resolve the API
   // domain; a hub without any peers is a hub without any models.
   `FLUX_API=${['https://api.runonflux.io', ...arg('seeds', '').split(',').map(v => v.trim()).filter(Boolean)].join(',')}`,
-  'DISCOVER_MS=60000',
-  'PROBE_MS=20000',
+  // DISCOVER_MS (60000) and PROBE_MS (20000) are the hub's own defaults; left
+  // out, because FluxOS allows 20 variables per component and metrics needed two.
 ] : [];
 for (const e of hubEnv) if (e.length > 400) throw new Error(`hub env exceeds 400 chars: ${e.slice(0, 40)}...`);
 if (HUB_ONLY && !arg('pools', '')) throw new Error('--hub needs --pools model=app:port[,...]');
