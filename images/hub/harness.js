@@ -440,6 +440,21 @@ function forcedCall(ctx) {
     function: { name: 'flux_quote_app', arguments: JSON.stringify({ components, instances: ctx.diagApp.instances || 3 }) } };
 }
 
+// What the decision layer knew going into a turn, as short labels for the
+// conversation record: the size it recommended, a size question owed, warnings
+// pending, the diagnosis, a priced change.
+function contextNotes(ctx) {
+  if (!ctx) return [];
+  return [
+    ctx.recommended ? `recommended:${ctx.recommended.name}` : null,
+    ctx.mustAsk ? 'size-question' : null,
+    ...(ctx.warnings || []).map((w) => `warning:${w.slice(0, 40)}`),
+    ctx.mustDiagnose ? 'must-diagnose' : null,
+    ctx.diagnosis ? `diagnosis:${ctx.diagnosis.cause}` : null,
+    ctx.change ? `change:+${ctx.change.addsUsdPerDay}/day` : null,
+  ].filter(Boolean);
+}
+
 // Repair the tool calls of an OpenAI-shaped assistant message in place.
 function repairMessage(msg, ctx) {
   const fixed = [];
@@ -492,6 +507,7 @@ const LAG = 240;
 const mustCheck = (ctx) => Boolean(ctx && ((ctx.warnings && ctx.warnings.length) || ctx.mustAsk || ctx.mustDiagnose || ctx.diagnosis || ctx.change));
 function createSseTransformer(ctx, write, { onCut, retry } = {}) {
   let buf = ''; let text = ''; let sent = 0; let cut = false; let base = null; let finishing = null;
+  const notes = [];
   const pending = forcedCall(ctx);
   const hold = Boolean(retry) && mustCheck(ctx);
   const tools = []; const held = [];
@@ -517,18 +533,19 @@ function createSseTransformer(ctx, write, { onCut, retry } = {}) {
       text += d.content;
       if (pending || hold) return;                           // held: a forced call or a retry may replace it
       const c = repetitionCut(text);
-      if (c >= 0) { cut = true; text = `${text.slice(0, c).replace(/[,\s]+$/, '')}.`; flushText(Math.min(text.length, Math.max(sent, c))); if (onCut) onCut(); }
+      if (c >= 0) { cut = true; notes.push('cut:repetition'); text = `${text.slice(0, c).replace(/[,\s]+$/, '')}.`; flushText(Math.min(text.length, Math.max(sent, c))); if (onCut) onCut(); }
       else flushText(text.length - LAG);
     }
     if (ch.finish_reason) held.push(data);
   }
   function finish() { if (!finishing) finishing = settle(); return finishing; }
   async function settle() {
-    if (!tools.length && pending) tools.push({ index: 0, ...pending });
+    if (!tools.length && pending) { tools.push({ index: 0, ...pending }); notes.push('forced:quote'); }
     if (!tools.length && hold) {
       // Check the whole reply first; ask once more when it fails.
       const v = checkReply(text, ctx);
       if (!v.ok) {
+        notes.push(`retried:${v.feedback.slice(0, 80)}`);
         let second = null;
         try { second = await retry(v.feedback); } catch { second = null; }
         const msg = second && second.choices && second.choices[0] && second.choices[0].message;
@@ -537,6 +554,7 @@ function createSseTransformer(ctx, write, { onCut, retry } = {}) {
           text = '';
         } else if (msg && typeof msg.content === 'string') {
           const v2 = checkReply(msg.content, ctx);
+          if (!v2.ok) notes.push('repaired');
           text = v2.ok ? msg.content : v2.repair(msg.content);
         } else {
           text = v.repair(text);
@@ -549,7 +567,7 @@ function createSseTransformer(ctx, write, { onCut, retry } = {}) {
     }
     if (tools.length) {
       const msg = { tool_calls: tools.filter(Boolean) };
-      repairMessage(msg, ctx);
+      for (const f of repairMessage(msg, ctx)) notes.push(`fixed:${f}`);
       if (!pending) flushText(text.length);
       write(chunk({ tool_calls: msg.tool_calls }));
       for (let i = 0; i < held.length; i += 1) held[i] = held[i].replace('"finish_reason":"stop"', '"finish_reason":"tool_calls"');
@@ -558,7 +576,7 @@ function createSseTransformer(ctx, write, { onCut, retry } = {}) {
     } else {
       let final = text;
       const v = checkReply(text, { ...ctx, sourceText: ctx.sourceText });
-      if (!v.ok) { const r = v.repair(text); if (r.startsWith(text.slice(0, sent))) final = r; }
+      if (!v.ok) { const r = v.repair(text); if (r.startsWith(text.slice(0, sent))) { final = r; notes.push('repaired'); } }
       text = final; flushText(text.length);
     }
     if (!held.some((h) => /finish_reason/.test(h))) held.unshift(JSON.stringify({ ...(base || {}), choices: [{ index: 0, delta: {}, finish_reason: tools.length ? 'tool_calls' : 'stop' }] }));
@@ -577,6 +595,8 @@ function createSseTransformer(ctx, write, { onCut, retry } = {}) {
     },
     end() { if (buf.trim().startsWith('data:')) event(buf.trim().slice(5).trim()); return finish(); },
     get cut() { return cut; },
+    get notes() { return notes; },
+    get reply() { return { content: text, tool_calls: tools.filter(Boolean).map((t) => ({ name: t.function.name, arguments: t.function.arguments })) }; },
   };
 }
 
@@ -656,4 +676,4 @@ function checkReply(text, ctx) {
   return { ok: false, feedback: problems.join(' '), repair: (t) => repairs.reduce((acc, f) => f(acc), t) };
 }
 
-module.exports = { completionToSse, forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };
+module.exports = { contextNotes, completionToSse, forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };

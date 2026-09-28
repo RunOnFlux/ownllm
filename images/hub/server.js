@@ -42,6 +42,11 @@
  *                  decision layer in harness.js: tool results enriched with the
  *                  decision, tool calls repaired, replies checked (retried once
  *                  when not streamed, repaired in the stream when streamed)
+ *   METRICS_URL    conversation metrics collector (images/metrics); with
+ *   METRICS_KEY    its write key, every HARNESS_MODELS turn is recorded there:
+ *                  the turn's new messages and reply (masked there), tools,
+ *                  what the decision layer did, latency and tokens. Other
+ *                  models' traffic is never recorded.
  *   PUBLIC_KEY_NAME name of a key the front page hands out (a demo key with
  *                  tight KEY_LIMITS); empty = the page shows none
  *
@@ -67,6 +72,48 @@ const PUBLIC_IP_RPM = Number(process.env.PUBLIC_IP_RPM || 8);
 const PUBLIC_IP_BURST = Number(process.env.PUBLIC_IP_BURST || 4);
 const harness = require('./harness');
 const HARNESS_MAX_TOKENS = Number(process.env.HARNESS_MAX_TOKENS || 1500);
+const METRICS_URL = (process.env.METRICS_URL || '').replace(/\/$/, '');
+const METRICS_KEY = process.env.METRICS_KEY || '';
+
+/**
+ * One assistant turn, sent to the metrics collector and forgotten: a slow or
+ * absent collector must never delay or fail the person's answer.
+ */
+function recordTurn({ convKey, body, modelId, streamed, started, tail, reply, notes, hctx }) {
+  if (!METRICS_URL || !METRICS_KEY || !convKey) return;
+  try {
+    const msgs = Array.isArray(body.messages) ? body.messages : [];
+    let lastUser = -1;
+    msgs.forEach((m, i) => { if (m && m.role === 'user') lastUser = i; });
+    const turnMsgs = msgs.slice(Math.max(lastUser, 0)).filter((m) => m && m.role !== 'system')
+      .map((m) => ({ role: m.role, content: typeof m.content === 'string' ? m.content.slice(0, 8000) : m.content,
+        ...(m.tool_calls ? { tool_calls: m.tool_calls.map((tc) => ({ name: tc.function && tc.function.name, arguments: tc.function && String(tc.function.arguments).slice(0, 4000) })) } : {}),
+        ...(m.name ? { name: m.name } : {}) }));
+    const calls = (reply && reply.tool_calls) || [];
+    const pt = /"prompt_tokens"\s*:\s*(\d+)/.exec(tail || ''); const ct = /"completion_tokens"\s*:\s*(\d+)/.exec(tail || '');
+    const record = {
+      // the web app's own id when it sent one (user field), so its ratings match
+      conversation: convKey.startsWith('u:') ? convKey.slice(2) : convKey, turn: msgs.length, model: modelId, streamed,
+      latencyMs: Date.now() - started,
+      promptTokens: pt ? Number(pt[1]) : null, completionTokens: ct ? Number(ct[1]) : null,
+      tools: calls.map((c) => c.name),
+      harness: [...harness.contextNotes(hctx), ...(notes || [])],
+      outcome: calls.some((c) => c.name === 'ui_prefill_deploy') ? 'prefill' : calls.length ? 'tool' : (reply && reply.content ? 'answer' : 'empty'),
+      messages: turnMsgs,
+      reply,
+    };
+    fetch(`${METRICS_URL}/events`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${METRICS_KEY}` },
+      body: JSON.stringify(record), signal: AbortSignal.timeout(10000),
+    }).catch(() => { /* metrics are best effort */ });
+  } catch { /* never let metrics break a turn */ }
+}
+const replyOf = (text) => {
+  try {
+    const m = JSON.parse(text).choices[0].message;
+    return { content: m.content || '', tool_calls: (m.tool_calls || []).map((tc) => ({ name: tc.function.name, arguments: tc.function.arguments })) };
+  } catch { return null; }
+};
 const HARNESS_MODELS = new Set((process.env.HARNESS_MODELS || '').split(',').map(s => s.trim()).filter(Boolean));
 const THINK_OFF = new Set((process.env.THINK_OFF || '').split(',').map(s => s.trim()).filter(Boolean));
 const REVOKED = new Set((process.env.REVOKED || '').split(',').map(s => s.trim()).filter(Boolean));
@@ -598,6 +645,7 @@ const server = http.createServer(async (req, res) => {
           res.end(out.text);
           countUsage(out.text.slice(-4096), acct, per);
           if (out.note) console.log(`${modelId} ${ip}: harness ${out.note}`);
+          recordTurn({ convKey, body, modelId, streamed: false, started, tail: out.text.slice(-4096), reply: replyOf(out.text), notes: out.note ? [out.note] : [], hctx });
           return;
         }
         if (upstream.status >= 400) {
@@ -620,6 +668,7 @@ const server = http.createServer(async (req, res) => {
               res.end();
               if (r && r.text) countUsage(r.text.slice(-4096), acct, per);
               console.log(`${modelId} ${ip}: harness retried a malformed tool call on a streamed turn`);
+              recordTurn({ convKey, body, modelId, streamed: true, started, tail: r && r.text ? r.text.slice(-4096) : '', reply: sse.reply, notes: ['json-retry', ...sse.notes], hctx });
               return;
             }
           }
@@ -653,7 +702,10 @@ const server = http.createServer(async (req, res) => {
         } catch (err) {
           if (!(sse && sse.cut)) throw err;   // destroyed on purpose after a cut
         }
-        if (sse) await sse.end();
+        if (sse) {
+          await sse.end();
+          recordTurn({ convKey, body, modelId, streamed: true, started, tail, reply: sse.reply, notes: sse.notes, hctx });
+        }
         if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
         res.end();
         if (!tail.trim()) console.log(`${modelId} ${ip}: upstream ${upstream.status} ended with an empty body after ${Date.now() - started} ms`);

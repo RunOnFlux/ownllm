@@ -129,6 +129,9 @@ const ROUTER_ONLY = argv.includes('--router');
 // The hub is likewise standalone: one endpoint over many pool apps. Holds
 // secrets (pool keys, HUB_SECRET), so unlike the router it is enterprise.
 const HUB_ONLY = argv.includes('--hub');
+// Conversation metrics (images/metrics): standalone, holds its write and admin
+// keys, so it is enterprise like the hub. SQLite on a g: volume, one writer.
+const METRICS_ONLY = argv.includes('--metrics');
 
 // Flux rules enforced in appValidator.js: app name is alphanumeric + inner
 // hyphens, max 63, and must not start with "flux" or "zel".
@@ -160,6 +163,7 @@ const PROFILES = {
   router: { cpu: 0.5, ram: 500, hdd: 1, threads: 1, loaded: 1, ctx: 2048, models: '' },
   // The hub is the same shape: a proxy holding keys and a routing table.
   hub: { cpu: 0.5, ram: 500, hdd: 1, threads: 1, loaded: 1, ctx: 2048, models: '' },
+  metrics: { cpu: 0.5, ram: 500, hdd: 5, threads: 1, loaded: 1, ctx: 2048, models: '' },
   // Model pools behind the hub (tools/gen.js --api-only --profile pool-*).
   // Small models share one pool: three resident at once is ~7 GB of weights.
   // parallel: 2 so two clients of the same instance do not queue; each slot
@@ -523,6 +527,10 @@ const hubEnv = HUB_ONLY ? [
   // The decision layer (images/hub/harness.js) on the Flux AI assistant's turns:
   // tool results carry the decision, tool calls are repaired, replies checked.
   `HARNESS_MODELS=${arg('harness-models', 'fluxai:tiny')}`,
+  // Conversation metrics: the collector's address and write key, the key read
+  // from the metrics app's own plaintext spec so it is never typed.
+  `METRICS_URL=${arg('metrics-url', '')}`,
+  `METRICS_KEY=${arg('metrics-key', existingEnv(SPECS_DIR, 'ownllmmetrics-metrics', 'METRICS_KEY') || '')}`,
   `ALLOWED_ORIGINS=${ALLOWED_ORIGINS}`,
   // Discovery hosts, tried in order. --seeds adds FluxOS nodes by IP
   // (tools/hub-seeds.js) for an instance whose node cannot resolve the API
@@ -549,6 +557,32 @@ const hub = {
   cpu: 0.5,
   ram: 500,
   hdd: 1,
+};
+
+const metricsEnv = METRICS_ONLY ? [
+  `METRICS_KEY=${(ROTATE ? null : existingEnv(SPECS_DIR, `${APP}-metrics`, 'METRICS_KEY')) || crypto.randomBytes(32).toString('base64url')}`,
+  `ADMIN_KEY=${(ROTATE ? null : existingEnv(SPECS_DIR, `${APP}-metrics`, 'ADMIN_KEY')) || crypto.randomBytes(32).toString('base64url')}`,
+  // Where thumbs up/down may come from: the web app's production hosts.
+  `ALLOWED_ORIGINS=${arg('allowed-origins', 'cloud.runonflux.com,cloud.runonflux.io,home.runonflux.io,devcloud.app.runonflux.io,cloudpreview.app.runonflux.io')}`,
+  `RETENTION_DAYS=${arg('retention-days', 365)}`,
+  'DB_PATH=/data/metrics.db',
+] : [];
+const metrics = {
+  name: 'metrics',
+  description: 'Conversation metrics for the Flux AI assistant: turn records from the hub, ratings from the web app',
+  repotag: `${REGISTRY}/ownllm-metrics:${GATE_VERSION}`,
+  ports: [PORT],
+  containerPorts: [8080],
+  domains: [''],
+  environmentParameters: metricsEnv,
+  commands: [],
+  // g: - one primary writes the SQLite file, the standbys hold a synced copy
+  // and take over if it goes, so a node failure loses no conversation records.
+  containerData: 'g:/data',
+  repoauth: '',
+  cpu: 0.5,
+  ram: 500,
+  hdd: 5,
 };
 
 const docsbot = {
@@ -656,6 +690,8 @@ const spec = {
     ? [router]
     : HUB_ONLY
     ? [hub]
+    : METRICS_ONLY
+    ? [metrics]
     : API_ONLY
     ? (DOCSBOT ? [engine, boot, gate, docsbot] : [engine, boot, gate]).filter(c => !(TERNARY && c === boot))
     : (ENTERPRISE ? [engine, boot, gate, webui] : [engine, boot, webui]).filter(c => !(TERNARY && c === boot)),
@@ -670,7 +706,7 @@ const spec = {
   // Flux Home (see README); this generator emits the plaintext to feed it.
   // The router holds no secret - it proxies a public endpoint - so it needs no
   // encrypted specification and can be a plain application.
-  enterprise: ROUTER_ONLY ? false : (ENTERPRISE || API_ONLY || DOCSBOT || HUB_ONLY ? '<PASTE_ENCRYPTED_BLOB>' : false),
+  enterprise: ROUTER_ONLY ? false : (ENTERPRISE || API_ONLY || DOCSBOT || HUB_ONLY || METRICS_ONLY ? '<PASTE_ENCRYPTED_BLOB>' : false),
 };
 
 // --- sanity checks against the rules in appValidator.js -------------------
@@ -756,7 +792,7 @@ if (price < CHAIN.minPrice) price = CHAIN.minPrice;
 // this is the file that gets committed. Emptying it also matches exactly what
 // reaches the chain - registryManager.js:1946 does the same before broadcast.
 // The hub's compose holds HUB_SECRET and the pool keys: sealed like the rest.
-const SEALED = ENTERPRISE || API_ONLY || HUB_ONLY;
+const SEALED = ENTERPRISE || API_ONLY || HUB_ONLY || METRICS_ONLY;
 const envelope = SEALED
   ? { ...spec, contacts: [], compose: [] }
   : spec;
