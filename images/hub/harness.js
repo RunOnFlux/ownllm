@@ -251,9 +251,33 @@ function enrichTool(name, args, result, ctx) {
 // and the model drops it when it retypes the spec (v10 quoted Minecraft9GB with
 // the right size and no g:/data). When a component uses an image a template in
 // this conversation defined, the flag comes from the template, not the model.
+// Identical components are never a valid spec. Asked for "palworld on 30
+// instances with 5 cpu cores", v10 took the 2.5-core template and copied its
+// component up to nine times to add up to the cores, and the quote priced it.
+function dedupeComponents(args) {
+  const out = JSON.parse(JSON.stringify(args));
+  let dropped = 0;
+  const dedupe = (list) => {
+    const seen = new Set();
+    return list.filter((c) => {
+      const key = JSON.stringify({ ...c, name: undefined });
+      if (seen.has(key)) { dropped += 1; return false; }
+      seen.add(key); return true;
+    });
+  };
+  if (Array.isArray(out.components)) out.components = dedupe(out.components);
+  if (out.spec && Array.isArray(out.spec.components)) out.spec.components = dedupe(out.spec.components);
+  if (out.spec && Array.isArray(out.spec.compose)) out.spec.compose = dedupe(out.spec.compose);
+  return { args: out, dropped };
+}
+
 function repairCall(name, args, ctx) {
-  if (!/flux_quote_app|ui_prefill_deploy|flux_build_spec/.test(name) || !ctx.templates || !ctx.templates.size) return { args, fixed: [] };
-  const fixed = [];
+  if (!/flux_quote_app|ui_prefill_deploy|flux_build_spec|flux_validate_spec/.test(name)) return { args, fixed: [] };
+  const d = dedupeComponents(args);
+  if (d.dropped) { args = d.args; }
+  const dupNote = d.dropped ? [`removed ${d.dropped} duplicate component${d.dropped === 1 ? '' : 's'}`] : [];
+  if (!ctx.templates || !ctx.templates.size) return { args, fixed: dupNote };
+  const fixed = [...dupNote];
   const fix = (c) => {
     const img = String(c.image || c.repotag || '');
     const t = ctx.templates.get(img) || ctx.templates.get(img.replace(/:latest$/, '')) || ctx.templates.get(`${img}:latest`);
