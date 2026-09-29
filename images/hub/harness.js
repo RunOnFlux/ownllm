@@ -311,6 +311,97 @@ const WARNING_SIGNS = [
   [/private registry image/, /repoauth|credential/i],
 ];
 
+// --- the person's language ----------------------------------------------------------------------
+// The first real conversations came in Indonesian and Polish and were answered
+// in English. A cheap stopword count is enough to tell which it is; a short or
+// ambiguous message counts as English, so nothing is forced on a guess.
+const LANGS = {
+  English: /\b(the|and|you|what|how|with|for|this|that|is|are|my|can|want|need|server|please)\b/gi,
+  Spanish: /\b(el|la|los|las|que|para|con|una|quiero|necesito|cómo|puedo|servidor)\b/gi,
+  Portuguese: /\b(o|os|as|que|para|com|uma|quero|preciso|como|posso|não|servidor)\b/gi,
+  German: /\b(der|die|das|und|ich|mit|für|ein|eine|wie|kann|möchte|brauche|nicht)\b/gi,
+  French: /\b(le|la|les|et|je|pour|avec|une|comment|veux|besoin|serveur|est)\b/gi,
+  Italian: /\b(il|lo|gli|che|per|con|una|voglio|come|posso|sono|non)\b/gi,
+  Polish: /\b(i|w|na|jak|dla|mi|się|chcę|potrzebuję|czy|jest|nie|obejmujący|zbuduj|serwer)\b/gi,
+  Czech: /\b(a|v|na|jak|pro|mi|se|chci|potřebuji|je|není|server)\b/gi,
+  Indonesian: /\b(untuk|dan|yang|saya|ingin|bisa|dengan|ini|itu|kecil|toko|bagaimana|apa)\b/gi,
+  Turkish: /\b(ve|bir|için|nasıl|istiyorum|bu|ile|sunucu)\b/gi,
+  Dutch: /\b(de|het|een|en|ik|voor|met|hoe|wil|nodig)\b/gi,
+};
+function languageOf(text) {
+  const t = String(text || '');
+  if (/[\u0400-\u04FF]/.test(t)) return 'Russian';
+  if (/[\u3040-\u30ff]/.test(t)) return 'Japanese';
+  if (/[\u4e00-\u9fff]/.test(t)) return 'Chinese';
+  if (/[\uac00-\ud7af]/.test(t)) return 'Korean';
+  const scores = Object.entries(LANGS).map(([name, re]) => [name, (t.match(re) || []).length]);
+  scores.sort((a, b) => b[1] - a[1]);
+  const [best, second] = scores;
+  if (!best || best[1] < 1 || best[0] === 'English' || best[1] === (second && second[1])) return 'English';
+  // Polish and Czech share short words; diacritics decide.
+  if (best[0] === 'Czech' && /[łńśźż]/i.test(t)) return 'Polish';
+  if (best[0] === 'Polish' && /[ěřůč]/i.test(t) && !/[łńśźż]/i.test(t)) return 'Czech';
+  return best[0];
+}
+
+// --- marketplace apps named in the message ----------------------------------------------------
+// One keyword per catalogue app, from its display name: "Firo Node" -> firo,
+// DashNode -> dash, Minecraft9GB -> minecraft. A person who names one should
+// get the template's exact spec and price, not a guessed image: FiroMN was
+// quoted at $1.49 on a guessed image where the template sells it at $8.99.
+const GENERIC = new Set(['node', 'server', 'the', 'and', 'game', 'games', 'slots', 'edition', 'full', 'vanilla', 'modded', 'dedicated']);
+let KEYWORDS = null;
+function templateKeywords() {
+  if (KEYWORDS) return KEYWORDS;
+  KEYWORDS = new Map();
+  for (const x of CATALOGUE) {
+    const words = String(x.displayName || x.name).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\d+\s*(GB|Slots?)\b/gi, ' ').toLowerCase().split(/[^a-z]+/);
+    const word = words.find((w) => w.length >= 4 && !GENERIC.has(w));
+    if (word && !KEYWORDS.has(word)) KEYWORDS.set(word, word);
+  }
+  return KEYWORDS;
+}
+function namedTemplate(text) {
+  const t = String(text || '').toLowerCase();
+  for (const word of templateKeywords().keys()) if (new RegExp(`\\b${word}`).test(t)) return word;
+  return null;
+}
+
+// --- the spec a reply describes ---------------------------------------------------------------------
+// Three of the first four real conversations described a different spec from
+// the one just quoted: "1 instance" for a 3-instance quote, "5 GB RAM" for 500
+// MB. The price was right and the words were not. Instances, RAM and cores the
+// reply states are compared with the quote's arguments.
+const WORDNUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+function specOf(args) {
+  const comps = componentsOf(args || {});
+  if (!comps.length) return null;
+  const sum = (k) => comps.reduce((a, c) => a + (Number(c[k]) || 0), 0);
+  return { instances: Number((args.spec || args).instances) || 3, ramMB: sum('ram'), cpu: sum('cpu'), hdd: sum('hdd'), single: comps.length === 1 };
+}
+function misstated(text, spec) {
+  if (!spec) return [];
+  const t = String(text || '');
+  const bad = [];
+  for (const m of t.matchAll(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+instances?\b/gi)) {
+    const before = t.slice(Math.max(0, m.index - 12), m.index);
+    if (/per\s*$|each\s*$/i.test(before)) continue;                  // "$0.50 per instance"
+    const n = WORDNUM[m[1].toLowerCase()] ?? Number(m[1]);
+    if (n !== spec.instances) bad.push(m[0]);
+  }
+  if (spec.single) {
+    for (const m of t.matchAll(/\b(\d+(?:\.\d+)?)\s*(GB|MB)\s*(?:of\s+)?(?:RAM|memory)\b/gi)) {
+      const mb = Number(m[1]) * (m[2].toUpperCase() === 'GB' ? 1000 : 1);
+      if (Math.abs(mb - spec.ramMB) > spec.ramMB * 0.05 && Math.abs(Number(m[1]) * 1024 - spec.ramMB) > spec.ramMB * 0.05) bad.push(m[0]);
+    }
+    for (const m of t.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:v?CPU|cores?)\b/gi)) {
+      if (Math.abs(Number(m[1]) - spec.cpu) > 0.05) bad.push(m[0]);
+    }
+  }
+  return [...new Set(bad)];
+}
+const specSentence = (s) => `To be exact: ${s.instances} instance${s.instances === 1 ? '' : 's'}, each with ${s.cpu} core${s.cpu === 1 ? '' : 's'}, ${s.ramMB >= 1000 ? `${s.ramMB / 1000} GB` : `${s.ramMB} MB`} RAM and ${s.hdd} GB disk.`;
+
 // How a reply names each diagnosed cause, and how it would claim a different one.
 const CAUSE_SIGNS = {
   'out of memory': /memory|\bram\b|oom/i,
@@ -362,7 +453,8 @@ function dropSentences(text, bad) {
 const DIAG_INTENT = /\b(why (did|does|is|was|has|do)\b[^?]{0,60}\b(restart|reboot|crash|down|die|stop|offline|kill)|restarted|rebooted|crashed|went down|is down|keeps? (dying|restarting|crashing|going down)|stopped working|(was|got) killed|oom[- ]?killed|is offline|not responding)/i;
 function prepare(messages, tools) {
   const ctx = { templates: new Map(), warnings: [], mustAsk: false, sourceText: '', userText: '', seenWarnings: new Set(),
-    baseline: {}, diagnosis: null, change: null, knownApps: new Set(),
+    baseline: {}, diagnosis: null, change: null, knownApps: new Set(), quotedSpec: null, lookedUpTemplate: false,
+    canTemplate: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_get_template'),
     canDiagnose: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_diagnose_app') };
   if (!Array.isArray(messages)) return ctx;
   const calls = new Map();
@@ -400,7 +492,8 @@ function prepare(messages, tools) {
       if (out.recommended) ctx.mustAsk = false;
       if (out.diagnosis) { ctx.diagnosis = out.diagnosis; ctx.diagApp = out; }
       if (out.recommended) ctx.recommended = out.recommended;
-      if (call && call.name === 'flux_quote_app' && !out.error) ctx.quoted = true;
+      if (call && call.name === 'flux_quote_app' && !out.error) { ctx.quoted = true; ctx.quotedSpec = specOf(call.args); }
+      if (call && call.name === 'flux_get_template') ctx.lookedUpTemplate = true;
       if (out.change) ctx.change = { ...out.change, say: out.say };
     }
   });
@@ -408,6 +501,11 @@ function prepare(messages, tools) {
   // A "why did it restart" turn goes to the diagnosis tool before anything else.
   ctx.mustDiagnose = ctx.canDiagnose && DIAG_INTENT.test(userText) && !ctx.diagnosis;
   ctx.sourceText = source.join('\n');
+  ctx.language = languageOf(userText);
+  // A marketplace app named this turn and not looked up yet: its quote or
+  // prefill goes to flux_get_template first (repairMessage).
+  const named = namedTemplate(userText);
+  ctx.mustTemplate = named && ctx.canTemplate && !ctx.lookedUpTemplate ? named : null;
   return ctx;
 }
 
@@ -452,12 +550,23 @@ function contextNotes(ctx) {
     ctx.mustDiagnose ? 'must-diagnose' : null,
     ctx.diagnosis ? `diagnosis:${ctx.diagnosis.cause}` : null,
     ctx.change ? `change:+${ctx.change.addsUsdPerDay}/day` : null,
+    ctx.language && ctx.language !== 'English' ? `language:${ctx.language}` : null,
+    ctx.mustTemplate ? `template:${ctx.mustTemplate}` : null,
   ].filter(Boolean);
 }
 
 // Repair the tool calls of an OpenAI-shaped assistant message in place.
 function repairMessage(msg, ctx) {
   const fixed = [];
+  if (ctx && ctx.mustTemplate && msg && Array.isArray(msg.tool_calls)) {
+    const tc = msg.tool_calls.find((t) => /^(flux_quote_app|ui_prefill_deploy|flux_validate_spec)$/.test(t.function.name));
+    if (tc && !msg.tool_calls.some((t) => t.function.name === 'flux_get_template')) {
+      fixed.push(`${tc.function.name} -> flux_get_template(${ctx.mustTemplate})`);
+      tc.function.name = 'flux_get_template';
+      tc.function.arguments = JSON.stringify({ search: ctx.mustTemplate });
+      msg.tool_calls = [tc];
+    }
+  }
   if (ctx && ctx.mustDiagnose && msg && Array.isArray(msg.tool_calls)) {
     const tc = msg.tool_calls.find((t) => /^flux_get_app(_logs|_stats)?$/.test(t.function.name));
     if (tc && !msg.tool_calls.some((t) => t.function.name === 'flux_diagnose_app')) {
@@ -504,7 +613,8 @@ function repairMessage(msg, ctx) {
 // reply that fails the check can be asked for again, as a non-streamed turn
 // is. Streaming could only append a repair; the eval's scores assume the retry.
 const LAG = 240;
-const mustCheck = (ctx) => Boolean(ctx && ((ctx.warnings && ctx.warnings.length) || ctx.mustAsk || ctx.mustDiagnose || ctx.diagnosis || ctx.change));
+const mustCheck = (ctx) => Boolean(ctx && ((ctx.warnings && ctx.warnings.length) || ctx.mustAsk || ctx.mustDiagnose || ctx.diagnosis || ctx.change
+  || ctx.quotedSpec));
 function createSseTransformer(ctx, write, { onCut, retry } = {}) {
   let buf = ''; let text = ''; let sent = 0; let cut = false; let base = null; let finishing = null;
   const notes = [];
@@ -637,6 +747,16 @@ function checkReply(text, ctx) {
       repairs.push((t) => `${t.trim()}\n\nNote: ${w}`);
     }
   }
+  if (ctx.quotedSpec) {
+    const bad = misstated(text, ctx.quotedSpec);
+    if (bad.length) {
+      problems.push(`You described the spec wrongly (${bad.map((b) => `"${b}"`).join(', ')}). ${specSentence(ctx.quotedSpec)} Describe it exactly as quoted.`);
+      repairs.push((t) => `${dropSentences(t, bad).trim()}\n\n${specSentence(ctx.quotedSpec)}`);
+    }
+  }
+  // The person's language is recorded (contextNotes), not enforced: v10 cannot
+  // write Indonesian or Polish, so holding the reply to ask again only added
+  // latency. It becomes a check once a model is trained on those languages.
   if (ctx.mustDiagnose) {
     problems.push('The user asked why their app restarted or went down. Call flux_diagnose_app with the app name first and answer from its diagnosis; do not guess a cause.');
     repairs.push((t) => t);
@@ -676,4 +796,4 @@ function checkReply(text, ctx) {
   return { ok: false, feedback: problems.join(' '), repair: (t) => repairs.reduce((acc, f) => f(acc), t) };
 }
 
-module.exports = { contextNotes, completionToSse, forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };
+module.exports = { languageOf, namedTemplate, misstated, specOf, contextNotes, completionToSse, forcedCall, prepare, repairMessage, createSseTransformer, setCatalogue, unsourced, enrichTool, checkReply, repairCall, noteTemplates, wantedSize, pickSize, quoteWarnings, repetitionCut };

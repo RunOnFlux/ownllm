@@ -47,7 +47,7 @@ const docsRetrieval = DOCS_MODE === 'live'
       return body.results;
     } }
   : DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
-const CASES = (opt('case', Array.from({ length: 70 }, (_, i) => i + 1).join(','))).split(',').map(Number);
+const CASES = (opt('case', Array.from({ length: 76 }, (_, i) => i + 1).join(','))).split(',').map(Number);
 // The MCP tool list ships in the repo; /tmp is cleared between sessions and the
 // eval failed every case with ENOENT when it was.
 const TOOLS_FILE = opt('tools-file', require('node:path').join(__dirname, '..', 'finetune', 'tools.json'));
@@ -445,6 +445,24 @@ const CASE_LIST = [
     want: { mustCall: ['flux_diagnose_app'], saidMatch: /moved|another node|reschedul|migrat/i, saidMatch2: /g:|sync|replicat|three instances|3 instances/i } },
   { id: 70, user: 'why does cronjob1 keep restarting',
     want: { mustCall: ['flux_diagnose_app'], mustNot: ['flux_quote_app'], saidMatch: /exit|finish|on its own|by itself|completes/i } },
+  // --- the first real conversations (metrics, 2026-09-29) --------------------
+  // Answer in the person's language; a marketplace app is looked up, not guessed;
+  // the spec described matches the spec quoted; an out-of-scope or vague request
+  // is not forced into a deployment.
+  { id: 71, user: 'WordPress untuk toko kecil',
+    want: { mustNot: ['flux_deploy_app:confirm'], argCheck: (calls, said) => require('./harness').languageOf(said) === 'Indonesian' && specConsistent(calls, said) } },
+  { id: 72, user: 'Zbuduj mi projekt sieci LAN obejmujący 5 budynków',
+    want: { mustNot: ['ui_prefill_deploy', 'flux_quote_app'], argCheck: (calls, said) => require('./harness').languageOf(said) === 'Polish' } },
+  { id: 73, user: 'what about firo masternode',
+    want: { mustNot: ['ui_prefill_deploy'], saidMatch: /firo/i } },
+  { id: 74, pre: 73, user: 'FiroMN',
+    want: { mustCall: ['flux_get_template'],
+      // the web app ends at the prefill, so there is no final text to check the spec against
+      argCheck: (calls) => calls.some((c) => /quote|prefill/.test(c.tag) && /fironode/.test(JSON.stringify(c.args)) && /\/root\/\.firo/.test(JSON.stringify(c.args))) } },
+  { id: 75, user: 'A nostalgia tv server that I can point to from my domain.',
+    want: { mustNot: ['ui_prefill_deploy'], saidMatch: /\?/ } },
+  { id: 76, user: 'deploy nginx:1.27, 1 core, 1 gb ram, 20 gb disk, 3 instances',
+    want: { mustCall: ['flux_quote_app'], argCheck: (calls, said) => specConsistent(calls, said) } },
   // A factual question: search and answer in the same turn, never promise and stop.
   { id: 65, user: 'what are progressive node rewards',
     want: { mustCall: ['flux_search_docs'], saidMatch: /ArcaneOS|80|20|operator/i,
@@ -543,6 +561,12 @@ function inventedRepoauth(calls, userText) {
   return calls.some((c) => (c.args.components || []).some((comp) => comp.repoauth !== undefined && comp.repoauth !== ''));
 }
 const credFails = [];
+// The spec a reply describes matches the last quote it got (instances, RAM, cores).
+function specConsistent(calls, said) {
+  const h = require('./harness');
+  const quote = [...calls].reverse().find((c) => c.tag === 'flux_quote_app');
+  return !quote || h.misstated(said || '', h.specOf(quote.args)).length === 0;
+}
 // The web app's result shapes where they differ from the mocks' MCP-like ones.
 function webShape(name, a, r) {
   if (name === 'flux_quote_app' && r && r.usdPerMonth !== undefined) return { usd: r.usdPerMonth, flux: r.flux ?? null, instances: r.instances, months: 1 };
