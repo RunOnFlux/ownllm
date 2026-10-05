@@ -614,7 +614,8 @@ const docsbot = {
     // sheets are embedded at boot and retrieved at the facts tier instead, so
     // they are in the prompt - as cited [1] - exactly when they are relevant.
     'PINNED_DOCS=',
-    'INDEX_DOCS=flux-facts.md,flux-howto.md',
+    // The API reference has its own tier (see TIER_WEIGHTS in the docsbot).
+    'INDEX_DOCS=flux-facts.md,flux-howto.md,flux-api-reference.md:reference',
     // Fewer, because prefill dominates. Six chunks is ~1,800 tokens; on the
     // slowest node measured that is 25 seconds before a word is generated.
     'TOP_K=3',

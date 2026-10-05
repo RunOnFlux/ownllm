@@ -96,8 +96,10 @@ function cacheLookup(question, qvec) {
 // what llama.cpp's KV cache can actually reuse - retrieved chunks differ per
 // question and can never be cached, but the instruction plus core facts can.
 const PINNED = (process.env.PINNED_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
-// Documents shipped with the image and embedded at boot (see indexExtraDocs).
-const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).filter(Boolean);
+// Documents shipped with the image and embedded at boot (see indexExtraDocs),
+// as "file" (facts tier) or "file:tier", e.g. flux-api-reference.md:reference.
+const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).filter(Boolean)
+  .map((entry) => { const [name, tier = 'facts'] = entry.split(':'); return { name, tier }; });
 
 /**
  * Retrieval weight per corpus tier.
@@ -111,9 +113,12 @@ const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).
  * These multiply the final hybrid score, so a whitepaper passage still wins
  * when nothing more specific matches, but a documentation page beats it on
  * anything close. Facts generated from source rank highest: they cannot drift.
+ * The API reference (generated from the OpenAPI spec) sits just below them:
+ * at facts it outranked the guides on questions that only brushed against an
+ * endpoint, at docs it lost "which endpoint lists running apps" to them.
  */
 const TIER_WEIGHTS = {
-  facts: 1.35, docs: 1.2, academy: 1.1, product: 1.05,
+  facts: 1.35, reference: 1.3, docs: 1.2, academy: 1.1, product: 1.05,
   'product-repo': 1.0, enterprise: 0.95, website: 0.85, whitepaper: 0.8, blog: 0.7,
 };
 const weightOf = tier => TIER_WEIGHTS[tier] ?? 1.0;
@@ -254,7 +259,7 @@ function loadChunks() {
     // (Filtering here changed the count 26,879 -> 26,871, failed the vector
     // file's count check, and sent twenty fresh instances into a two-hour
     // re-embed.)
-    const pinnedNames = new Set([...PINNED, ...INDEX_DOCS].map(p => p.split('/').pop()));
+    const pinnedNames = new Set([...PINNED, ...INDEX_DOCS.map(d => d.name)].map(p => p.split('/').pop()));
     return fs.readFileSync(corpus, 'utf8').split('\n').filter(Boolean).map((l) => {
       const c = JSON.parse(l);
       c.url = siteUrl(c.url);
@@ -312,13 +317,13 @@ function loadVectors(corpusPath, count) {
 /**
  * Hand-written documents that ship with the image but are not in the corpus
  * (the how-to sheet). They are embedded at boot - a handful of chunks, a few
- * seconds - and indexed at the facts tier, so for "how do I deploy" they are
+ * seconds - and indexed at the facts tier (or the one INDEX_DOCS names), so for "how do I deploy" they are
  * retrieved as [1] and cited, instead of competing from the pinned prefix
  * with whatever chunk scored highest. A heading may carry the page to cite
  * in angle brackets: "## Deploy an app <https://docs.runonflux.com/...>".
  */
 async function indexExtraDocs() {
-  for (const name of INDEX_DOCS) {
+  for (const { name, tier } of INDEX_DOCS) {
     const file = path.join(DOCS_DIR, name);
     if (!fs.existsSync(file)) { console.log(`INDEX_DOCS: ${name} not found, skipped`); continue; }
     const text = fs.readFileSync(file, 'utf8');
@@ -326,14 +331,18 @@ async function indexExtraDocs() {
     const chunks = sections.map((sec) => {
       const first = sec.split('\n')[0];
       const m = /^## (.*?)\s*(?:<(https?:[^>]+)>)?\s*$/.exec(first);
-      return { source: `RunOnFlux/ownllm/images/docsbot/docs/${name}`, heading: m ? m[1] : first.slice(3), url: m && m[2] ? m[2] : undefined, tier: 'facts', text: sec.replace(/^## .*\n/, `${m ? m[1] : ''}\n`) };
+      return { source: `RunOnFlux/ownllm/images/docsbot/docs/${name}`, heading: m ? m[1] : first.slice(3), url: m && m[2] ? m[2] : undefined, tier, text: sec.replace(/^## .*\n/, `${m ? m[1] : ''}\n`) };
     });
-    const vecs = await embedBatch(chunks, 0);
+    // In batches like the corpus: the API reference sheet is ~560 sections,
+    // and one request that size can outlast the embed timeout on a CPU node.
+    const BATCH = Number(process.env.EMBED_BATCH || 96);
+    const vecs = [];
+    for (let i = 0; i < chunks.length; i += BATCH) vecs.push(...await embedBatch(chunks.slice(i, i + BATCH), i));
     chunks.forEach((c, j) => {
       const v = Float32Array.from(vecs[j]);
       index.push({ ...c, vec: v, mag: norm(v), tf: termFreq(c.text), len: countTokens(c.text) });
     });
-    console.log(`indexed ${chunks.length} sections of ${name} at the facts tier`);
+    console.log(`indexed ${chunks.length} sections of ${name} at the ${tier} tier`);
   }
 }
 

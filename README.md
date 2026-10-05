@@ -627,6 +627,27 @@ sheet says so directly, turning a calculation they get wrong into a lookup they
 get right. Its worked pricing example was checked against the live API and
 matches to the cent.
 
+### The FluxOS API reference
+
+`images/docsbot/docs/flux-api-reference.md` is the FluxOS API reference, one
+section per endpoint plus the reference's own introduction, generated from the
+OpenAPI spec by the docs site's build
+([fluxdocs](https://github.com/RunOnFlux/fluxdocs): `npm run build` writes
+`dist/fluxapi.md`). Every section cites its page on docs.runonflux.io.
+
+It is not in the corpus. `INDEX_DOCS` lists it as
+`flux-api-reference.md:reference`, so it is embedded at boot (in batches of
+`EMBED_BATCH`) and ranked at its own tier, below the facts sheets and above the
+documentation. Refreshing it after a FluxOS release is a copy of the new
+`dist/fluxapi.md`, a `VERSION` bump and a redeploy; the corpus vectors are not
+touched.
+
+Before it, *"which endpoint lists the apps running on a node"* retrieved game
+server guides and *"how do I get a zelidauth header"* was answered "not
+covered". With it, 9 of 10 API questions retrieve the right section first and
+all 10 within the top 3 (none did before), and `tools/eval-retrieval.js` went
+from 9/10 to 10/10 (mean rank 1.56 to 1.50).
+
 ### Retrieval is weighted by tier
 
 The whitepaper is 227,000 words against 232,000 for all documentation combined -
@@ -639,6 +660,7 @@ Each tier therefore multiplies the hybrid score:
 | tier | weight | |
 |---|---|---|
 | `facts` | 1.35 | generated from source, cannot drift |
+| `reference` | 1.30 | FluxOS API reference, generated from the OpenAPI spec |
 | `docs` | 1.20 | current documentation |
 | `academy` | 1.10 | long-form articles |
 | `product` | 1.05 | deploy UI, product pages |
