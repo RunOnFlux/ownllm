@@ -112,8 +112,10 @@ usually completes within seconds; there is no waiting period.
 ## Claiming parallel assets <https://docs.runonflux.com/fluxnodes/claim-parallel-assets>
 
 Parallel assets are node rewards paid on other chains through Parallel Mining.
-Ten are active: Kadena, Ethereum, BNB Smart Chain, Tron, Solana, Avalanche,
-Ergo, Algorand, Polygon and Base.
+Nine are active: Kadena, Ethereum, BNB Smart Chain, Tron, Solana, Avalanche,
+Algorand, Polygon and Base. **FLUX on Ergo is no longer active** (see "FLUX on
+Ergo is shut down" below); unclaimed Ergo rewards are claimable on the Flux main
+chain.
 
 - In **Zelcore**: Apps, then **Fusion**, three-dot menu, **Parallel Mining
   Claim**, pick the asset and the mining address, then Claim.
@@ -123,6 +125,28 @@ Ergo, Algorand, Polygon and Base.
   the claimable balance is below the fee; it is not a bug. Claiming monthly or
   quarterly is recommended.
 - Rewards for newly added assets are claimable retroactively.
+
+## FLUX on Ergo is shut down <https://ergo.runonflux.com>
+
+FLUX on Ergo is **no longer an active parallel asset**. After 21 September 2026,
+when Ergo's storage-rent rule (a box left unmoved for four years can be claimed
+by anyone) put FLUX held on Ergo at risk, Flux ended FLUX on Ergo. Nothing is
+lost for holders:
+
+- Every FLUX on Ergo balance is honoured **1:1 through Fusion**, from a snapshot
+  at **Ergo block 1,878,291** (21 September 2026).
+- Unclaimed snapshot balances and unclaimed Ergo mining rewards **remain
+  claimable on the Flux main chain**. No action is needed to keep them.
+- Claims are made **inside Fusion only**. Any other site presenting itself as a
+  Flux–Ergo claim portal is a scam.
+- FLUX on Ergo acquired after **21 September 2026, 22:54:55 UTC** carries no
+  claim: do not buy FLUX on Ergo.
+- Check a snapshot balance, and whether boxes on Ergo are safe, at
+  **ergo.runonflux.com**. The full account:
+  https://runonflux.com/four-years-eighteen-minutes-ergo-storage-rent/
+
+There is no Ergo bridge or Ergo parallel-asset claim to set up any more; a
+question about bridging FLUX to Ergo is answered with the above.
 
 ## Titan node staking <https://docs.runonflux.com/fluxnodes/titan-node-staking>
 
