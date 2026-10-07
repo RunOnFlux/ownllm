@@ -18,7 +18,7 @@
         ""
       ],
       "environmentParameters": [
-        "ALLOWED_ORIGINS=docs.runonflux.com,docs.runonflux.io,runonflux.com,runonflux.io,cloud.runonflux.com,cloud.runonflux.io,home.runonflux.io,devcloud.app.runonflux.io,sspwallet.com,sspwallet.io,docs.sspwallet.io,docs.sspwallet.com,zelcore.io,docs.zelcore.io",
+        "ALLOWED_ORIGINS=docs.runonflux.com,docs.runonflux.io,runonflux.com,runonflux.io,cloud.runonflux.com,cloud.runonflux.io,home.runonflux.io,devcloud.app.runonflux.io,cloudpreview.app.runonflux.io,sspwallet.com,sspwallet.io,docs.sspwallet.io,docs.sspwallet.com,zelcore.io,docs.zelcore.io,support.runonflux.io,support.runonflux.com,runonflux.freshdesk.com,ergo.runonflux.com,fusion.runonflux.io",
         "TARGET_APP=ownllmdocs",
         "TARGET_PORT=33001",
         "FLUX_API=https://api.runonflux.io",
