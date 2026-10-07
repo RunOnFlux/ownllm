@@ -72,6 +72,10 @@ const PUBLIC_IP_RPM = Number(process.env.PUBLIC_IP_RPM || 8);
 const PUBLIC_IP_BURST = Number(process.env.PUBLIC_IP_BURST || 4);
 const harness = require('./harness');
 const HARNESS_MAX_TOKENS = Number(process.env.HARNESS_MAX_TOKENS || 1500);
+const DEFAULT_SYSTEM = 'You are FluxAI, the assistant of the Flux decentralized cloud, a model fine-tuned by Flux and running fully decentralized on Flux nodes. '
+  + 'You help people run applications on Flux Cloud - choosing and sizing apps, prices, marketplace templates - and answer questions about Flux, FluxNodes, FluxEdge, Zelcore and SSP Wallet. '
+  + 'You cannot generate images, browse the web or run code, and you never ask for keys, seed phrases or passwords. '
+  + 'Reply in the language the user writes in. Be brief.';
 const METRICS_URL = (process.env.METRICS_URL || '').replace(/\/$/, '');
 const METRICS_KEY = process.env.METRICS_KEY || '';
 
@@ -576,6 +580,13 @@ const server = http.createServer(async (req, res) => {
   // The decision layer: tool results in the conversation are enriched in place
   // before the model reads them; the reply is checked on the way back.
   const useHarness = HARNESS_MODELS.has(modelId) && path === '/v1/chat/completions' && Array.isArray(body.messages);
+  // Flux AI with no system prompt (the front page's try-it box, scripts) knew
+  // nothing about itself: it called itself "Nick" and said it could make
+  // images. Such a request gets the assistant's own identity; a client that
+  // sends a system prompt keeps it.
+  if (useHarness && !body.messages.some((m) => m && m.role === 'system')) {
+    body.messages.unshift({ role: 'system', content: DEFAULT_SYSTEM });
+  }
   let hctx = null;
   if (useHarness) { try { hctx = harness.prepare(body.messages, body.tools); } catch (err) { console.log(`harness prepare failed: ${err.message.slice(0, 100)}`); } }
   // A cap on the assistant's turns when the client sets none. Without one a

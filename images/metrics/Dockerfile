@@ -3,7 +3,7 @@
 # Node 24 for the built-in node:sqlite. No dependencies.
 FROM node:24-alpine
 WORKDIR /app
-COPY server.js /app/server.js
+COPY server.js bip39-english.json /app/
 ENV PORT=8080 DB_PATH=/data/metrics.db
 EXPOSE 8080
 CMD ["node", "/app/server.js"]

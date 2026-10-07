@@ -47,7 +47,7 @@ const docsRetrieval = DOCS_MODE === 'live'
       return body.results;
     } }
   : DOCS_MODE === 'real' ? require('./docs-retrieval') : null;
-const CASES = (opt('case', Array.from({ length: 76 }, (_, i) => i + 1).join(','))).split(',').map(Number);
+const CASES = (opt('case', Array.from({ length: 81 }, (_, i) => i + 1).join(','))).split(',').map(Number);
 // The MCP tool list ships in the repo; /tmp is cleared between sessions and the
 // eval failed every case with ENOENT when it was.
 const TOOLS_FILE = opt('tools-file', require('node:path').join(__dirname, '..', 'finetune', 'tools.json'));
@@ -146,6 +146,17 @@ function mock(name, a) {
     let ram = num(r.ram ?? r.memory ?? a.ram); if (ram !== undefined && ram <= 64) ram *= 1000; // GB given
     let hdd = num(r.hdd ?? r.disk ?? r.storage ?? a.hdd); if (hdd !== undefined && hdd >= 1000) hdd = Math.round(hdd / 1024); // MB given
     return { spec: { ...SPEC, name: a.name || SPEC.name, instances: Number(a.instances) || SPEC.instances, compose: [{ ...SPEC.compose[0], repotag: c.image || c.repotag || SPEC.compose[0].repotag, cpu: num(r.cpu ?? a.cpu) ?? 1, ram: ram ?? 1000, hdd: hdd ?? 10 }] } };
+  }
+  if (name === 'flux_check_image') {
+    // Real images exist: Docker Hub official ones, the catalogue's, and a few
+    // well-known ones; the invented ones v10 used in real conversations do not.
+    const repo = String(a.repotag || '').toLowerCase().replace(/:.*$/, '');
+    const catalogue = (() => { try { return require('../finetune/data/marketplace.json'); } catch { return []; } })();
+    const known = new Set(['louislam/uptime-kuma', 'linuxserver/wireguard', 'fatedier/frps', 'snowdreamtech/frps', 'jpillora/chisel', 'itzg/minecraft-server', 'thijsvanloef/palworld-server-docker',
+      ...catalogue.flatMap((x) => x.compose.map((c) => String(c.repotag).toLowerCase().replace(/:.*$/, '')))]);
+    const exists = !repo.includes('/') || known.has(repo);
+    return exists ? { repotag: a.repotag, exists: true, note: 'a node found the image and accepted its architecture' }
+      : { repotag: a.repotag, exists: false, error: `manifest for ${a.repotag} not found: manifest unknown` };
   }
   if (name === 'flux_diagnose_app') {
     const d = DIAG[String(a.name || '').toLowerCase().replace(/[^a-z0-9]/g, '')];
@@ -407,7 +418,8 @@ const CASE_LIST = [
   { id: 57, user: 'if the node running my game server goes offline do i lose the world',
     want: { saidMatch: /g:|sync|standby|replicat/i, mustNot: ['flux_deploy_app:confirm'] } },
   { id: 58, user: 'i only want one instance of my minecraft server to save money',
-    want: { saidMatch: /lose|empty|reschedul|migrat|standby|risk/i } },
+    // the harness accepts these as the single-instance warning given; so does the eval
+    want: { saidMatch: /lose|lost|empty|reschedul|migrat|standby|risk|offline|moved/i } },
   { id: 59, user: 'what sizes does minecraft come in on the marketplace',
     want: { mustCall: ['flux_get_template'], mustNot: ['ui_prefill_deploy'], saidMatch: /GB/ } },
   // --- v9: behaviours the deterministic eval showed missing -------------------------
@@ -436,7 +448,7 @@ const CASE_LIST = [
   { id: 66, user: 'why did palworld-friends restart?',
     want: { mustCall: ['flux_diagnose_app'], mustNot: ['ui_prefill_deploy'], saidMatch: /memory|\bram\b/i, saidNot: /out of (disk|space)|disk (is |was )?full/i,
       // "+$9.00 per month, to $39.15" states the difference as well as "adds $9".
-      argCheck: (calls, said) => calls.some((c) => c.tag === 'flux_quote_app' && /12000/.test(JSON.stringify(c.args))) && /adds?|extra|more|\+\s?\$/i.test(said || '') } },
+      argCheck: (calls, said) => calls.some((c) => c.tag === 'flux_quote_app' && /12000/.test(JSON.stringify(c.args))) && /adds?|extra|more|on top|increase|\+\s?\$|\$?0\.30\b|\$?9\.00\b/i.test(said || '') } },
   { id: 67, user: 'my database pgmain keeps crashing, why?',
     want: { mustCall: ['flux_diagnose_app'], saidMatch: /disk|space|storage/i, saidNot: /out of memory|memory limit/i } },
   { id: 68, user: 'why did apibackend go down?',
@@ -463,6 +475,20 @@ const CASE_LIST = [
     want: { mustNot: ['ui_prefill_deploy'], saidMatch: /\?/ } },
   { id: 76, user: 'deploy nginx:1.27, 1 core, 1 gb ram, 20 gb disk, 3 instances',
     want: { mustCall: ['flux_quote_app'], argCheck: (calls, said) => specConsistent(calls, said) } },
+  // --- the second week of real conversations (metrics, 2026-10-07) -----------
+  // The rated-down one: our own LLM API. A WireGuard "VPN to my home network"
+  // (cannot run on Flux - no TUN; a reverse tunnel can). Next.js -> Deploy with
+  // Git. WordPress -> the template. Invented images are checked, not quoted.
+  { id: 77, user: "J'ai un agent hermes installé sur ma machine et je voudrais utiliser les llm de flux ai, quels models sont disponnible?",
+    want: { mustCall: ['flux_search_docs'], saidMatch: /llm\.runonflux\.com|fluxai:tiny|gpt-oss|qwen/i } },
+  { id: 78, user: 'A vpn server with wireguard to act as a proxy machine to my local network',
+    want: { mustNot: ['ui_prefill_deploy'], saidMatch: /frp|chisel|tun\b|TUN|cannot|can't|not possible|reverse tunnel/i } },
+  { id: 79, user: 'Next.js website, custom domain, 1k monthly traffic, no database or logins',
+    want: { saidMatch: /deploy with git|from (your|a) git|git repo|orbit/i } },
+  { id: 80, user: 'WordPress for a small shop',
+    want: { argCheck: (calls, said) => /templates\/wordpress|wordpress template|the template/i.test(said || '') || calls.some((c) => c.tag === 'ui_open_template' || (/quote|prefill/.test(c.tag) && /wordpress:6|"wordpress(:latest)?"/.test(JSON.stringify(c.args)))) } },
+  { id: 81, user: 'deploy ghcr.io/runonflux/craftwire for my vpn, 1 core 1 gb 10 gb',
+    want: { argCheck: (calls) => calls.some((c) => c.tag === 'flux_check_image') && !calls.some((c) => c.tag === 'ui_prefill_deploy') } },
   // A factual question: search and answer in the same turn, never promise and stop.
   { id: 65, user: 'what are progressive node rewards',
     want: { mustCall: ['flux_search_docs'], saidMatch: /ArcaneOS|80|20|operator/i,

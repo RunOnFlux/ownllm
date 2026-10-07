@@ -74,9 +74,6 @@ const REDACTIONS = [
   [/\b(?:0x)?[0-9a-fA-F]{64}\b/g, '<hex-secret>'],
   [/\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}\b/g, '<jwt>'],
   [/\b(?:sk|pk|rk|ghp|gho|github_pat|glpat|xox[abp]|dckr_pat)[-_][A-Za-z0-9_-]{16,}\b/g, '<token>'],
-  // A BIP39 phrase: exactly 12/15/18/21/24 lowercase words of 3-8 letters. A
-  // longer run of short words is prose and is left alone.
-  [/\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b/g, (m) => ([12, 15, 18, 21, 24].includes(m.split(/\s+/).length) ? '<seed-phrase?>' : m)],
   [/\b([A-Z0-9_]*(?:KEY|PASS|PASSWORD|TOKEN|SECRET|PRIV|AUTH|MNEMONIC|SEED)[A-Z0-9_]*)=\S+/gi, '$1=<secret>'],
   [/"repoauth"\s*:\s*"[^"]*"/g, '"repoauth":"<secret>"'],
   [/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '<email>'],
@@ -85,12 +82,50 @@ const REDACTIONS = [
   [/\b0x[0-9a-fA-F]{40}\b/g, '<eth-address>'],
   [/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '<ip>'],
 ];
+// A seed phrase is 12 or more consecutive words from the BIP39 English list.
+// Shape alone was not enough: "a VPN on your phone is ..." - twelve short
+// lowercase words of ordinary prose - was masked as a seed phrase.
+const BIP39 = new Set((() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'bip39-english.json'), 'utf8')); } catch { return []; } })());
+function maskSeedPhrases(text) {
+  if (!BIP39.size) return text;
+  const parts = text.split(/(\s+)/);                       // words and the spaces between them
+  let run = [];                                           // indexes of consecutive BIP39 words
+  // A word keeps its surrounding punctuation (the text arrives JSON-encoded, so
+  // the first word of a message is `"content":"abandon`); only the word goes.
+  const core = (p) => (/^[a-z]+$/.test(p.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '')) ? p.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '') : '');
+  const flush = () => {
+    if (run.length >= 12) {
+      const first = run[0]; const last = run[run.length - 1];
+      const lead = parts[first].slice(0, parts[first].indexOf(core(parts[first])));
+      const tail = parts[last].slice(parts[last].lastIndexOf(core(parts[last])) + core(parts[last]).length);
+      parts[first] = `${lead}<seed-phrase>${first === last ? tail : ''}`;
+      for (const i of run.slice(1)) { parts[i] = ''; parts[i - 1] = ''; }
+      if (first !== last) parts[last] = tail;
+    }
+    run = [];
+  };
+  parts.forEach((p, i) => {
+    if (i % 2 === 1) return;                              // whitespace
+    const w = core(p);
+    if (w && BIP39.has(w)) run.push(i); else flush();
+  });
+  flush();
+  return parts.join('');
+}
 function redact(text) {
   let s = String(text ?? '');
+  s = maskSeedPhrases(s);
   for (const [re, to] of REDACTIONS) s = s.replace(re, to);
   return s;
 }
-const redactJson = (v) => redact(JSON.stringify(v ?? null));
+// Every string value masked on its own, then encoded: masking the encoded
+// JSON split words on its quotes and brackets, so a phrase that opened a
+// message ("content":"abandon ...) no longer counted as twelve words.
+const redactDeep = (v) => (typeof v === 'string' ? redact(v)
+  : Array.isArray(v) ? v.map(redactDeep)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactDeep(x)]))
+  : v);
+const redactJson = (v) => JSON.stringify(redactDeep(v ?? null));
 
 // --- helpers -----------------------------------------------------------------------------------
 function bearer(req) {

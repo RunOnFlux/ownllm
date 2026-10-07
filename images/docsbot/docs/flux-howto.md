@@ -38,3 +38,19 @@ Zelcore is a non-custodial (self-custody) multi-asset wallet from InFlux Technol
 - It holds many coins and accounts from a single seed phrase, and lets you own, trade and manage digital assets.
 - In the Flux ecosystem it signs Flux Cloud deployments, manages FluxNode collateral, claims Parallel Assets and stakes FLUX on Titan.
 - Zelcore holds no keys: a lost seed phrase cannot be recovered by anyone (see "Zelcore accounts and recovery").
+
+## Flux AI models and the LLM API <https://llm.runonflux.com>
+Flux runs its own LLM API, fully decentralized on Flux nodes, at https://llm.runonflux.com. It is OpenAI-compatible: point any OpenAI client, agent framework or tool (for example an agent that takes an OpenAI provider) at the base URL https://llm.runonflux.com/v1 with a Flux API key, and call /v1/chat/completions; GET /v1/models lists what is available. The Ollama API (/api/chat) works too.
+- Models served: fluxai:tiny (FluxAI, Flux's own fine-tuned model, best at deploying on Flux), gpt-oss:20b, qwen3:8b, gemma4:12b, granite4:tiny-h, granite4.2:3b, qwen3.5:2b, qwen3.5:0.8b and bitnet-2b-4t.
+- The front page at llm.runonflux.com has a rate-limited demo key to try it; for regular use ask the Flux team for your own key.
+- It runs on CPU nodes, so answers take seconds rather than milliseconds.
+
+## Deploy a Next.js or Node.js website <https://docs.runonflux.io/fluxcloud/deploy-with-git>
+For a Next.js, React, Vue or other Node.js site you do not need to build a Docker image: use **Deploy with Git** in Flux Cloud. Flux-Orbit builds and runs the app straight from your Git repository (Node.js, Python, Go, Rust, PHP, .NET, Java and more). Point your own domain at the app with a CNAME (Custom Domain Setup). If you already have a container image, Deploy with Docker works as well.
+
+## WordPress on Flux Cloud <https://cloud.runonflux.com/templates/wordpress>
+Use the WordPress template in Flux Cloud (cloud.runonflux.com/templates/wordpress). It deploys the official wordpress:6-apache image with a mariadb:11 database component; the site files live in /var/www/html and the database in /var/lib/mysql. Set your own database password in the form before you sign.
+
+## VPN servers (WireGuard, OpenVPN) on Flux <https://github.com/runonflux/flux/blob/master/ZelBack/src/services/dockerService.js>
+Flux apps run as containers without extra Linux capabilities and without a TUN device, so a VPN server that creates its own network interface - WireGuard, OpenVPN, Tailscale or Headscale exit nodes - cannot run on Flux. App ports do carry both TCP and UDP.
+To reach machines on your own network through Flux, run a reverse-tunnel server instead, which uses ordinary ports and needs no TUN device - for example **frp** (frps) or **chisel**: the server runs on Flux, the client runs on your home machine and connects out to it, and your local services are reachable through the Flux app's ports.

@@ -354,6 +354,9 @@ const LANGS = {
 };
 function languageOf(text) {
   const t = String(text || '');
+  // Vietnamese letters (ơ ư đ and the stacked tone marks) are not used by any
+  // other language here; the first Vietnamese users were labelled Czech.
+  if ((t.match(/[ơưđạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/gi) || []).length >= 2) return 'Vietnamese';
   if (/[\u0400-\u04FF]/.test(t)) return 'Russian';
   if (/[\u3040-\u30ff]/.test(t)) return 'Japanese';
   if (/[\u4e00-\u9fff]/.test(t)) return 'Chinese';
@@ -373,7 +376,13 @@ function languageOf(text) {
 // DashNode -> dash, Minecraft9GB -> minecraft. A person who names one should
 // get the template's exact spec and price, not a guessed image: FiroMN was
 // quoted at $1.49 on a guessed image where the template sells it at $8.99.
-const GENERIC = new Set(['node', 'server', 'the', 'and', 'game', 'games', 'slots', 'edition', 'full', 'vanilla', 'modded', 'dedicated']);
+// Words that name a kind of thing rather than one app: "our private registry"
+// was routed to a template because one app's display name starts with Private.
+const GENERIC = new Set(['node', 'nodes', 'server', 'servers', 'the', 'and', 'game', 'games', 'slots', 'edition', 'full', 'vanilla', 'modded', 'dedicated',
+  'private', 'public', 'cloud', 'network', 'chain', 'crypto', 'wallet', 'proxy', 'docker', 'site', 'website', 'store', 'shop', 'storage', 'files', 'data',
+  'coin', 'token', 'money', 'mining', 'miner', 'world', 'bridge', 'explorer', 'monitor', 'status', 'panel', 'office', 'chat', 'mail', 'social', 'media',
+  'music', 'video', 'photo', 'blog', 'forum', 'wiki', 'code', 'home', 'assistant', 'agent', 'search', 'finance', 'market', 'trade', 'swap', 'hosting',
+  'host', 'backup', 'masternode', 'validator', 'relay', 'gateway', 'database', 'cache', 'queue', 'stack', 'starter', 'basic', 'standard', 'premium', 'personal']);
 let KEYWORDS = null;
 function templateKeywords() {
   if (KEYWORDS) return KEYWORDS;
@@ -410,6 +419,10 @@ function misstated(text, spec) {
   for (const m of t.matchAll(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+instances?\b/gi)) {
     const before = t.slice(Math.max(0, m.index - 12), m.index);
     if (/per\s*$|each\s*$/i.test(before)) continue;                  // "$0.50 per instance"
+    // Advice is not a description of the quote: "three instances is the
+    // marketplace default", "I would use two instances", "if you go to 3".
+    const around = t.slice(Math.max(0, m.index - 50), m.index + m[0].length + 50);
+    if (/default|recommend|instead|would|could|consider|usually|suggest|if you|switch to|go to|upgrade|rather than|for a reason|avoid/i.test(around)) continue;
     const n = WORDNUM[m[1].toLowerCase()] ?? Number(m[1]);
     if (n !== spec.instances) bad.push(m[0]);
   }
@@ -460,10 +473,13 @@ function unsourced(text, source) {
   if (/\bdiscount/i.test(text) && !/discount/i.test(source)) bad.push('discount');
   return [...new Set(bad)];
 }
+// A sentence that carries a warning is never dropped: removing a misstated
+// figure once took the single-instance warning with it.
+const CARRIES_WARNING = /standby|lose|lost|separate|copies|warning|no backup|comes back empty/i;
 function dropSentences(text, bad) {
   if (!bad.length) return text;
   const parts = String(text).split(/(?<=[.!?])\s+/);
-  const kept = parts.filter((p) => !bad.some((b) => (b === 'discount' ? /\bdiscount/i.test(p) : p.includes(b))));
+  const kept = parts.filter((p) => CARRIES_WARNING.test(p) || !bad.some((b) => (b === 'discount' ? /\bdiscount/i.test(p) : p.includes(b))));
   return kept.length ? kept.join(' ') : text;
 }
 
@@ -478,6 +494,9 @@ const DIAG_INTENT = /\b(why (did|does|is|was|has|do)\b[^?]{0,60}\b(restart|reboo
 function prepare(messages, tools) {
   const ctx = { templates: new Map(), warnings: [], mustAsk: false, sourceText: '', userText: '', seenWarnings: new Set(),
     baseline: {}, diagnosis: null, change: null, knownApps: new Set(), quotedSpec: null, lookedUpTemplate: false,
+    checkedImages: new Set(), badImages: new Set(), allUserText: '', searchedThisTurn: false,
+    canSearch: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_search_docs'),
+    canCheckImage: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_check_image'),
     canTemplate: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_get_template'),
     canDiagnose: Array.isArray(tools) && tools.some((t) => (t.function || t).name === 'flux_diagnose_app') };
   if (!Array.isArray(messages)) return ctx;
@@ -487,7 +506,7 @@ function prepare(messages, tools) {
   let userText = ''; const source = [];
   messages.forEach((m, i) => {
     if (!m) return;
-    if (m.role === 'user') { userText = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || ''); source.push(userText); return; }
+    if (m.role === 'user') { userText = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || ''); source.push(userText); ctx.allUserText += `\n${userText}`; return; }
     if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
       for (const tc of m.tool_calls) {
         let a = tc.function && tc.function.arguments;
@@ -506,6 +525,10 @@ function prepare(messages, tools) {
       if (out !== parsed) m.content = JSON.stringify(out);
     }
     noteTemplates(out, ctx.templates);
+    if (call && call.name === 'flux_check_image' && call.args && call.args.repotag) {
+      const name = bareImage(call.args.repotag).split(':')[0];
+      if (out && (out.exists === false || out.error)) ctx.badImages.add(name); else ctx.checkedImages.add(name);
+    }
     for (const list of [out && out.yourApps, out && out.apps]) {
       if (Array.isArray(list)) for (const a of list) { const n = typeof a === 'string' ? a : a && a.name; if (n) ctx.knownApps.add(String(n)); }
     }
@@ -515,6 +538,7 @@ function prepare(messages, tools) {
       if (out.sizes) ctx.mustAsk = true;
       if (out.recommended) ctx.mustAsk = false;
       if (out.diagnosis) { ctx.diagnosis = out.diagnosis; ctx.diagApp = out; }
+      if (call && call.name === 'flux_search_docs') ctx.searchedThisTurn = true;
       if (out.recommended) ctx.recommended = out.recommended;
       if (call && call.name === 'flux_quote_app' && !out.error) { ctx.quoted = true; ctx.quotedSpec = specOf(call.args); }
       if (call && call.name === 'flux_get_template') ctx.lookedUpTemplate = true;
@@ -528,8 +552,19 @@ function prepare(messages, tools) {
   ctx.language = languageOf(userText);
   // A marketplace app named this turn and not looked up yet: its quote or
   // prefill goes to flux_get_template first (repairMessage).
-  const named = namedTemplate(userText);
-  ctx.mustTemplate = named && ctx.canTemplate && !ctx.lookedUpTemplate ? named : null;
+  const tmpl = namedTemplate(userText);
+  ctx.mustTemplate = tmpl && ctx.canTemplate && !ctx.lookedUpTemplate ? tmpl : null;
+  ctx.mustSearch = Boolean(ctx.canSearch && DOCS_FIRST.test(userText) && !ctx.searchedThisTurn);
+  const imageInText = /\b((?:[a-z0-9.-]+\.[a-z]{2,}\/)?[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._\/-]*(?::[\w.-]+)?)\b/i.exec(userText);
+  const named = imageInText && bareImage(imageInText[1]).split(':')[0];
+  // A repository URL is not an image: "https://github.com/acme/webapp" has its own answer.
+  const isUrl = imageInText && (/:\/\/$/.test(userText.slice(Math.max(0, imageInText.index - 3), imageInText.index))
+    || /^(github\.com|gitlab\.com|bitbucket\.org|codeberg\.org)\//i.test(imageInText[1]));
+  // A private registry cannot be checked without its credentials; "not found"
+  // there would contradict the right answer (repoauth, typed into the form).
+  const isPrivate = /private|our registry|internal registry|not public/i.test(userText);
+  ctx.namedImage = named && !isUrl && !isPrivate && !ctx.checkedImages.has(named) && !ctx.badImages.has(named) ? imageInText[1] : null;
+  if (ctx.mustSearch) ctx.mustTemplate = null;
   return ctx;
 }
 
@@ -537,6 +572,18 @@ function prepare(messages, tools) {
 // fix that has not been priced. v10 named the right fix and never quoted it, even
 // when told to on a retry, so the price the user needs never existed.
 function forcedCall(ctx) {
+  // A docs-first topic answered without searching: search with the person's words.
+  if (ctx && ctx.mustSearch) {
+    return { id: `harness_search_${Date.now().toString(36)}`, type: 'function',
+      function: { name: 'flux_search_docs', arguments: JSON.stringify({ query: String(ctx.userText).slice(0, 300) }) } };
+  }
+  // An image the person named and nobody has checked: check it before the
+  // model talks about it. After a docs search, v10 told a user their invented
+  // ghcr.io image "pulls fine and the architecture is right" with no check made.
+  if (ctx && ctx.namedImage && ctx.canCheckImage) {
+    return { id: `harness_image_${Date.now().toString(36)}`, type: 'function',
+      function: { name: 'flux_check_image', arguments: JSON.stringify({ repotag: ctx.namedImage }) } };
+  }
   // A template picked for the user this turn and not priced yet: quote it from
   // the template itself. v10 looped inside the quote's arguments, copying the
   // Palworld environment list until the output ran out, so the price never came.
@@ -576,12 +623,65 @@ function contextNotes(ctx) {
     ctx.change ? `change:+${ctx.change.addsUsdPerDay}/day` : null,
     ctx.language && ctx.language !== 'English' ? `language:${ctx.language}` : null,
     ctx.mustTemplate ? `template:${ctx.mustTemplate}` : null,
+    ctx.mustSearch ? 'docs-first' : null,
+    ...[...(ctx.badImages || [])].map((i) => `bad-image:${i}`),
   ].filter(Boolean);
+}
+
+// --- topics the documentation answers better than the model --------------------------------------
+// On these the model's instinct is wrong and a curated sheet is right: a
+// WireGuard "VPN to my home network" cannot run on Flux (no TUN), a Next.js
+// site wants Deploy with Git, WordPress has its template, the LLM API has its
+// own sheet. The model went straight to quoting invented images instead of
+// searching, so on these topics the documentation is searched first.
+const DOCS_FIRST = /\b(vpn|wireguard|wire guard|openvpn|tailscale|headscale|proxy (to|for|into) (my|our|a)? ?(home|local|lan)|reverse tunnel|next\.?js|nuxt|sveltekit|svelte|react (app|site)|vue (app|site)|static (site|website)|wordpress|llm|language models?|ai models?|openai[- ]compatible|api key for (flux|the) (ai|llm))\b/i;
+
+// --- images nobody has vouched for ------------------------------------------------------------------
+// The model invents images: ghcr.io/runonflux/craftwire, wireguard/wg-quick-
+// docker, runonflux/wp-nginx - quoted, and one prefilled, in the second week of
+// real conversations. An image is trusted when a template gave it, the person
+// wrote it, a node already checked it, or it is a Docker Hub official image
+// (no namespace). Anything else is checked with flux_check_image before a quote
+// or prefill uses it.
+const bareImage = (img) => String(img || '').trim().toLowerCase().replace(/:latest$/, '');
+function untrustedImages(args, ctx) {
+  const out = [];
+  for (const c of componentsOf(args || {})) {
+    const img = bareImage(c.image || c.repotag);
+    if (!img) continue;
+    const name = img.split(':')[0];
+    if (!name.includes('/')) continue;                                    // official image
+    if ([...ctx.templates.keys()].some((t) => bareImage(t).split(':')[0] === name)) continue;
+    if (ctx.allUserText.toLowerCase().includes(name)) continue;
+    if (ctx.checkedImages.has(name) || ctx.badImages.has(name)) continue;  // checked: once is enough
+    out.push(c.image || c.repotag);
+  }
+  return out;
 }
 
 // Repair the tool calls of an OpenAI-shaped assistant message in place.
 function repairMessage(msg, ctx) {
   const fixed = [];
+  if (ctx && ctx.mustSearch && msg && Array.isArray(msg.tool_calls) && msg.tool_calls.length
+    && !msg.tool_calls.some((t) => t.function.name === 'flux_search_docs')) {
+    const tc = msg.tool_calls[0];
+    fixed.push(`${tc.function.name} -> flux_search_docs`);
+    tc.function.name = 'flux_search_docs';
+    tc.function.arguments = JSON.stringify({ query: String(ctx.userText).slice(0, 300) });
+    msg.tool_calls = [tc];
+    return fixed;
+  }
+  if (ctx && ctx.canCheckImage && msg && Array.isArray(msg.tool_calls)) {
+    const tc = msg.tool_calls.find((t) => /^(flux_quote_app|ui_prefill_deploy|flux_validate_spec)$/.test(t.function.name));
+    let a = null; try { a = tc && JSON.parse(tc.function.arguments || '{}'); } catch { a = null; }
+    const unknown = a ? untrustedImages(a, ctx) : [];
+    if (tc && unknown.length && !msg.tool_calls.some((t) => t.function.name === 'flux_check_image')) {
+      fixed.push(`${tc.function.name} -> flux_check_image(${unknown[0]})`);
+      tc.function.name = 'flux_check_image';
+      tc.function.arguments = JSON.stringify({ repotag: unknown[0] });
+      msg.tool_calls = [tc];
+    }
+  }
   if (ctx && ctx.mustTemplate && msg && Array.isArray(msg.tool_calls)) {
     const tc = msg.tool_calls.find((t) => /^(flux_quote_app|ui_prefill_deploy|flux_validate_spec)$/.test(t.function.name));
     if (tc && !msg.tool_calls.some((t) => t.function.name === 'flux_get_template')) {
