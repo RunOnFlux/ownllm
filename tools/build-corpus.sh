@@ -66,6 +66,19 @@ node tools/ingest.js --out "$OUT" --append --tier website \
   --site https://zelcore.io --max-pages 220
 
 echo
+echo "### Flux Games (runonflux.com/games): guides at the docs tier, the rest as website"
+# The game pages live in their own sitemap (runonflux.com/games/sitemap.xml),
+# which the runonflux.com crawl above never reaches. Their guides are the
+# current word on game servers: in October 2026 the docs' game pages still said
+# a server is joined by its domain without the port, and the bot repeated it.
+# --delay: the site refuses a fast crawl after about 100 pages.
+GAMES_DOCS='/(guides/[^/]+|setup-guide|server-requirements|pricing|world-settings-editor)/?$'
+node tools/ingest.js --out "$OUT" --append --tier docs \
+  --site https://runonflux.com/games --include "$GAMES_DOCS" --exclude "$LANGS" --max-pages 400 --delay 1200
+node tools/ingest.js --out "$OUT" --append --tier website \
+  --site https://runonflux.com/games --exclude "$LANGS|$GAMES_DOCS" --max-pages 400 --delay 1200
+
+echo
 echo "### tier: product (deployment guidance - the highest-value pages for user questions)"
 # cloud.runonflux.com is the fluxos-frontend deploy UI, server-rendered, and its
 # sitemap covers the register flow, every marketplace app including the game

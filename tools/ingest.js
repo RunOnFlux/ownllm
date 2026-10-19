@@ -29,6 +29,10 @@ const OUT = one('--out', 'corpus.jsonl');
 const MAX_CHARS = Number(one('--chunk', 1200));
 const OVERLAP = Number(one('--overlap', 200));
 const MAX_PAGES = Number(one('--max-pages', 400));
+// Milliseconds between page fetches. runonflux.com/games served ~107 pages of a
+// fast crawl and then refused nearly every request from that address; a pause
+// between pages keeps a crawl under the site's burst limit.
+const DELAY_MS = Number(one('--delay', 0));
 // Sitemaps carry far more than you want. sspwallet.io lists 2226 URLs, which is
 // 159 pages in 14 languages: ingesting all of it would put fourteen
 // translations of every page into the corpus and wreck retrieval.
@@ -212,23 +216,36 @@ function htmlToText(html) {
     .replace(/<li[^>]*>/gi, '\n- ')
     .replace(/<\/(p|div|tr|section)>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
 // Titles carry entities too: a citation read "Get Help &amp; Technical Support".
+// React escapes an apostrophe as &#x27;, so numeric entities are decoded too
+// ("How to Join a Friend&#x27;s Palworld Server" matched no search for "friend's").
 const decodeEntities = t => t
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
   .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-  .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  .replace(/&gt;/g, '>').replace(/&quot;/g, '"');
 const titleOf = html => decodeEntities((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim());
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/** A page's HTML. "Slow down" (429, 503) is waited out twice before it counts as a failure. */
 async function fetchText(url) {
-  const res = await fetch(url, { headers: { 'User-Agent': 'ownllm-ingest' }, signal: AbortSignal.timeout(30000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+  for (let attempt = 0; ; attempt += 1) {
+    const res = await fetch(url, { headers: { 'User-Agent': 'ownllm-ingest' }, signal: AbortSignal.timeout(30000) });
+    if (res.ok) return res.text();
+    if (![429, 503].includes(res.status) || attempt >= 2) throw new Error(`HTTP ${res.status}`);
+    const wait = Number(res.headers.get('retry-after')) * 1000 || (attempt + 1) * 15000;
+    await sleep(Math.min(wait, 120000));
+  }
 }
 
 /** Follows the site's own sitemap rather than crawling blind. */
@@ -355,15 +372,19 @@ async function ingestApi(endpoint) {
     urls = urls.filter(keepUrl).slice(0, MAX_PAGES);
     if (before !== urls.length) console.log(`${site}: ${before} URLs -> ${urls.length} after filtering`);
     let ok = 0;
+    const failed = [];
     for (const url of urls) {
+      if (DELAY_MS) await sleep(DELAY_MS);
       try {
         const html = await fetchText(url);
         const before = chunks.length;
         addText(htmlToText(html), { source: titleOf(html) || url, origin: site, url, tier: TIER });
         if (chunks.length > before) ok += 1;
-      } catch { /* a dead link should not stop the crawl */ }
+      } catch (err) { failed.push(`${url} (${err.message})`); /* a dead link should not stop the crawl */ }
     }
-    console.log(`${site}: ${ok}/${urls.length} pages`);
+    // Pages that could not be read are named: a silent 111/300 looked like thin
+    // pages when it was a refused crawl.
+    console.log(`${site}: ${ok}/${urls.length} pages${failed.length ? `, ${failed.length} not read, e.g. ${failed.slice(0, 3).join('; ')}` : ''}`);
   }
 
   // Marketing sites repeat their nav, footer and calls-to-action on every
