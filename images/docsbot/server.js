@@ -606,7 +606,10 @@ function buildPrompt(question, hits, live, history = []) {
     + (live ? `LIVE NETWORK STATUS (accurate as of now, prefer this over the documentation for current figures):\n${live}\n\n` : '')
     + (pinnedBlock ? `CORE DOCUMENTATION:\n${pinnedBlock}\n\n` : '')
     + `RETRIEVED DOCUMENTATION:\n${ctx}\n\n`
-    + (history.length ? `CONVERSATION SO FAR (for context; the QUESTION below may refer to it):\n${history.map(t => `User: ${t.q}\nAssistant: ${t.a}`).join('\n')}\n\n` : '')
+    // An earlier answer is context, not a source. Shown its own wrong answer
+    // ("set Russia as a Forbidden location") and told "i mean exclude all other
+    // countries other than russia?", the model repeated it word for word.
+    + (history.length ? `CONVERSATION SO FAR (for context; the QUESTION below may refer to it. An earlier answer may be wrong: answer from the DOCUMENTATION, and when the user corrects or clarifies, do not repeat the earlier answer unless the documentation supports it):\n${history.map(t => `User: ${t.q}\nAssistant: ${t.a}`).join('\n')}\n\n` : '')
     + `QUESTION: ${question}\n\nANSWER:`;
 }
 

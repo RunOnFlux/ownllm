@@ -17,6 +17,12 @@ You do NOT need to run a FluxNode to deploy an application.
 3. For an update: edit the fields, decide whether the **Renewal** toggle should also add time (on by default), review the quote, sign with your Flux ID and pay. An update is priced on the difference for the remaining period, so a same-size update costs little.
 4. To redeploy the same specification with the latest image (no spec change), use the **Control** tab (Manage App → Control) and choose **Soft Reinstall** (pulls the latest image, keeps persistent data) or **Restart Application** on the selected instance. **Hard Reinstall** wipes the app's data.
 
+## Deploy an app only in one country, or keep it out of one (Geolocation) <https://docs.runonflux.com/fluxcloud/register-new-app/deploy-with-docker/geolocation>
+Yes, an app can be limited to one country (only in Russia, only in Germany, only in the USA) or to one continent. In Register New App open the **Geolocation** tab. It has two lists that do opposite things:
+- **Allowed Locations** means ONLY HERE. Add the one country, continent or region the app may run in, and every other location is excluded automatically. "Only in Russia" and "exclude all countries except Russia" both mean: add Russia under Allowed Locations (Russia is listed under Europe).
+- **Forbidden Locations** means NEVER HERE. The app runs everywhere except the locations listed, so a country added here is a country the app will not run in. Forbidden never keeps an app inside a country.
+For an app that is already running, change the lists with an update (Manage → Subscription → Update). With no entries the app can run anywhere. A location in both lists is forbidden. The allowed locations must hold at least as many nodes as the app has instances, or registration is refused.
+
 ## Run a FluxNode <https://docs.runonflux.com/fluxnodes/what-are-fluxnodes>
 Tiers (collateral / minimum hardware): Cumulus 1,000 FLUX, 2 cores/4 threads, 8 GB RAM, 220 GB SSD; Nimbus 12,500 FLUX, 4 cores/8 threads, 32 GB RAM, 440 GB SSD; Stratus 40,000 FLUX, 8 cores/16 threads, 64 GB RAM, 880 GB SSD. All need a public IP, 25/50/100 Mbit/s and ~97% uptime. Steps: lock the collateral in a wallet you control (Zelcore or SSP), install FluxOS on the server (ArcaneOS is the current recommended installation), start the node from the wallet. Smaller stakes can join through Titan Node staking (minimum 50 FLUX); managed-service providers run the server for you while you keep custody.
 
