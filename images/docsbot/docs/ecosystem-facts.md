@@ -249,3 +249,79 @@ in the documentation.
 The Flux AI product is at **ai.runonflux.com**. The site fluxai.io is not a
 Flux / InFlux Technologies property. SSP Wallet's domains are sspwallet.io and
 sspwallet.com; there is no sspwallet.online.
+
+## The Flux whitepaper <https://whitepaper.app.runonflux.io/>
+
+The Flux whitepaper is **"Flux v9: A Decentralized Cloud for Autonomous
+Compute"** by Tadeas Kmenta. The current version is **1.0.1** (October 25,
+2026); 1.0 was published on 2026-09-07. Read it at whitepaper.app.runonflux.io:
+the full paper is /full, the short paper /short, both together at the root.
+
+1.0.1 corrects the 1.0 text: factual errors, contradictions between sections,
+figures that did not match their sources, planned work that read as shipped,
+and who operates which service and holds which keys. No section was added or
+removed. The paper tags every claim, so a reader can tell running code
+(shipped) from work in progress, planned work and long-term vision.
+
+## Is FluxEdge decentralized? <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+No. Per the whitepaper (1.0.1), FluxCloud and FluxEdge are **two separate
+products on two separate sets of machines**. FluxCloud applications run on
+collateralised FluxNodes orchestrated peer-to-peer by FluxOS. **FluxEdge is a
+centralized service** that rents machines which **lock no FLUX collateral, are
+not FluxNodes** and are not part of the FluxNode network. FluxAI's GPU inference
+is a tenant of FluxEdge and other providers.
+
+The plan, in order, and none of it shipped yet:
+
+1. One FluxCloud interface offering both decentralized FluxCloud compute and
+   FluxEdge GPU compute, with GPU rentals still served by FluxEdge's centralized
+   backend. This interface is in development.
+2. Then a merge of the two systems themselves; its design is not yet worked out.
+3. Long term, one decentralized network running all kinds of applications.
+
+## Dev fund and emergency block keys <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+- The **dev-fund address is a 2-of-4 multisignature** held by four named
+  individuals: Tadeas Kmenta, Valter Silva, Daniel Keller and Jeremy Anderson.
+  Key custody is personal. Every spend from it reveals the redeem script on chain.
+- **Emergency blocks**: a hardcoded set of 4 public keys can produce a block
+  outside the normal Proof of Node path with a **2-of-4 multisignature**, on
+  mainnet and testnet alike. There is no time or stall-detection gating, and the
+  threshold stays at 2-of-4. The remainder output of such a block's coinbase
+  defaults to the dev-fund address, as in every block.
+- The bridge uses a 3-of-4 configuration.
+
+## Block reward after Proof of Node <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+Since block height **2,020,000**, when Proof of Node replaced proof-of-work, the
+block reward is a fixed initial amount that **decays by a constant fraction once
+a year**. The reduction interval is **1,051,200 blocks** (365 x 24 x 60 x 2: one
+year at the 30-second block spacing). The team's public statement: block
+rewards reduce 10% a year for twenty years and then continue at a small fixed
+amount indefinitely. Before height 2,020,000 the schedule was a Bitcoin-style
+halving curve.
+
+## Application specification v9 has not shipped <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+Spec v9 is **in development**; it has not shipped and has not activated, and no
+enforcement height exists in the shipped FluxOS configuration. The plan is to
+activate it in Q4 2026 and migrate existing applications in the same quarter.
+Applications today use spec v8.
+
+## Services InFlux runs centrally <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+Some Flux services are not run by node operators. `appsmonitor`, operated
+centrally by InFlux, tracks application expiry, sends renewal notifications and
+is the only automatic renewal that exists. `fluxstorage` is a single-instance
+service that holds oversized environment variables and commands. The release
+API and the auto-renewal service are private repositories.
+
+## CPU inference on FluxCloud: llm.runonflux.com <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+`llm.runonflux.com` is an OpenAI-compatible endpoint, gated by API keys, that
+routes each request to pools of ordinary FluxCloud applications running Ollama
+on FluxNodes; no pool requests a GPU. On 2026-10-25 it listed nine models served
+by six pools of 140 instances. One is the team's own model, **fluxai:tiny**, a
+LoRA fine-tune of IBM's Granite 4. The same endpoint serves the documentation
+assistant ("Ask Flux AI" on Flux websites) and the FluxCloud deployment assistant.

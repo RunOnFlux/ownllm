@@ -122,6 +122,18 @@ const TIER_WEIGHTS = {
   'product-repo': 1.0, enterprise: 0.95, website: 0.85, whitepaper: 0.8, blog: 0.7,
 };
 const weightOf = tier => TIER_WEIGHTS[tier] ?? 1.0;
+/**
+ * The whitepaper's 0.8 weight keeps it from winning how-to questions, but it
+ * also kept it out of every answer: on 14 questions only the whitepaper
+ * answers (the dev-fund multisignature, the reward schedule, whether FluxEdge
+ * is decentralized, spec v9's status) it reached the top 3 for none of them,
+ * against ~29,000 chunks weighted 1.2-1.35. So when no whitepaper passage made
+ * the cut, the best one is added as one extra result if, before tier weights,
+ * it matches the question at least WHITEPAPER_SLOT times as well as the last
+ * result that did. Measured: 0/14 -> 10/14 whitepaper answers, how-to answers
+ * unchanged (8/8 still led by the docs). 0 turns it off.
+ */
+const WHITEPAPER_SLOT = Number(process.env.WHITEPAPER_SLOT ?? 1.0);
 const CHUNK_CHARS = Number(process.env.CHUNK_CHARS || 1200);
 const CHUNK_OVERLAP = Number(process.env.CHUNK_OVERLAP || 200);
 
@@ -510,13 +522,18 @@ function retrieve(queryVec, question) {
   // scores drown the embeddings entirely.
   const maxKw = Math.max(1e-9, ...scored.map(s => s.kw));
   const maxVec = Math.max(1e-9, ...scored.map(s => s.vec));
-  return scored
-    .map(s => ({
-      ...s.c,
-      score: (0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw)) * weightOf(s.c.tier),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, TOP_K);
+  const ranked = scored
+    .map(s => {
+      const raw = 0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw);
+      return { ...s.c, raw, score: raw * weightOf(s.c.tier) };
+    })
+    .sort((a, b) => b.score - a.score);
+  const top = ranked.slice(0, TOP_K);
+  if (WHITEPAPER_SLOT > 0 && top.length && !top.some(h => h.tier === 'whitepaper')) {
+    const wp = ranked.find(h => h.tier === 'whitepaper');
+    if (wp && wp.raw >= WHITEPAPER_SLOT * top[top.length - 1].raw) top.push({ ...wp, slot: true });
+  }
+  return top;
 }
 
 /**
@@ -793,7 +810,9 @@ http.createServer(async (req, res) => {
       if (limitByIp && rateLimited(ip)) return send(429, { error: `rate limit: ${RATE_PER_MIN} questions per minute` });
       const k = Math.min(5, Math.max(1, Number(body.k) || 3));
       const [qvec] = await embed([query]);
-      const hits = retrieve(qvec, query).slice(0, k);
+      // The whitepaper slot rides on top of k rather than displacing a result.
+      const all = retrieve(qvec, query);
+      const hits = [...all.filter(h => !h.slot).slice(0, k), ...all.filter(h => h.slot)];
       return send(200, { results: hits.map((h, i) => ({
         n: i + 1, title: h.heading || h.source, text: String(h.text || '').replace(/\s+/g, ' ').slice(0, 700), url: h.url || undefined,
         tier: h.tier || undefined, source: h.source || undefined,

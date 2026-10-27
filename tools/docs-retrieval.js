@@ -22,7 +22,7 @@ const CORPUS = process.env.DOCS_CORPUS || path.join(DOCS, 'corpus.jsonl');
 const ENGINE = process.env.EMBED_ENGINE || 'http://localhost:11434';
 const EMBED_MODEL = 'granite-embedding:278m';
 const TOP_K = 3;
-const TIER_WEIGHTS = { facts: 1.35, docs: 1.2, academy: 1.1, product: 1.05, 'product-repo': 1.0, enterprise: 0.95, website: 0.85, whitepaper: 0.8, blog: 0.7 };
+const TIER_WEIGHTS = { facts: 1.35, reference: 1.3, docs: 1.2, academy: 1.1, product: 1.05, 'product-repo': 1.0, enterprise: 0.95, website: 0.85, whitepaper: 0.8, blog: 0.7 };
 const weightOf = (t) => TIER_WEIGHTS[t] ?? 1.0;
 const tokenize = (t) => (String(t).toLowerCase().match(/[a-z0-9_.:-]{2,}/g) || []);
 
@@ -76,14 +76,20 @@ async function search(query, k = TOP_K) {
   const maxKw = Math.max(1e-9, ...scored.map((s) => s.kw));
   const maxVec = Math.max(1e-9, ...scored.map((s) => s.vec));
   const ranked = scored
-    .map((s) => ({ c: s.c, score: (0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw)) * weightOf(s.c.tier) }))
+    .map((s) => { const raw = 0.6 * (s.vec / maxVec) + 0.4 * (s.kw / maxKw); return { c: s.c, raw, score: raw * weightOf(s.c.tier) }; })
     .sort((a, b) => b.score - a.score);
-  const out = []; const seen = new Set();
-  for (const { c, score } of ranked) {
+  const out = []; const seen = new Set(); let lastRaw = 0;
+  for (const { c, raw, score } of ranked) {
     const sig = c.text.slice(0, 80);
     if (seen.has(sig)) continue; seen.add(sig);
-    out.push({ n: out.length + 1, title: c.heading, text: c.text.replace(/\s+/g, ' ').slice(0, 700), url: c.url, score: +score.toFixed(3) });
+    out.push({ n: out.length + 1, title: c.heading, text: c.text.replace(/\s+/g, ' ').slice(0, 700), url: c.url, tier: c.tier, score: +score.toFixed(3) });
+    lastRaw = raw;
     if (out.length >= k) break;
+  }
+  // The docs bot's whitepaper slot (images/docsbot/server.js WHITEPAPER_SLOT).
+  if (!out.some((h) => h.tier === 'whitepaper')) {
+    const wp = ranked.find((r) => r.c.tier === 'whitepaper');
+    if (wp && wp.raw >= lastRaw) out.push({ n: out.length + 1, title: wp.c.heading, text: wp.c.text.replace(/\s+/g, ' ').slice(0, 700), url: wp.c.url, tier: 'whitepaper', score: +wp.score.toFixed(3) });
   }
   cache.set(key, out);
   return out;

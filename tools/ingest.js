@@ -45,6 +45,7 @@ const EXCLUDE = one('--exclude', null) ? new RegExp(one('--exclude', null)) : nu
  * worse than one that has never heard of it.
  */
 const TIER = one('--tier', 'docs');
+const PDF_BASE = one('--pdf-base', '');
 
 const keepUrl = u => (!INCLUDE || INCLUDE.test(u)) && (!EXCLUDE || !EXCLUDE.test(u));
 
@@ -340,7 +341,10 @@ async function ingestApi(endpoint) {
     try {
       const raw = execFileSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8', maxBuffer: 64e6 });
       const text = cleanPdfText(raw);
-      addText(text, { source: path.basename(pdf), origin: 'pdf', url: '', tier: TIER });
+      // --pdf-base gives the chunks a link to where the PDF is published, so a
+      // citation leads somewhere; without it they had none.
+      const url = PDF_BASE ? `${PDF_BASE.replace(/\/$/, '')}/${path.basename(pdf)}` : '';
+      addText(text, { source: path.basename(pdf), origin: 'pdf', url, tier: TIER });
       console.log(`${pdf}: ${text.length} chars`);
     } catch (err) {
       console.log(`SKIPPED ${pdf}: ${/ENOENT/.test(err.message) ? 'pdftotext not installed (brew install poppler)' : err.message}`);

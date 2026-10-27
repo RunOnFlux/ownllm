@@ -51,9 +51,14 @@ node tools/ingest.js --out "$OUT" --append --tier docs \
 echo
 echo "### tier: whitepaper"
 # The PDFs, not the repo's markdown: repos/ under it is vendored source.
+# fluxwhitepaper-public is the published paper (whitepaper.app.runonflux.io);
+# the private fluxwhitepaper repo stopped at 1.0 when 1.0.1 shipped there.
+WP="$R/fluxwhitepaper-public"
+git -C "$WP" pull -q --ff-only || echo "  could not update $WP - using it as it is"
 node tools/ingest.js --out "$OUT" --append --tier whitepaper \
-  --pdf "$R/fluxwhitepaper/FluxWhitepaper.pdf" \
-  --pdf "$R/fluxwhitepaper/FluxWhitepaper-Short.pdf"
+  --pdf-base https://whitepaper.app.runonflux.io \
+  --pdf "$WP/FluxWhitepaper.pdf" \
+  --pdf "$WP/FluxWhitepaper-Short.pdf"
 
 echo
 echo "### tier: website (product pages, marketing tone but current)"
