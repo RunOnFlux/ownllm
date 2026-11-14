@@ -102,7 +102,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
 <body>
 <header><div class="wrap">
   <a class="brand" href="/"><svg width="26" height="26" viewBox="28.5 28.5 92 92" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M74.7415 38.4807C81.8512 38.5284 88.7876 40.6802 94.676 44.6648C100.564 48.6495 105.141 54.2885 107.829 60.8707C110.517 67.453 111.195 74.6837 109.779 81.6511C108.363 88.6185 104.915 95.0105 99.8709 100.021C94.8267 105.032 88.4117 108.437 81.435 109.806C74.4583 111.176 67.2323 110.449 60.6681 107.717C54.104 104.985 48.4957 100.371 44.5505 94.4563C40.6053 88.5415 38.4999 81.5908 38.4998 74.481C38.532 64.9012 42.3684 55.7265 49.165 48.9752C55.9616 42.2239 65.1617 38.4489 74.7415 38.4807Z" fill="#2656D7"/><path d="M79.0362 95.3835L74.908 97.7676L66.0398 92.6549L70.0672 90.3294L70.168 90.2707L79.0362 95.3835Z" fill="white"/><path d="M94.8832 63.1743V67.973L83.7856 61.5662L67.955 70.7087V73.5382L61.3185 69.7077L54.9352 73.3905V63.1743L74.908 51.6431L94.8832 63.1743Z" fill="white"/><path d="M94.8832 73.4332V86.2561L83.7879 92.6558H83.7739L72.6904 86.2561V73.4332L83.7879 67.0241L94.8832 73.4332Z" fill="white"/><path d="M67.6995 78.8526V86.2205L61.3162 89.908L54.9352 86.2229V78.855L61.3185 75.1698L67.6995 78.8526Z" fill="white"/></svg>Flux LLM</a>
-  <nav><a href="#models">Models</a><a href="#start">Quick start</a><a href="#try">Try it</a><a href="#keys">Keys</a><a href="#how">How it works</a><a href="https://github.com/RunOnFlux/ownllm" rel="noopener">GitHub</a></nav>
+  <nav><a href="#models">Models</a><a href="#start">Quick start</a><a href="#try">Try it</a><a href="#keys">Keys</a><a href="#fluxai">FluxAI</a><a href="#how">How it works</a><a href="https://github.com/RunOnFlux/ownllm" rel="noopener">GitHub</a></nav>
 </div></header>
 
 <div class="wrap"><div class="hero">
@@ -148,8 +148,18 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
   <h2>API keys</h2>
   <div class="grid">
     <div class="card"><h3>Demo key</h3><p>The key on this page is public and shared. It allows a modest number of requests per minute with a small burst, two at a time, and each visitor gets their own slice of it so one script cannot use it up for everyone. Good for trying models and small scripts, not for an app.</p></div>
-    <div class="card"><h3>Your own key</h3><p>Keys are issued per person or project with higher limits, and can be revoked individually. Ask in the Flux <a href="https://docs.runonflux.com/resources/socials" rel="noopener">community channels</a> or open an issue on <a href="https://github.com/RunOnFlux/ownllm/issues" rel="noopener">GitHub</a>.</p></div>
+    <div class="card"><h3>Your own key</h3><p>Keys are issued per person or project with higher limits, and can be revoked individually. To get one, <a href="https://support.runonflux.io/support/tickets/new" rel="noopener">open a support request</a>: say what you are building, which models you need and roughly how many requests a day.</p></div>
     <div class="card"><h3>Run your own</h3><p>Everything here is open source and deploys from one command. Run the same endpoint under your own Flux account with the models you choose: <a href="https://github.com/RunOnFlux/ownllm" rel="noopener">RunOnFlux/ownllm</a>.</p></div>
+  </div>
+</div></section>
+
+<section id="fluxai"><div class="wrap">
+  <h2>FluxAI, our own model</h2>
+  <p class="sub"><code>fluxai:tiny</code> is a model we fine-tuned for Flux, and it runs on Flux Cloud like everything else on this page.</p>
+  <div class="grid">
+    <div class="card"><h3>Deploys apps</h3><p>It powers the Flux AI assistant in Flux Cloud: it sizes an app, quotes it and builds the app specification, and deploys only after you agree.</p></div>
+    <div class="card"><h3>Answers from the docs</h3><p>It is the knowledge bot behind <a href="https://support.runonflux.io" rel="noopener">Flux support</a>: answers grounded in the documentation, with sources, and a plain "the docs don't say" when they don't.</p></div>
+    <div class="card"><h3>Small on purpose</h3><p>A 7B mixture-of-experts model with about 1B parameters active, trained on Flux's own conventions, so it needs a short prompt and answers quickly on CPU nodes.</p></div>
   </div>
 </div></section>
 
