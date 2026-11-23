@@ -21,7 +21,13 @@ deployments; the four routes above are the supported ones.
 
 ## How to pay for an application <https://docs.runonflux.com/fluxcloud/cost-calculator>
 
-- Methods: **Stripe** (card), **PayPal**, or **FLUX**.
+- Methods: **card** (Apple Pay and Google Pay where the device offers them) or
+  **USDC**, both in the Stripe checkout (choose US$ on the Stripe page to pay in
+  USDC), or **FLUX** from Zelcore or SSP Wallet. The same methods apply to Flux
+  Games servers and runonflux.com/apps products.
+- **PayPal is not accepted** anywhere in FluxCloud or Flux Games checkout, and
+  there is no Crypto.com Pay option for applications or game servers. Never tell
+  a customer otherwise.
 - Paying in FLUX gives a **5% discount**. It is 5%, not 10%.
 - FLUX must be sent on **FLUX mainnet**. A parallel asset on Ethereum, BNB Chain
   or another chain is not accepted for application payments.
@@ -102,8 +108,10 @@ Rewards, only block rewards.
 In Zelcore: **Apps, then FluxNodes**, select the node, click **Delete**. It
 usually completes within seconds; there is no waiting period.
 
-- **Do not refresh or leave the FluxNodes screen while it runs.** That re-locks
-  the funds and the process must be repeated.
+- Since **Zelcore 8.39.0**, deleting frees the collateral at once, and a
+  **Release** button frees it on every device. Only on older Zelcore versions:
+  do not refresh or leave the FluxNodes screen while it runs, or the funds
+  re-lock and the process must be repeated.
 - Afterwards, if the FLUX stays in the same wallet, send an amount that is **not
   equal to the collateral** (for example 999.99 rather than 1,000) to break up
   the exact output so it is not picked up as collateral again by accident.
@@ -207,14 +215,44 @@ to FluxEdge.
 SSP is a 2-of-2 multisignature wallet: the SSP Wallet browser extension holds
 one key and the SSP Key phone app holds a second; both must sign.
 
-- **Phone lost, extension still working:** install SSP Key on a new phone, choose
-  restore, start recovery from the extension, scan the QR. No seed phrase needed.
-- **Computer lost, phone still working:** the phone anchors the restore.
-- **Both lost:** restore from the two seed phrases on a trusted device.
-- There are **two separate seed phrases**, one per device. One wallet pairs with
-  exactly one SSP Key. There is no cloud backup.
+There are **two separate seed phrases**: the **wallet seed phrase** restores the
+SSP Wallet key, the **key seed phrase** restores the SSP Key. A lost device is
+restored **only from its own seed phrase**; no QR code, recovery request or
+support action can rebuild a lost key without it.
 
-Funds are not lost when one device is lost. Documentation: docs.sspwallet.io.
+- **Phone lost or broken:** install SSP Key on the new phone, choose **Restore
+  Key**, enter the **key seed phrase**, then re-sync it with SSP Wallet. The
+  addresses stay the same.
+- **Browser or computer lost:** install SSP Wallet, restore from the **wallet
+  seed phrase**, then re-sync with SSP Key.
+- **Both devices lost, both seed phrases kept:** restore both keys from their seeds.
+- **A device lost together with its seed phrase:** the funds cannot be moved;
+  only one of the two required keys is left. Nobody can recover a seed phrase.
+- **A seed phrase lost but both devices still work:** move the funds now to a
+  new, fully backed-up SSP wallet.
+
+There is no cloud backup. Documentation: https://docs.sspwallet.io
+(Troubleshooting, "Lost or Replaced a Device?").
+
+## Flux Games servers: paying, renewing and cancelling <https://runonflux.com/games>
+
+- Game servers are bought at **runonflux.com/games** and managed at
+  **runonflux.com/games/dashboard** (Renew, Backup, Location, Hardware and
+  Deployment Settings tabs). Tickets: runonflux.com/games/support.
+- Payment: card or USDC through Stripe, or FLUX (5% off). **No PayPal.**
+- Paying by card can **Renew automatically** (a Stripe subscription). To stop
+  paying but keep the server until its end date, cancel that subscription in
+  Stripe: account menu **Stripe subscriptions**, or **Manage subscription** on the
+  server's Renew tab. A one-off payment simply runs out on its end date.
+- **Cancel Server** and **Cancel Subscription** on the Renew tab both **delete the
+  server and its world** about 50 minutes after "Yes, cancel and delete"; it
+  cannot be undone. **Never suggest cancelling, deleting, re-buying or "cancel and
+  renew" to fix a problem**: a restart, a location change ("Redeploy now, keeps
+  data") or a ticket is the fix.
+- An expired server is removed and cannot be renewed; support can often restore
+  a recent automatic backup onto a new server if asked quickly.
+- The 30-day money-back guarantee covers the first paid month. Refunds are
+  decided by the team; never promise one.
 
 ## Zelcore accounts and recovery <https://zelcore.io/legacy-login-deprecated>
 

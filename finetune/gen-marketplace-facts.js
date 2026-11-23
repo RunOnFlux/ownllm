@@ -36,6 +36,8 @@ lines.push('Generated from api.marketplace.runonflux.io. Each marketplace app is
 lines.push('');
 lines.push('A containerData starting with `g:` means primary/standby: only one instance runs and the others keep a synchronised copy of that directory, which is why a game server is sold on several instances. Extra instances are standby copies of one world, not extra players.');
 lines.push('');
+lines.push('Game servers bought at runonflux.com/games (Flux Games) are a separate product with their own prices, dashboard (runonflux.com/games/dashboard) and support form; the preset prices below are FluxCloud marketplace specifications and are never the price of a Flux Games server. For Flux Games prices, link runonflux.com/games/pricing.');
+lines.push('');
 
 // Ladders first: the same app at several sizes, which is how people ask for them.
 const byImage = {};

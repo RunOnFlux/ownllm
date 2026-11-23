@@ -4,6 +4,8 @@ Generated from api.marketplace.runonflux.io. Each marketplace app is a ready-mad
 
 A containerData starting with `g:` means primary/standby: only one instance runs and the others keep a synchronised copy of that directory, which is why a game server is sold on several instances. Extra instances are standby copies of one world, not extra players.
 
+Game servers bought at runonflux.com/games (Flux Games) are a separate product with their own prices, dashboard (runonflux.com/games/dashboard) and support form; the preset prices below are FluxCloud marketplace specifications and are never the price of a Flux Games server. For Flux Games prices, link runonflux.com/games/pricing.
+
 ## Apps offered at several sizes <https://cloud.runonflux.com/marketplace>
 
 **Enshrouded** (image `jktuned/enshrouded-server:latest`, containerData `g:/opt/enshrouded/server/savegame`, 3 instances):

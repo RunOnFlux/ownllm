@@ -241,7 +241,7 @@ function mock(name, a) {
         'The marketplace offers preconfigured one-click applications across Games, NewGames, Blockchain, Productivity, Masternode, Front-end and Hosting. Minecraft Java is offered at 1, 2, 5, 9, 16, 32 and 48 GB of RAM, each on the itzg/minecraft-server image with containerData g:/data and three instances. Palworld is offered at 4, 8, 16 and 32 slots on thijsvanloef/palworld-server-docker with containerData g:/palworld/Pal/Saved.',
         'https://docs.runonflux.com/fluxcloud/marketplace'],
       [/price|cost|pay|discount|minimum/, 'Pricing and payment',
-        'Applications are priced in USD per month from cores, RAM and disk times instances, with a minimum of about $0.99. Payment is by Stripe, PayPal or FLUX; paying in FLUX applies a 5% discount, on FLUX mainnet only.',
+        'Applications are priced in USD per month from cores, RAM and disk times instances, with a minimum of about $0.99. Payment is by card or USDC through Stripe, or FLUX (no PayPal); paying in FLUX applies a 5% discount, on FLUX mainnet only.',
         'https://docs.runonflux.io/fluxcloud/pricing'],
     ];
     const hit = DOCS.find(([re]) => re.test(q));

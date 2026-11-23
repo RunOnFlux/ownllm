@@ -36,7 +36,7 @@ Flux Cloud: https://cloud.runonflux.com - docs: https://docs.runonflux.com - nod
 SSP Wallet is a true two-factor, self-custody crypto wallet, and it is fully open source.
 - **Two devices, two keys:** the SSP Wallet browser extension holds one private key and the SSP Key app on your phone holds a second one.
 - **2-of-2 multisignature:** every transaction is built in the extension and must be signed by both keys, so one stolen or lost device cannot move funds.
-- Each device has its own seed phrase; there is no cloud backup. Losing one device does not lose the funds (see "SSP Wallet: lost a device").
+- Each device has its own seed phrase; there is no cloud backup. Losing one device does not lose the funds as long as that device's own seed phrase is backed up: a lost device is restored only from its seed phrase (see "SSP Wallet: lost a device").
 - SSP Wallet can sign Flux Cloud deployments, like Zelcore and MetaMask. Documentation: docs.sspwallet.io.
 
 ## What Zelcore is <https://zelcore.io>
