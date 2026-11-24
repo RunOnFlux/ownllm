@@ -1,6 +1,6 @@
 {
   "model": "granite-embedding:278m",
   "dims": 768,
-  "count": 36601,
-  "corpusHash": "1ddf45195e06c9e2"
+  "count": 36242,
+  "corpusHash": "e208902965ef0a5c"
 }

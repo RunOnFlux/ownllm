@@ -209,6 +209,12 @@ the FluxNodes and the Flux blockchain were not affected** and keep running.
 - Do not give FluxEdge or FluxCore how-to answers (deposits, leases, installing
   FluxCore): those services no longer exist.
 
+## BeaverAI has shut down
+
+BeaverAI (beaverai.app), the AI meeting notetaker, has been **shut down**; its
+site no longer answers. Do not give BeaverAI how-to, pricing or integration
+answers: the service no longer exists.
+
 ## SSP Wallet: lost a device <https://sspwallet.io/en/academy/security/recovering-ssp-when-you-lose-your-phone>
 
 SSP is a 2-of-2 multisignature wallet: the SSP Wallet browser extension holds

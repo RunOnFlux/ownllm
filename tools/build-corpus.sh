@@ -113,14 +113,13 @@ node tools/ingest.js --out "$OUT" --append --tier product \
   --site https://cloud.runonflux.com --max-pages 120
 
 # AI products. ai.runonflux.com has 10 tutorial pages, which are the useful
-# part; beaverai.app publishes 78 blog posts. In November 2026 ai.runonflux.com
-# became a client-rendered app with an empty sitemap (one ~20-word page comes
-# back) and beaverai.app answered HTTP 530, so both contribute nothing until
-# that changes; FluxAI is still covered by fluxai-enterprise below.
+# part. In November 2026 ai.runonflux.com became a client-rendered app with an
+# empty sitemap (one ~20-word page comes back), so it contributes nothing until
+# that changes; FluxAI is still covered by fluxai-enterprise below. BeaverAI
+# (beaverai.app, fluxai-beaver, FluxAI's Beaver notetaker docs) has shut down
+# and is left out; ecosystem-facts.md says so.
 node tools/ingest.js --out "$OUT" --append --tier product \
   --site https://ai.runonflux.com --exclude '/images/' --max-pages 60
-node tools/ingest.js --out "$OUT" --append --tier product \
-  --site https://beaverai.app --max-pages 120
 
 # No sitemap on these, so only the landing page is reachable. The gap is filled
 # from their repositories below. fluxedge.ai and fluxcore.ai are gone: FluxEdge
@@ -154,10 +153,10 @@ echo "### tier: product-repo (what the thin marketing sites do not say)"
 # product answers those questions actually want. It belongs to a different
 # product with a different audience; if it needs a bot, it needs its own.
 # DOCKER_IMAGE_FILE_TREE and test logs are engineering exhaust, not documentation.
-SKIP='(ai_university|DOCKER_IMAGE_FILE_TREE|^tests/|/archive/)'
+SKIP='(ai_university|DOCKER_IMAGE_FILE_TREE|^tests/|/archive/|features/beaver/|help/beaver-notetaker)'
 # console-api (the FluxEdge console) and fluxai-fluxedge (FluxAI on FluxEdge)
 # are left out: they describe a platform that no longer runs.
-for NAME in fluxai-enterprise brimley fluxai-beaver; do
+for NAME in fluxai-enterprise brimley; do
   if [ -d "$R/$NAME/docs" ]; then
     node tools/ingest.js --out "$OUT" --append --tier product-repo --exclude "$SKIP" --dir "$R/$NAME/docs"
   elif [ -d "$R/$NAME" ]; then
