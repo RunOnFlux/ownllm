@@ -552,6 +552,41 @@ node tools/ingest.js --out images/docsbot/docs/corpus.jsonl \
 
 Then rebuild the docsbot image; the corpus ships inside it.
 
+The full build is `tools/build-corpus.sh`. Point it at an export of each
+repository's default branch (`REPOS=<dir>`), not at working copies: a docs
+checkout on a feature branch puts unreleased pages in the corpus. It writes
+beside the real files and moves them into place only when every step has
+succeeded, so a failed build leaves the shipped corpus and fact sheets intact.
+
+### Live sources: the help centre and release notes
+
+Two sources are deliberately not in the corpus, because they change weekly:
+the help centre at support.runonflux.io (articles written from what customers
+ask, checked against the code) and release notes (FluxOS, SSP Wallet and SSP
+Key from GitHub releases; Zelcore from its `changelog.md`, since its GitHub
+releases carry no notes). Every docs bot instance fetches them itself, once it
+is ready and then every 6 hours, embeds them and swaps them into the index
+(`images/docsbot/sources.js`). An article published on the help centre is
+retrievable within the refresh interval, with no rebuild or redeploy. A source
+whose fetch fails keeps its previous copy.
+
+They rank at their own tiers: `help` at 1.25, above the docs, because where an
+article and an older docs page disagree (a payment method, a menu that moved)
+the article is right; `releases` at 1.1, the academy's weight: enough to beat
+the API reference's "update to the latest version" endpoints on "what is the
+latest version", not enough to crowd how-to questions.
+
+| env | default |
+|---|---|
+| `LIVE_SOURCES` | on; `0` turns it off |
+| `SOURCES_REFRESH_MS` | 21600000 (6 hours) |
+| `HELP_CENTRE_URL` | `https://support.runonflux.io` |
+| `RELEASE_REPOS` | `FluxOS=RunOnFlux/flux,SSP Wallet=RunOnFlux/ssp-wallet,SSP Key=RunOnFlux/ssp-key` |
+| `ZELCORE_CHANGELOG` | the raw `changelog.md` on GitHub; empty skips it |
+| `RELEASES_PER_PRODUCT` | 5 |
+
+Tests: `node --test images/docsbot/sources.test.js`.
+
 **Source text is kept verbatim, never summarised.** Having a model summarise the
 corpus first is tempting and wrong: a summary is a paraphrase, so it bakes that
 model's mistakes in permanently and there is no longer anything truthful to

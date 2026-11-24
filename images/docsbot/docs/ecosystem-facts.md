@@ -186,29 +186,28 @@ part of the public specification.
 |---|---|---|
 | FluxCloud | deploy Docker applications on the CPU node network, paid per month | people renting capacity |
 | FluxNodes | operator machines hosting FluxCloud apps, backed by collateral | people supplying CPU capacity |
-| FluxEdge | rent GPUs by the hour (L40, A100, H100, RTX 4090) for training, inference, rendering | people renting GPU capacity |
-| FluxCore | desktop app that offers a machine's GPU/CPU to FluxEdge and mines when idle; no collateral | people supplying GPU capacity |
+| FluxEdge | **shut down in November 2026**; it rented GPUs by the hour | nobody: no new rentals |
+| FluxCore | **shut down with FluxEdge**; it was the agent that offered a machine's GPU to FluxEdge | providers should remove it |
 
-FluxCloud applications run on CPU nodes; there is no GPU attached. GPU work goes
-to FluxEdge.
+FluxCloud applications run on CPU nodes; there is no GPU attached. FluxEdge, the
+GPU rental service, has shut down, so Flux offers no GPU rentals today.
 
-## FluxEdge billing <https://docs.runonflux.com/fluxedge/faqs/billing-and-payments>
+## FluxEdge and FluxCore have been shut down <https://docs.runonflux.com/fluxedge-fluxcore-shutdown>
 
-- Pay-as-you-go, drawn from a prepaid balance in real time.
-- **Deposits are non-refundable and non-withdrawable.** Deposit what you plan to use.
-- Deposit by PayPal, Stripe card, FLUX or voucher; depositing FLUX earns a 5% bonus.
-- A project is a Kubernetes pod on a leased machine; you pay per machine, not per project.
-- Local storage persists only for the lease; it is lost on stop, relaunch or migration.
-- Project specs cannot be changed after deployment; logs are deleted after 10 days.
+FluxEdge and FluxCore were **shut down following a security incident on
+4 November 2026**. The FluxEdge console and the FluxCore agent service are
+offline; rentals, deployments and deposits have stopped. **FluxCloud, FluxOS,
+the FluxNodes and the Flux blockchain were not affected** and keep running.
 
-## FluxCore for providers <https://docs.runonflux.com/fluxcore/overview>
-
-- Windows 10/11 or Ubuntu 22.04 (not Ubuntu Minimal).
-- Linux install: `bash -i <(curl -s https://download.fluxcore.ai/setup.sh)`; the UI is then at `http://<local-ip>:18180`.
-- Install the NVIDIA driver and both CUDA packages **before** FluxCore, or GPU benchmarks fall back to CPU and a full reinstall is needed.
-- Providers **cannot set their own price**; it is computed from the hardware and reliability.
-- A reboot or outage during a lease stops it, lowers reliability, and forfeits **20%** of that lease's rewards; the machine has 5 minutes to return before it is removed from the cluster.
-- The Machine ID password cannot be recovered if lost; the machine must be reinstalled.
+- **Renters with a balance left:** open a ticket at support.runonflux.io from
+  the email address they signed in to FluxEdge with; the team settles it
+  directly.
+- **Providers (FluxCore):** remove the agent from their machines. Reinstalling
+  the operating system is the cleanest option; the docs page lists the commands
+  otherwise. Nothing is pushed through the old updater any more. Unpaid
+  earnings are settled through support.runonflux.io.
+- Do not give FluxEdge or FluxCore how-to answers (deposits, leases, installing
+  FluxCore): those services no longer exist.
 
 ## SSP Wallet: lost a device <https://sspwallet.io/en/academy/security/recovering-ssp-when-you-lose-your-phone>
 
@@ -302,6 +301,9 @@ removed. The paper tags every claim, so a reader can tell running code
 (shipped) from work in progress, planned work and long-term vision.
 
 ## Is FluxEdge decentralized? <https://whitepaper.app.runonflux.io/FluxWhitepaper.pdf>
+
+FluxEdge has since **shut down (November 2026)**; this is how the whitepaper
+described it while it ran.
 
 No. Per the whitepaper (1.0.1), FluxCloud and FluxEdge are **two separate
 products on two separate sets of machines**. FluxCloud applications run on

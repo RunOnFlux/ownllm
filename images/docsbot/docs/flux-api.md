@@ -2,271 +2,6 @@
 
 Every FluxOS node serves this HTTP API on port 16127 (or the node's configured API port), and https://api.runonflux.io fronts a healthy node with the same paths. Responses are JSON with status "success" or "error" and a data field. Management endpoints (control, logs, update, install, remove) need a signed session: request a loginphrase, sign it with the Flux ID (ZelID) that owns the app or node, and send it as the zelidauth header; read-only listing endpoints are public.
 
-## /daemon endpoints - the Flux daemon (blockchain node) RPC <https://api.runonflux.io/daemon>
-- GET /daemon/help/:command?, cached 1 hour
-- GET /daemon/getinfo, cached 60 seconds
-- GET /daemon/getfluxnodestatus, cached 60 seconds
-- GET /daemon/getzelnodestatus, cached 60 seconds
-- GET /daemon/listfluxnodes/:filter?, cached 30 seconds
-- GET /daemon/listzelnodes/:filter?, cached 30 seconds
-- GET /daemon/viewdeterministicfluxnodelist/:filter?, cached 30 seconds
-- GET /daemon/viewdeterministiczelnodelist/:filter?, cached 30 seconds
-- GET /daemon/getfluxnodecount, cached 30 seconds
-- GET /daemon/getzelnodecount, cached 30 seconds
-- GET /daemon/getdoslist, cached 30 seconds
-- GET /daemon/getstartlist, cached 30 seconds
-- GET /daemon/fluxnodecurrentwinner, cached 30 seconds
-- GET /daemon/getbestblockhash, cached 30 seconds
-- GET /daemon/getblock/:hashheight?/:verbosity?, cached 30 seconds
-- GET /daemon/getblockchaininfo, cached 30 seconds
-- GET /daemon/getblockcount, cached 30 seconds
-- GET /daemon/getblockdeltas/:hash?, cached 30 seconds
-- GET /daemon/getblockhashes/:high?/:low?/:noorphans?/:logicaltimes?, cached 30 seconds
-- GET /daemon/getblockhash/:index?, cached 30 seconds
-- GET /daemon/getblockheader/:hash?/:verbose?, cached 30 seconds
-- GET /daemon/getchaintips, cached 30 seconds
-- GET /daemon/getdifficulty, cached 30 seconds
-- GET /daemon/getmempoolinfo, cached 30 seconds
-- GET /daemon/getrawmempool/:verbose?, cached 30 seconds
-- GET /daemon/gettxout/:txid?/:n?/:includemempool?, cached 30 seconds
-- GET /daemon/gettxoutproof/:txids?/:blockhash?, cached 30 seconds
-- GET /daemon/gettxoutsetinfo, cached 30 seconds
-- GET /daemon/verifytxoutproof/:proof?, cached 30 seconds
-- GET /daemon/getspentinfo/:txid?/:index?, cached 30 seconds
-- GET /daemon/getblocksubsidy/:height?, cached 30 seconds
-- GET /daemon/getblocktemplate/:jsonrequestobject?, cached 30 seconds
-- GET /daemon/getlocalsolps, cached 30 seconds
-- GET /daemon/getmininginfo, cached 30 seconds
-- GET /daemon/getnetworkhashps/:blocks?/:height?, cached 30 seconds
-- GET /daemon/getnetworksolps/:blocks?/:height?, cached 30 seconds
-- GET /daemon/getconnectioncount, cached 30 seconds
-- GET /daemon/getdeprecationinfo, cached 30 seconds
-- GET /daemon/getnettotals, cached 30 seconds
-- GET /daemon/getnetworkinfo, cached 30 seconds
-- GET /daemon/getpeerinfo, cached 30 seconds
-- GET /daemon/listbanned, cached 30 seconds
-- GET /daemon/createrawtransaction/:transactions?/:addresses?/:locktime?/:expiryheight?, cached 30 seconds
-- GET /daemon/decoderawtransaction/:hexstring?, cached 30 seconds
-- GET /daemon/decodescript/:hex?, cached 30 seconds
-- GET /daemon/fundrawtransaction/:hexstring?
-- GET /daemon/getrawtransaction/:txid?/:verbose?
-- GET /daemon/sendrawtransaction/:hexstring?/:allowhighfees?
-- GET /daemon/createmultisig/:n?/:keys?, cached 30 seconds
-- GET /daemon/estimatefee/:nblocks?, cached 30 seconds
-- GET /daemon/estimatepriority/:nblocks?, cached 30 seconds
-- GET /daemon/validateaddress/:fluxaddress?, cached 30 seconds
-- GET /daemon/verifymessage/:fluxaddress?/:signature?/:message?, cached 30 seconds
-- GET /daemon/gettransaction/:txid?/:includewatchonly?, cached 30 seconds
-- GET /daemon/zvalidateaddress/:zaddr?, cached 30 seconds
-- GET /daemon/getbenchmarks, cached 30 seconds
-- GET /daemon/getbenchstatus, cached 30 seconds; handled by idService.loginPhrase
-- GET /daemon/prioritisetransaction/:txid?/:prioritydelta?/:feedelta?
-- GET /daemon/submitblock/:hexdata?/:jsonparametersobject?; handled by idService.loggedSessions
-- GET /daemon/stop; handled by fluxService.reindexDaemon
-- GET /daemon/reindex; handled by fluxService.reindexDaemon
-- GET /daemon/createfluxnodekey
-- GET /daemon/createzelnodekey
-- GET /daemon/listfluxnodeconf/:filter?
-- GET /daemon/listzelnodeconf/:filter?
-- GET /daemon/getfluxnodeoutputs
-- GET /daemon/getzelnodeoutputs
-- GET /daemon/startfluxnode/:set?/:lockwallet?/:alias?
-- GET /daemon/startzelnode/:set?/:lockwallet?/:alias?
-- GET /daemon/startdeterministicfluxnode/:alias?/:lockwallet?
-- GET /daemon/startdeterministiczelnode/:alias?/:lockwallet?
-- GET /daemon/verifychain/:checklevel?/:numblocks?
-- GET /daemon/addnode/:node?/:command?
-- GET /daemon/clearbanned
-- GET /daemon/disconnectnode/:node?
-- GET /daemon/getaddednodeinfo/:dns?/:node?
-- GET /daemon/setban/:ip?/:command?/:bantime?/:absolute?
-- GET /daemon/signrawtransaction/:hexstring?/:prevtxs?/:privatekeys?/:sighashtype?/:branchid?
-- GET /daemon/addmultisigaddress/:n?/:keysobject?
-- GET /daemon/backupwallet/:destination?
-- GET /daemon/dumpprivkey/:taddr?
-- GET /daemon/getbalance/:minconf?/:includewatchonly?
-- GET /daemon/getnewaddress
-- GET /daemon/getrawchangeaddress
-- GET /daemon/getreceivedbyaddress/:fluxaddress?/:minconf?
-- GET /daemon/getunconfirmedbalance
-- GET /daemon/getwalletinfo
-- GET /daemon/importaddress/:address?/:label?/:rescan?
-- GET /daemon/importprivkey/:fluxprivkey?/:label?/:rescan?
-- GET /daemon/importwallet/:filename?
-- GET /daemon/keypoolrefill/:newsize?
-- GET /daemon/listaddressgroupings
-- GET /daemon/listlockunspent
-- GET /daemon/listreceivedbyaddress/:minconf?/:includeempty?/:includewatchonly?
-- GET /daemon/listsinceblock/:blockhash?/:targetconfirmations?/:includewatchonly?
-- GET /daemon/listtransactions/:count?/:from?/:includewatchonly?
-- GET /daemon/listunspent/:minconf?/:maxconf?/:addresses?
-- GET /daemon/lockunspent/:unlock?/:transactions?
-- GET /daemon/rescanblockchain/:startheight?
-- GET /daemon/sendfrom/:tofluxaddress?/:amount?/:minconf?/:comment?/:commentto?
-- GET /daemon/sendmany/:amounts?/:minconf?/:comment?/:substractfeefromamount?
-- GET /daemon/sendtoaddress/:fluxaddress?/:amount?/:comment?/:commentto?/:substractfeefromamount?
-- GET /daemon/settxfee/:amount?
-- GET /daemon/signmessage/:taddr?/:message?
-- GET /daemon/zexportkey/:zaddr?
-- GET /daemon/zexportviewingkey/:zaddr?
-- GET /daemon/zgetbalance/:address?/:minconf?
-- GET /daemon/zgetmigrationstatus
-- GET /daemon/zgetnewaddress/:type?
-- GET /daemon/zgetoperationresult/:operationid?
-- GET /daemon/zgetoperationstatus/:operationid?
-- GET /daemon/zgettotalbalance/:minconf?/:includewatchonly?
-- GET /daemon/zimportkey/:zkey?/:rescan?/:startheight?
-- GET /daemon/zimportviewingkey/:vkey?/:rescan?/:startheight?
-- GET /daemon/zimportwallet/:filename?
-- GET /daemon/zlistaddresses/:includewatchonly?
-- GET /daemon/zlistoperationids
-- GET /daemon/zlistreceivedbyaddress/:address?/:minconf?
-- GET /daemon/zlistunspent/:minconf?/:maxonf?/:includewatchonly?/:addresses?
-- GET /daemon/zmergetoaddress/:fromaddresses?/:toaddress?/:fee?/:transparentlimit?/:shieldedlimit?/:memo?
-- GET /daemon/zsendmany/:fromaddress?/:amounts?/:minconf?/:fee?
-- GET /daemon/zsetmigration/:enabled?
-- GET /daemon/zshieldcoinbase/:fromaddress?/:toaddress?/:fee?/:limit?
-- GET /daemon/zcrawjoinsplit/:rawtx?/:inputs?/:outputs?/:vpubold?/:vpubnew?
-- GET /daemon/zcrawkeygen
-- GET /daemon/zcrawreceive/:zcsecretkey?/:encryptednote?
-- GET /daemon/zcsamplejoinsplit
-- GET /daemon/getaddresstxids/:address?/:start?/:end?
-- GET /daemon/getaddressbalance/:address?
-- GET /daemon/getaddressdeltas/:address?/:start?/:end?/:chaininfo?
-- GET /daemon/getaddressutxos/:address?/:chaininfo?
-- GET /daemon/getaddressmempool/:address?; handled by idService.loggedUsers
-- GET /daemon/start; handled by fluxService.startDaemon
-- GET /daemon/restart; handled by fluxService.restartDaemon
-- GET /daemon/ping
-- GET /daemon/zcbenchmark/:benchmarktype?/:samplecount?
-- GET /daemon/startbenchmark
-- GET /daemon/stopbenchmark; handled by fluxService.startBenchmark
-- POST /daemon/createrawtransaction
-- POST /daemon/decoderawtransaction
-- POST /daemon/decodescript
-- POST /daemon/fundrawtransaction
-- POST /daemon/sendrawtransaction
-- POST /daemon/createmultisig
-- POST /daemon/verifymessage
-- POST /daemon/getblockhashes
-- POST /daemon/getspentinfo
-- POST /daemon/getaddresstxids
-- POST /daemon/getaddressbalance
-- POST /daemon/getaddressdeltas
-- POST /daemon/getaddressutxos
-- POST /daemon/getaddressmempool; handled by fluxService.streamChainPreparation
-- POST /daemon/submitblock; handled by imageManager.checkDockerAccessibility
-- POST /daemon/signrawtransaction
-- POST /daemon/addmultisigaddress
-- POST /daemon/sendfrom
-- POST /daemon/sendmany
-- POST /daemon/sendtoaddress
-- POST /daemon/signmessage
-- POST /daemon/zsendmany
-- POST /daemon/zcrawjoinsplit
-- POST /daemon/zcrawreceive; handled by benchmarkService.signFluxTransactionPost
-
-## /apps endpoints - application registration, lookup, control and logs <https://api.runonflux.io/apps>
-- GET /apps/listrunningapps, cached 15 seconds; handled by appQueryService.listRunningAppsApi
-- GET /apps/heldcomponents, cached 1 second; handled by appQueryService.heldComponents
-- GET /apps/promotedfolders, cached 30 seconds; handled by appQueryService.promotedFolders
-- GET /apps/listallapps, cached 30 seconds; handled by appQueryService.listAllAppsApi
-- GET /apps/listappsimages, cached 30 seconds; handled by appQueryService.installedApps
-- GET /apps/installedapps/:appname?, cached 30 seconds; handled by appQueryService.installedApps
-- GET /apps/availableapps, cached 30 seconds; handled by registryManager.availableApps
-- GET /apps/fluxusage, cached 30 seconds; handled by resourceQueryService.fluxUsage
-- GET /apps/appsresources, cached 30 seconds; handled by resourceQueryService.appsResourcesApi
-- GET /apps/registrationinformation, cached 30 seconds; handled by registryManager.registrationInformation
-- GET /apps/temporarymessages/:hash?, cached 5 seconds
-- GET /apps/permanentmessages/:hash?/:owner?/:appname?, cached 2 minutes; handled by registryManager.getGlobalAppsSpecifications
-- GET /apps/globalappsspecifications/:hash?/:owner?/:appname?, cached 30 seconds; handled by registryManager.getGlobalAppsSpecifications
-- GET /apps/latestspecificationversion, cached 5 minutes; handled by appQueryService.getlatestApplicationSpecificationAPI
-- GET /apps/updatetolatestspecs/:appname; handled by registryManager.updateApplicationSpecificationAPI
-- GET /apps/appspecifications/:appname/:decrypt?; handled by registryManager.getApplicationSpecificationAPI
-- GET /apps/appcomponentnames/:appname?, cached 30 seconds; handled by registryManager.getApplicationComponentNamesAPI
-- GET /apps/appowner/:appname?, cached 30 seconds; handled by registryManager.getApplicationOwnerAPI
-- GET /apps/apporiginalowner/:appname?, cached 30 seconds; handled by appQueryService.getApplicationOriginalOwner
-- GET /apps/messagescount/:appowner?, cached 30 seconds; handled by appQueryService.getAppsMessagesCount
-- GET /apps/hashes, cached 30 seconds; handled by registryManager.getAppHashes
-- GET /apps/location/:appname?, cached 30 seconds; handled by registryManager.getAppsLocation
-- GET /apps/locations, cached 30 seconds; handled by registryManager.getAppsLocations
-- GET /apps/installinglocation/:appname?, cached 30 seconds; handled by registryManager.getAppInstallingLocation
-- GET /apps/installinglocations, cached 30 seconds; handled by appQueryService.getAppsInstallingLocations
-- GET /apps/installingerrorslocation/:appname?, cached 30 seconds; handled by registryManager.getAppInstallingErrorsLocation
-- GET /apps/installingerrorslocations, cached 30 seconds; handled by registryManager.getAppsInstallingErrorsLocations
-- POST /apps/calculateprice
-- POST /apps/calculatefiatandfluxprice, cached 30 seconds; handled by generalService.whitelistedRepositories
-- GET /apps/whitelistedrepositories, cached 30 seconds; handled by generalService.whitelistedRepositories
-- POST /apps/verifyappregistrationspecifications
-- POST /apps/verifyappupdatespecifications
-- POST /apps/placementfeasibility, cached 30 seconds
-- GET /apps/placementlocations, cached 30 seconds; handled by deploymentInfoService.deploymentInformation
-- GET /apps/deploymentinformation, cached 30 seconds; handled by deploymentInfoService.deploymentInformation
-- GET /apps/enterprisenodes, cached 30 seconds; handled by enterpriseNodesService.getEnterpriseNodesAPI
-- GET /apps/getappspecsusdprice, cached 30 minutes; handled by deploymentInfoService.getAppSpecsUSDPrice
-- GET /apps/tamperingevents/:appname?, cached 30 seconds; handled by appTamperingDetectionService.getEvents
-- POST /apps/appendbackuptask
-- POST /apps/appendrestoretask; handled by fileSystemManager.uploadAppsFiles
-- GET /apps/checkhashes; handled by appHashSyncService.triggerAppHashesCheckAPI
-- GET /apps/requestmessage/:hash
-- GET /apps/appstart/:appname?/:global?
-- GET /apps/appstop/:appname?/:global?
-- GET /apps/apprestart/:appname?/:global?
-- GET /apps/appkill/:appname?
-- GET /apps/apppause/:appname?/:global?
-- GET /apps/appunpause/:appname?/:global?
-- GET /apps/apptop/:appname?
-- GET /apps/applog/:appname?/:lines?
-- GET /apps/applogpolling/:appname?/:lines?/:since?
-- GET /apps/appinspect/:appname?
-- GET /apps/appstats/:appname?
-- GET /apps/appmonitor/:appname?/:range?
-- GET /apps/appchanges/:appname?
-- POST /apps/appexec
-- GET /apps/appremove/:appname?/:force?/:global?
-- GET /apps/installapplocally/:appname?
-- GET /apps/testappinstall/:appname?
-- GET /apps/createfluxnetwork; handled by registryManager.rescanGlobalAppsInformationAPI
-- GET /apps/rescanglobalappsinformation/:blockheight?/:removelastinformation?; handled by registryManager.rescanGlobalAppsInformationAPI
-- GET /apps/reindexglobalappsinformation; handled by registryManager.reindexGlobalAppsInformationAPI
-- GET /apps/reindexglobalappslocation; handled by registryManager.reindexGlobalAppsLocationAPI
-- GET /apps/redeploy/:appname?/:force?/:global?
-- GET /apps/redeploycomponent/:appname?/:component?/:force?; handled by registryManager.reconstructAppMessagesHashCollectionAPI
-- GET /apps/reconstructhashes; handled by registryManager.reconstructAppMessagesHashCollectionAPI
-- GET /apps/startmonitoring/:appname?
-- GET /apps/stopmonitoring/:appname?/:deletedata?
-- GET /apps/appmonitorstream/:appname?; handled by syncthingService.getSyncthingMetrics
-- POST /apps/checkdockerexistance; handled by imageManager.checkDockerAccessibility
-- POST /apps/appregister; handled by registryManager.registerAppGlobalyApi
-- POST /apps/appupdate
-- POST /apps/getpublickey
-- GET /apps/fluxshare/getfile/:file?/:token?; handled by fluxshareService.fluxShareDownloadFile
-- GET /apps/fluxshare/getfolder/:folder?; handled by fluxshareService.fluxShareGetFolder
-- GET /apps/fluxshare/createfolder/:folder?; handled by fluxshareService.fluxShareCreateFolder
-- POST /apps/fluxshare/uploadfile/:folder?; handled by fluxshareService.fluxShareUpload
-- GET /apps/fluxshare/removefile/:file?; handled by fluxshareService.fluxShareRemoveFile
-- GET /apps/fluxshare/removefolder/:folder?; handled by fluxshareService.fluxShareRemoveFolder
-- GET /apps/fluxshare/fileexists/:file?; handled by fluxshareService.fluxShareFileExists
-- GET /apps/fluxshare/stats; handled by fluxshareService.fluxShareStorageStats
-- GET /apps/fluxshare/sharefile/:file?; handled by fluxshareService.fluxShareShareFile
-- GET /apps/fluxshare/unsharefile/:file?; handled by fluxshareService.fluxShareUnshareFile
-- GET /apps/fluxshare/sharedfiles; handled by fluxshareService.fluxShareGetSharedFiles
-- GET /apps/fluxshare/rename/:oldpath?/:newname?; handled by fluxshareService.fluxShareRename
-- GET /apps/fluxshare/downloadfolder/:folder?; handled by fluxshareService.fluxShareDownloadFolder
-- GET /apps/fileoperationimage/:imageid; handled by fileQueryService.getAppsFolder
-- GET /apps/getfolderinfo/:appname?/:component?/:folder?; handled by fileQueryService.getAppsFolder
-- GET /apps/createfolder/:appname?/:component?/:folder?; handled by fileSystemManager.createAppsFolder
-- GET /apps/renameobject/:appname?/:component?/:oldpath?/:newname?; handled by fileSystemManager.renameAppsObject
-- GET /apps/removeobject/:appname?/:component?/:object?; handled by fileSystemManager.removeAppsObject
-- GET /apps/operations/:jobId
-- DELETE /apps/operations/:jobId
-- POST /apps/moveobject; handled by fileSystemManager.moveAppsObject
-- POST /apps/copyobject; handled by fileSystemManager.copyAppsObject
-- POST /apps/compressobject; handled by fileSystemManager.compressAppsObject
-- POST /apps/extractobject; handled by fileSystemManager.extractAppsObject
-- GET /apps/downloadfile/:appname?/:component?/:file?; handled by fileSystemManager.downloadAppsFile
-- GET /apps/downloadfolder/:appname?/:component?/:folder?, cached 30 seconds; handled by fileSystemManager.downloadAppsFolder
-
 ## /flux endpoints - this FluxOS node: version, network, peers, updates <https://api.runonflux.io/flux>
 - GET /flux/nodetier, cached 30 seconds; handled by fluxService.getNodeTier
 - GET /flux/info, cached 60 seconds; handled by fluxService.getFluxInfo
@@ -276,38 +11,40 @@ Every FluxOS node serves this HTTP API on port 16127 (or the node's configured A
 - GET /flux/ip, cached 30 seconds; handled by fluxService.getFluxIP
 - GET /flux/staticip, cached 30 seconds; handled by fluxService.isStaticIPapi
 - GET /flux/geolocation, cached 30 seconds; handled by fluxService.getFluxGeolocation
+- GET /flux/uplink, cached 60 seconds; handled by uplinkService.uplinkAPI
+- GET /flux/kernel, cached 60 seconds; handled by kernelService.kernelAPI
 - GET /flux/zelid, cached 30 seconds; handled by fluxService.getFluxZelID
 - GET /flux/id, cached 30 seconds; handled by fluxService.getFluxZelID
 - GET /flux/fluxids, cached 30 seconds; handled by fluxService.getFluxIds
 - GET /flux/pgp, cached 30 seconds; handled by fluxService.getFluxPGPidentity
 - GET /flux/kadena, cached 30 seconds; handled by fluxService.getFluxKadena
 - GET /flux/routerip, cached 1 day; handled by fluxService.getRouterIP
-- GET /flux/blockedports, cached 1 day; handled by fluxService.getBlockedPorts
 - GET /flux/apiport, cached 1 day; handled by fluxService.getAPIPort
-- GET /flux/blockedrepositories, cached 1 day; handled by fluxService.getBlockedRepositories
 - GET /flux/enterpriseappowners, cached 1 hour; handled by fluxService.getEnterpriseAppOwners
 - GET /flux/marketplaceurl, cached 1 day; handled by fluxService.getMarketplaceURL
 - GET /flux/restart, cached 30 seconds; handled by fluxService.restartFluxOS
 - GET /flux/dosstate, cached 30 seconds; handled by fluxNetworkHelper.getDOSState
+- GET /flux/health, cached 30 seconds; handled by nodeHealthService.nodeHealth
 - POST /flux/dosstate, cached 30 seconds; handled by fluxNetworkHelper.setDOSStateApi
 - GET /flux/peers/:filter?, cached 30 seconds
 - GET /flux/unstablenodes, cached 30 seconds
 - GET /flux/peerhistory, cached 5 seconds
 - GET /flux/topology, cached 5 seconds
 - GET /flux/networkhealth, cached 5 seconds
+- GET /flux/networkpaths, cached 30 seconds
 - GET /flux/connectedpeers, cached 30 seconds
 - GET /flux/connectedpeersinfo, cached 30 seconds; handled by fluxNetworkHelper.getIncomingConnections
 - GET /flux/incomingconnections, cached 30 seconds; handled by fluxNetworkHelper.getIncomingConnections
 - GET /flux/incomingconnectionsinfo, cached 30 seconds; handled by fluxNetworkHelper.getIncomingConnectionsInfo
-- GET /flux/checkfluxavailability/:ip?/:port?, cached 30 seconds; handled by fluxNetworkHelper.checkFluxAvailability
+- GET /flux/checkfluxavailability/:ip?/:port?; handled by fluxNetworkHelper.checkFluxAvailability
 - POST /flux/checkappavailability; handled by fluxNetworkHelper.checkAppAvailability
 - POST /flux/keepupnpportsopen; handled by fluxNetworkHelper.keepUPNPPortsOpen
 - POST /flux/portsinuse; handled by portManager.portsInUseApi
+- POST /flux/identity; handled by peerIdentityService.identityAnswerAPI
+- GET /flux/outboundpath; handled by outboundPathService.outboundPathAPI
 - GET /flux/adjustkadena/:account?/:chainid?; handled by fluxService.adjustKadenaAccount
 - GET /flux/adjustrouterip/:routerip?; handled by fluxService.adjustRouterIP
-- POST /flux/adjustblockedports; handled by fluxService.adjustBlockedPorts
 - GET /flux/adjustapiport/:apiport?; handled by fluxService.adjustAPIPort
-- POST /flux/adjustblockedrepositories; handled by fluxService.adjustBlockedRepositories
 - GET /flux/reindexdaemon; handled by fluxService.reindexDaemon
 - GET /flux/startbenchmark; handled by fluxService.startBenchmark
 - GET /flux/restartbenchmark; handled by fluxService.restartBenchmark
@@ -360,90 +97,206 @@ Every FluxOS node serves this HTTP API on port 16127 (or the node's configured A
 - POST /flux/streamchain; handled by fluxService.streamChain
 - POST /flux/broadcastmessage
 - POST /flux/broadcastmessagetooutgoing
-- POST /flux/broadcastmessagetoincoming; handled by syncthingService.postSystemError
+- POST /flux/broadcastmessagetoincoming
 - GET /flux/eventstream
 - GET /flux/testcounters
+- POST /flux/testcheckpoints
+- GET /flux/teststate/:name
 
-## /syncthing endpoints - app data sync <https://api.runonflux.io/syncthing>
-- GET /syncthing/meta, cached 30 seconds; handled by syncthingService.getMetaApi
-- GET /syncthing/deviceid, cached 30 seconds; handled by syncthingService.getDeviceIdApi
-- GET /syncthing/health, cached 30 seconds; handled by syncthingService.getHealthApi
-- GET /syncthing/system/browse/:current?, cached 30 seconds; handled by syncthingService.systemBrowse
-- GET /syncthing/system/connections, cached 30 seconds; handled by syncthingService.systemConnections
-- GET /syncthing/system/debug/:enable?/:disable?; handled by syncthingService.systemDebug
-- GET /syncthing/system/discovery/:device?/:addr?; handled by syncthingService.systemDiscovery
-- GET /syncthing/system/error/clear; handled by syncthingService.systemErrorClear
-- GET /syncthing/system/error/:message?; handled by syncthingService.systemError
-- GET /syncthing/system/log/:since?; handled by syncthingService.systemLog
-- GET /syncthing/system/logtxt/:since?; handled by syncthingService.systemLogTxt
-- GET /syncthing/system/paths; handled by syncthingService.systemPaths
-- GET /syncthing/system/pause/:device?, cached 30 seconds; handled by syncthingService.systemPauseApi
-- GET /syncthing/system/ping, cached 30 seconds; handled by syncthingService.systemPingApi
-- GET /syncthing/system/reset/:folder?; handled by syncthingService.systemReset
-- GET /syncthing/system/restart; handled by syncthingService.systemRestartApi
-- GET /syncthing/system/resume/:device?; handled by syncthingService.systemResumeApi
-- GET /syncthing/system/shutdown, cached 30 seconds; handled by syncthingService.systemShutdown
-- GET /syncthing/system/status, cached 30 seconds; handled by syncthingService.systemStatus
-- GET /syncthing/system/upgrade, cached 30 seconds; handled by syncthingService.systemUpgrade
-- GET /syncthing/system/version, cached 30 seconds; handled by syncthingService.systemVersionApi
-- GET /syncthing/config, cached 30 seconds; handled by syncthingService.getConfigApi
-- GET /syncthing/config/restart-required, cached 30 seconds; handled by syncthingService.getConfigRestartRequired
-- GET /syncthing/config/folders/:id?, cached 30 seconds; handled by syncthingService.getConfigFoldersApi
-- GET /syncthing/config/devices/:id?, cached 30 seconds; handled by syncthingService.getConfigDevicesApi
-- GET /syncthing/config/defaults/folder, cached 30 seconds; handled by syncthingService.getConfigDefaultsFolderApi
-- GET /syncthing/config/defaults/device, cached 30 seconds; handled by syncthingService.getConfigDefaultsDevice
-- GET /syncthing/config/defaults/ignores, cached 30 seconds; handled by syncthingService.getConfigDefaultsIgnores
-- GET /syncthing/config/options, cached 30 seconds; handled by syncthingService.getConfigOptionsApi
-- GET /syncthing/config/ldap, cached 30 seconds; handled by syncthingService.getConfigLdap
-- GET /syncthing/config/gui, cached 30 seconds; handled by syncthingService.getConfigGuiApi
-- GET /syncthing/stats/device, cached 30 seconds; handled by syncthingService.statsDevice
-- GET /syncthing/stats/folder, cached 30 seconds; handled by syncthingService.statsFolder
-- GET /syncthing/cluster/pending/devices, cached 30 seconds; handled by syncthingService.getClusterPendigDevices
-- GET /syncthing/cluster/pending/folders, cached 30 seconds; handled by syncthingService.getClusterPendigFolders
-- GET /syncthing/folder/errors/:folder?, cached 30 seconds; handled by syncthingService.getFolderErrors
-- GET /syncthing/folder/versions/:folder?, cached 30 seconds; handled by syncthingService.getFolderVersions
-- GET /syncthing/db/browse/:folder?/:levels?/:prefix?, cached 30 seconds; handled by syncthingService.getDbBrowse
-- GET /syncthing/db/completion/:folder?/:device?, cached 30 seconds; handled by syncthingService.getDbCompletionApi
-- GET /syncthing/db/file/:folder?/:file?, cached 30 seconds; handled by syncthingService.getDbFile
-- GET /syncthing/db/ignores/:folder?, cached 30 seconds; handled by syncthingService.getDbIgnores
-- GET /syncthing/db/localchanged/:folder?, cached 30 seconds; handled by syncthingService.getDbLocalchanged
-- GET /syncthing/db/need/:folder?, cached 30 seconds; handled by syncthingService.getDbNeed
-- GET /syncthing/db/remoteneed/:folder?/:device?, cached 30 seconds; handled by syncthingService.getDbRemoteNeed
-- GET /syncthing/db/status/:folder?, cached 30 seconds; handled by syncthingService.getDbStatusApi
-- GET /syncthing/events/disk; handled by syncthingService.getEventsDisk
-- GET /syncthing/events/:events?/:since?/:limit?/:timeout?; handled by syncthingService.getEventsApi
-- GET /syncthing/svc/random/string/:length?, cached 30 seconds; handled by syncthingService.getSvcRandomString
-- GET /syncthing/svc/report, cached 30 seconds; handled by syncthingService.getSvcReport
-- GET /syncthing/svc/:deviceid?, cached 30 seconds; handled by syncthingService.getSvcDeviceID
-- GET /syncthing/debug/peercompletion; handled by syncthingService.debugPeerCompletion
-- GET /syncthing/debug/httpmetrics; handled by syncthingService.debugHttpmetrics
-- GET /syncthing/debug/cpuprof; handled by syncthingService.debugCpuprof
-- GET /syncthing/debug/heapprof; handled by syncthingService.debugHeapprof
-- GET /syncthing/debug/support; handled by syncthingService.debugSupport
-- GET /syncthing/debug/file; handled by syncthingService.debugFile
-- GET /syncthing/metrics; handled by syncthingService.getSyncthingMetrics
-- GET /syncthing/metrics/health; handled by syncthingService.getSyncthingHealthSummary
-- GET /syncthing/metrics/history/:limit?; handled by syncthingService.getSyncthingMetricsHistory
-- GET /syncthing/peer/diagnostics; handled by syncthingService.getPeerSyncDiagnosticsApi
-- POST /syncthing/system/error; handled by syncthingService.postSystemError
-- POST /syncthing/system/upgrade; handled by syncthingService.postSystemUpgrade
-- POST /syncthing/config; handled by syncthingService.postConfig
-- POST /syncthing/config/folders; handled by syncthingService.postConfigFolders
-- POST /syncthing/config/devices; handled by syncthingService.postConfigDevices
-- POST /syncthing/config/defaults/folder; handled by syncthingService.postConfigDefaultsFolder
-- POST /syncthing/config/defaults/device; handled by syncthingService.postConfigDefaultsDevice
-- POST /syncthing/config/defaults/ignores; handled by syncthingService.postConfigDefaultsIgnores
-- POST /syncthing/config/options; handled by syncthingService.postConfigOptions
-- POST /syncthing/config/gui; handled by syncthingService.postConfigGui
-- POST /syncthing/config/ldap; handled by syncthingService.postConfigLdap
-- POST /syncthing/cluster/pending/devices; handled by syncthingService.postClusterPendigDevices
-- POST /syncthing/cluster/pending/folders; handled by syncthingService.postClusterPendigFolders
-- POST /syncthing/folder/versions; handled by syncthingService.postFolderVersions
-- POST /syncthing/db/ignores; handled by syncthingService.postDbIgnores
-- POST /syncthing/db/override; handled by syncthingService.postDbOverride
-- POST /syncthing/db/prio; handled by syncthingService.postDbPrio
-- POST /syncthing/db/revert; handled by syncthingService.postDbRevert
-- POST /syncthing/db/scan; handled by syncthingService.postDbScan
+## /daemon endpoints - the Flux daemon (blockchain node) RPC <https://api.runonflux.io/daemon>
+- GET /daemon/help/:command?, cached 1 hour
+- GET /daemon/getinfo, cached 60 seconds
+- GET /daemon/getfluxnodestatus, cached 60 seconds
+- GET /daemon/getzelnodestatus, cached 60 seconds
+- GET /daemon/listfluxnodes/:filter?, cached 30 seconds
+- GET /daemon/listzelnodes/:filter?, cached 30 seconds
+- GET /daemon/viewdeterministicfluxnodelist/:filter?, cached 30 seconds
+- GET /daemon/viewdeterministiczelnodelist/:filter?, cached 30 seconds
+- GET /daemon/getfluxnodecount, cached 30 seconds
+- GET /daemon/getzelnodecount, cached 30 seconds
+- GET /daemon/getdoslist, cached 30 seconds
+- GET /daemon/getstartlist, cached 30 seconds
+- GET /daemon/fluxnodecurrentwinner, cached 30 seconds
+- GET /daemon/getbestblockhash, cached 30 seconds
+- GET /daemon/getblock/:hashheight?/:verbosity?, cached 30 seconds
+- GET /daemon/getblockchaininfo, cached 30 seconds
+- GET /daemon/getblockcount, cached 30 seconds
+- GET /daemon/getblockdeltas/:hash?, cached 30 seconds
+- GET /daemon/getblockhashes/:high?/:low?/:noorphans?/:logicaltimes?, cached 30 seconds
+- GET /daemon/getblockhash/:index?, cached 30 seconds
+- GET /daemon/getblockheader/:hash?/:verbose?, cached 30 seconds
+- GET /daemon/getdifficulty, cached 30 seconds
+- GET /daemon/getmempoolinfo, cached 30 seconds
+- GET /daemon/getrawmempool/:verbose?, cached 30 seconds
+- GET /daemon/gettxout/:txid?/:n?/:includemempool?, cached 30 seconds
+- GET /daemon/gettxoutproof/:txids?/:blockhash?, cached 30 seconds
+- GET /daemon/gettxoutsetinfo, cached 30 seconds
+- GET /daemon/verifytxoutproof/:proof?, cached 30 seconds
+- GET /daemon/getspentinfo/:txid?/:index?, cached 30 seconds
+- GET /daemon/getblocksubsidy/:height?, cached 30 seconds
+- GET /daemon/getblocktemplate/:jsonrequestobject?, cached 30 seconds
+- GET /daemon/getlocalsolps, cached 30 seconds
+- GET /daemon/getmininginfo, cached 30 seconds
+- GET /daemon/getnetworkhashps/:blocks?/:height?, cached 30 seconds
+- GET /daemon/getnetworksolps/:blocks?/:height?, cached 30 seconds
+- GET /daemon/getconnectioncount, cached 30 seconds
+- GET /daemon/getdeprecationinfo, cached 30 seconds
+- GET /daemon/getnettotals, cached 30 seconds
+- GET /daemon/getnetworkinfo, cached 30 seconds
+- GET /daemon/getpeerinfo, cached 30 seconds
+- GET /daemon/listbanned, cached 30 seconds
+- GET /daemon/createrawtransaction/:transactions?/:addresses?/:locktime?/:expiryheight?, cached 30 seconds
+- GET /daemon/decoderawtransaction/:hexstring?, cached 30 seconds
+- GET /daemon/decodescript/:hex?, cached 30 seconds
+- GET /daemon/getrawtransaction/:txid?/:verbose?
+- GET /daemon/sendrawtransaction/:hexstring?/:allowhighfees?
+- GET /daemon/getaddresstxids/:address?/:start?/:end?
+- GET /daemon/getaddressbalance/:address?
+- GET /daemon/getaddressdeltas/:address?/:start?/:end?/:chaininfo?
+- GET /daemon/getaddressutxos/:address?/:chaininfo?
+- GET /daemon/getaddressmempool/:address?
+- GET /daemon/createmultisig/:n?/:keys?, cached 30 seconds
+- GET /daemon/estimatefee/:nblocks?, cached 30 seconds
+- GET /daemon/estimatepriority/:nblocks?, cached 30 seconds
+- GET /daemon/validateaddress/:fluxaddress?, cached 30 seconds
+- GET /daemon/verifymessage/:fluxaddress?/:signature?/:message?, cached 30 seconds
+- GET /daemon/zvalidateaddress/:zaddr?, cached 30 seconds
+- GET /daemon/getbenchmarks, cached 30 seconds
+- GET /daemon/getbenchstatus, cached 30 seconds; handled by idService.loginPhrase
+- GET /daemon/prioritisetransaction/:txid?/:prioritydelta?/:feedelta?
+- GET /daemon/submitblock/:hexdata?/:jsonparametersobject?; handled by idService.loggedSessions
+- GET /daemon/stop; handled by fluxService.reindexDaemon
+- GET /daemon/reindex; handled by fluxService.reindexDaemon
+- GET /daemon/createfluxnodekey
+- GET /daemon/createzelnodekey
+- GET /daemon/listfluxnodeconf/:filter?
+- GET /daemon/listzelnodeconf/:filter?
+- GET /daemon/getfluxnodeoutputs
+- GET /daemon/getzelnodeoutputs
+- GET /daemon/startfluxnode/:set?/:lockwallet?/:alias?
+- GET /daemon/startzelnode/:set?/:lockwallet?/:alias?
+- GET /daemon/startdeterministicfluxnode/:alias?/:lockwallet?
+- GET /daemon/startdeterministiczelnode/:alias?/:lockwallet?
+- GET /daemon/verifychain/:checklevel?/:numblocks?
+- GET /daemon/addnode/:node?/:command?
+- GET /daemon/clearbanned
+- GET /daemon/disconnectnode/:node?
+- GET /daemon/getaddednodeinfo/:dns?/:node?
+- GET /daemon/setban/:ip?/:command?/:bantime?/:absolute?; handled by idService.loggedUsers
+- GET /daemon/start; handled by fluxService.startDaemon
+- GET /daemon/restart; handled by fluxService.restartDaemon
+- GET /daemon/ping
+- GET /daemon/startbenchmark
+- GET /daemon/stopbenchmark; handled by fluxService.startBenchmark
+- POST /daemon/createrawtransaction
+- POST /daemon/decoderawtransaction
+- POST /daemon/decodescript
+- POST /daemon/sendrawtransaction
+- POST /daemon/createmultisig
+- POST /daemon/verifymessage
+- POST /daemon/getblockhashes
+- POST /daemon/getspentinfo
+- POST /daemon/getaddresstxids
+- POST /daemon/getaddressbalance
+- POST /daemon/getaddressdeltas
+- POST /daemon/getaddressutxos
+- POST /daemon/getaddressmempool; handled by fluxService.streamChainPreparation
+- POST /daemon/submitblock; handled by imageManager.checkDockerAccessibility
+
+## /apps endpoints - application registration, lookup, control and logs <https://api.runonflux.io/apps>
+- GET /apps/listrunningapps, cached 15 seconds; handled by appQueryService.listRunningAppsApi
+- GET /apps/heldcomponents, cached 1 second; handled by appQueryService.heldComponents
+- POST /apps/heldcomponents; handled by appQueryService.heldComponentsAnswer
+- GET /apps/promotedfolders; handled by appQueryService.promotedFolders
+- POST /apps/promotedfolders; handled by appQueryService.promotedFolderHoldings
+- POST /apps/folderrecords, cached 30 seconds; handled by appQueryService.folderRecords
+- GET /apps/listallapps, cached 30 seconds; handled by appQueryService.listAllAppsApi
+- GET /apps/listappsimages, cached 30 seconds; handled by appQueryService.installedApps
+- GET /apps/installedapps/:appname?, cached 30 seconds; handled by appQueryService.installedApps
+- GET /apps/availableapps, cached 30 seconds; handled by registryManager.availableApps
+- GET /apps/fluxusage, cached 30 seconds; handled by resourceQueryService.fluxUsage
+- GET /apps/appsresources, cached 30 seconds; handled by resourceQueryService.appsResourcesApi
+- GET /apps/registrationinformation, cached 30 seconds; handled by registryManager.registrationInformation
+- GET /apps/temporarymessages/:hash?, cached 5 seconds
+- GET /apps/permanentmessages/:hash?/:owner?/:appname?, cached 2 minutes
+- GET /apps/permanentmessagesbyheight, cached 30 seconds; handled by registryManager.getGlobalAppsSpecifications
+- GET /apps/globalappsspecifications/:hash?/:owner?/:appname?, cached 30 seconds; handled by registryManager.getGlobalAppsSpecifications
+- GET /apps/latestspecificationversion, cached 5 minutes; handled by appQueryService.getlatestApplicationSpecificationAPI
+- GET /apps/updatetolatestspecs/:appname; handled by registryManager.updateApplicationSpecificationAPI
+- GET /apps/appspecifications/:appname/:decrypt?; handled by registryManager.getApplicationSpecificationAPI
+- GET /apps/appcomponentnames/:appname?, cached 30 seconds; handled by registryManager.getApplicationComponentNamesAPI
+- GET /apps/appowner/:appname?, cached 30 seconds; handled by registryManager.getApplicationOwnerAPI
+- GET /apps/apporiginalowner/:appname?, cached 30 seconds; handled by appQueryService.getApplicationOriginalOwner
+- GET /apps/messagescount/:appowner?, cached 30 seconds; handled by appQueryService.getAppsMessagesCount
+- GET /apps/hashes, cached 30 seconds; handled by registryManager.getAppHashes
+- GET /apps/registrystatus, cached 10 seconds; handled by registryManager.getRegistryStatus
+- GET /apps/location/:appname?, cached 30 seconds; handled by registryManager.getAppsLocation
+- GET /apps/locations, cached 30 seconds; handled by registryManager.getAppsLocations
+- GET /apps/installinglocation/:appname?, cached 30 seconds; handled by registryManager.getAppInstallingLocation
+- GET /apps/installinglocations, cached 30 seconds; handled by appQueryService.getAppsInstallingLocations
+- GET /apps/installingerrorslocation/:appname?, cached 30 seconds; handled by registryManager.getAppInstallingErrorsLocation
+- GET /apps/installingerrorslocations, cached 30 seconds; handled by registryManager.getAppsInstallingErrorsLocations
+- POST /apps/calculateprice
+- POST /apps/calculatefiatandfluxprice, cached 30 seconds; handled by generalService.whitelistedRepositories
+- GET /apps/whitelistedrepositories, cached 30 seconds; handled by generalService.whitelistedRepositories
+- POST /apps/verifyappregistrationspecifications
+- POST /apps/verifyappupdatespecifications
+- POST /apps/placementfeasibility, cached 30 seconds
+- GET /apps/placementlocations, cached 30 seconds; handled by deploymentInfoService.deploymentInformation
+- GET /apps/deploymentinformation, cached 30 seconds; handled by deploymentInfoService.deploymentInformation
+- GET /apps/enterprisenodes, cached 30 seconds; handled by enterpriseNodesService.getEnterpriseNodesAPI
+- GET /apps/getappspecsusdprice, cached 30 minutes; handled by deploymentInfoService.getAppSpecsUSDPrice
+- GET /apps/tamperingevents/:appname?, cached 30 seconds; handled by appTamperingDetectionService.getEvents
+- POST /apps/appendbackuptask
+- POST /apps/appendrestoretask; handled by fileSystemManager.uploadAppsFiles
+- GET /apps/checkhashes; handled by appHashSyncService.triggerAppHashesCheckAPI
+- GET /apps/requestmessage/:hash
+- GET /apps/appstart/:appname?/:global?
+- GET /apps/appstop/:appname?/:global?
+- GET /apps/apprestart/:appname?/:global?
+- GET /apps/appkill/:appname?
+- GET /apps/apppause/:appname?/:global?
+- GET /apps/appunpause/:appname?/:global?
+- GET /apps/apptop/:appname?
+- GET /apps/applog/:appname?/:lines?
+- GET /apps/applogpolling/:appname?/:lines?/:since?
+- GET /apps/appinspect/:appname?
+- GET /apps/appstats/:appname?
+- GET /apps/appmonitor/:appname?/:range?
+- GET /apps/appchanges/:appname?
+- POST /apps/appexec
+- GET /apps/appremove/:appname?/:force?/:global?
+- GET /apps/installapplocally/:appname?
+- GET /apps/testappinstall/:appname?
+- GET /apps/createfluxnetwork; handled by registryManager.rescanGlobalAppsInformationAPI
+- GET /apps/rescanglobalappsinformation/:blockheight?/:removelastinformation?; handled by registryManager.rescanGlobalAppsInformationAPI
+- GET /apps/reindexglobalappsinformation; handled by registryManager.reindexGlobalAppsInformationAPI
+- GET /apps/reindexglobalappslocation; handled by registryManager.reindexGlobalAppsLocationAPI
+- GET /apps/redeploy/:appname?/:force?/:global?
+- GET /apps/redeploycomponent/:appname?/:component?/:force?; handled by registryManager.reconstructAppMessagesHashCollectionAPI
+- GET /apps/reconstructhashes; handled by registryManager.reconstructAppMessagesHashCollectionAPI
+- GET /apps/startmonitoring/:appname?
+- GET /apps/stopmonitoring/:appname?/:deletedata?
+- GET /apps/appmonitorstream/:appname?; handled by syncthingService.getSyncthingMetrics
+- POST /apps/checkdockerexistance; handled by imageManager.checkDockerAccessibility
+- POST /apps/appregister; handled by registryManager.registerAppGlobalyApi
+- POST /apps/appupdate
+- POST /apps/getpublickey
+- GET /apps/fluxshare/getfolder/:folder?; handled by fluxshareService.fluxShareGetFolder
+- GET /apps/fluxshare/getfile/:file?; handled by fluxshareService.fluxShareDownloadFile
+- GET /apps/fileoperationimage/:imageid; handled by fileQueryService.getAppsFolder
+- GET /apps/getfolderinfo/:appname?/:component?/:folder?; handled by fileQueryService.getAppsFolder
+- GET /apps/createfolder/:appname?/:component?/:folder?; handled by fileSystemManager.createAppsFolder
+- GET /apps/renameobject/:appname?/:component?/:oldpath?/:newname?; handled by fileSystemManager.renameAppsObject
+- GET /apps/removeobject/:appname?/:component?/:object?; handled by fileSystemManager.removeAppsObject
+- GET /apps/operations/:jobId
+- DELETE /apps/operations/:jobId
+- POST /apps/moveobject; handled by fileSystemManager.moveAppsObject
+- POST /apps/copyobject; handled by fileSystemManager.copyAppsObject
+- POST /apps/compressobject; handled by fileSystemManager.compressAppsObject
+- POST /apps/extractobject; handled by fileSystemManager.extractAppsObject
+- GET /apps/downloadfile/:appname?/:component?/:file?; handled by fileSystemManager.downloadAppsFile
+- GET /apps/downloadfolder/:appname?/:component?/:folder?, cached 30 seconds; handled by fileSystemManager.downloadAppsFolder
 
 ## /benchmark endpoints - node benchmark <https://api.runonflux.io/benchmark>
 - GET /benchmark/getstatus, cached 30 seconds; handled by benchmarkService.getStatus
@@ -495,10 +348,18 @@ Every FluxOS node serves this HTTP API on port 16127 (or the node's configured A
 - GET /explorer/scannedheight, cached 30 seconds; handled by explorerService.getScannedHeight
 - GET /explorer/fusion/coinbase/:address?, cached 30 seconds; handled by explorerService.getAddressFusionCoinbase
 - GET /explorer/reindex/:reindexapps?; handled by explorerService.reindexExplorer
+- GET /explorer/start; handled by explorerService.startBlockProcessing
 - GET /explorer/restart; handled by explorerService.restartBlockProcessing
 - GET /explorer/stop; handled by explorerService.stopBlockProcessing
 - GET /explorer/rescan/:blockheight?/:rescanapps?; handled by explorerService.rescanExplorer
 - GET /explorer/issynced, cached 30 seconds; handled by explorerService.isExplorerSynced
+
+## /syncthing endpoints - app data sync <https://api.runonflux.io/syncthing>
+- GET /syncthing/deviceid, cached 30 seconds; handled by syncthingService.getDeviceIdApi
+- GET /syncthing/metrics; handled by syncthingService.getSyncthingMetrics
+- GET /syncthing/metrics/health; handled by syncthingService.getSyncthingHealthSummary
+- GET /syncthing/metrics/history/:limit?; handled by syncthingService.getSyncthingMetricsHistory
+- GET /syncthing/peer/diagnostics; handled by syncthingService.getPeerSyncDiagnosticsApi
 
 ## /backup endpoints - app backups <https://api.runonflux.io/backup>
 - GET /backup/getvolumedataofcomponent/:appname?/:component?/:multiplier?/:decimal?/:fields?; handled by backupRestoreService.getVolumeDataOfComponent
@@ -507,13 +368,9 @@ Every FluxOS node serves this HTTP API on port 16127 (or the node's configured A
 - GET /backup/removebackupfile/:filepath?/:appname?; handled by backupRestoreService.removeBackupFile
 - GET /backup/downloadlocalfile/:filepath?/:appname?; handled by backupRestoreService.downloadLocalFile
 
-## /arcane endpoints <https://api.runonflux.io/arcane>
-- GET /arcane/authchallenge
-- POST /arcane/configsync; handled by idService.verifyLogin
-
 ## /payment endpoints <https://api.runonflux.io/payment>
-- GET /payment/paymentrequest; handled by paymentService.paymentRequest
-- POST /payment/verifypayment; handled by paymentService.verifyPayment
+- GET /payment/paymentrequest; handled by paymentRelayService.paymentRequest
+- POST /payment/verifypayment; handled by paymentRelayService.receivePaymentCallback
 
 ## /ioutils endpoints <https://api.runonflux.io/ioutils>
 - POST /ioutils/fileupload/:type?/:appname?/:component?/:folder?/:filename?; handled by fileSystemManager.uploadAppsFiles

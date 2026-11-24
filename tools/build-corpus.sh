@@ -18,10 +18,21 @@
 #      that is where 2.1M of its 2.18M words live. The whitepaper itself is the
 #      PDFs at the top level.
 #
+# Not in the corpus on purpose: the help centre (support.runonflux.io) and the
+# release notes. They change weekly, so the docs bot fetches them itself
+# (images/docsbot/sources.js) instead of waiting for the next corpus build.
+#
 # Usage: tools/build-corpus.sh [output.jsonl]
+#   REPOS=<dir>  read the repositories from <dir> instead of ~/repos. Use an
+#                export of each default branch: a working copy on a feature
+#                branch (flux-docs often is) puts unreleased pages in the corpus.
 set -euo pipefail
-OUT="${1:-images/docsbot/docs/corpus.jsonl}"
-R="$HOME/repos"
+# Built beside the real files and moved over them only at the end: a build that
+# fails halfway (a site down, a missing config) must not leave the image with
+# no corpus or an empty fact sheet.
+FINAL="${1:-images/docsbot/docs/corpus.jsonl}"
+OUT="$FINAL.building"
+R="${REPOS:-$HOME/repos}"
 rm -f "$OUT"
 
 echo "### tier: facts (generated from FluxOS source - the authoritative numbers)"
@@ -30,10 +41,17 @@ echo "### tier: facts (generated from FluxOS source - the authoritative numbers)
 # work out that 1056000 blocks is about 12 months; stating it turns a
 # calculation they get wrong into a lookup they get right.
 if [ -d "$R/flux/ZelBack" ]; then
-  node tools/facts-from-source.js "$R/flux" > images/docsbot/docs/flux-facts.md
-  node tools/facts-api-from-source.js "$R/flux" > images/docsbot/docs/flux-api.md
-  # marketplace presets and the live catalog aggregate (finetune/gen-*.js write these)
-  node finetune/gen-marketplace.js --n 0 >/dev/null 2>&1 && cp finetune/data/marketplace-facts.md images/docsbot/docs/
+  node tools/facts-from-source.js "$R/flux" > images/docsbot/docs/flux-facts.md.building
+  node tools/facts-api-from-source.js "$R/flux" > images/docsbot/docs/flux-api.md.building
+  mv images/docsbot/docs/flux-facts.md.building images/docsbot/docs/flux-facts.md
+  mv images/docsbot/docs/flux-api.md.building images/docsbot/docs/flux-api.md
+  # Marketplace sheet: the live catalogue (tools/fetch-marketplace.js) through
+  # gen-marketplace-facts.js. gen-marketplace.js is the training-data generator; its
+  # sheet comes from the stale listapps subset and drops the NewGames category.
+  node tools/fetch-marketplace.js >/dev/null 2>&1 || echo "  marketplace catalogue not refreshed; using finetune/data/marketplace.json as it is"
+  node finetune/gen-marketplace-facts.js --out images/docsbot/docs/marketplace-facts.md.building
+  mv images/docsbot/docs/marketplace-facts.md.building images/docsbot/docs/marketplace-facts.md
+  # the live catalog aggregate
   node finetune/gen-catalog.js >/dev/null 2>&1 && cp finetune/data/catalog-facts.md images/docsbot/docs/
   node tools/ingest.js --out "$OUT" --append --tier facts --dir images/docsbot/docs
 else
@@ -62,7 +80,9 @@ node tools/ingest.js --out "$OUT" --append --tier whitepaper \
 
 echo
 echo "### tier: website (product pages, marketing tone but current)"
-LANGS='/(zh|vi|tr|ru|pt-BR|pl|ko|ja|it|id|fr|es|de|nl)(/|$)'
+# runonflux.com/games added Portuguese as /pt/ (not /pt-BR/): 2,956 translated chunks
+# slipped into the November 2026 build before pt was listed here.
+LANGS='/(zh|vi|tr|ru|pt-BR|pt|pl|ko|ja|it|id|fr|es|de|nl)(/|$)'
 node tools/ingest.js --out "$OUT" --append --tier website \
   --site https://runonflux.com --max-pages 120
 node tools/ingest.js --out "$OUT" --append --tier website \
@@ -93,15 +113,20 @@ node tools/ingest.js --out "$OUT" --append --tier product \
   --site https://cloud.runonflux.com --max-pages 120
 
 # AI products. ai.runonflux.com has 10 tutorial pages, which are the useful
-# part; beaverai.app publishes 78 blog posts.
+# part; beaverai.app publishes 78 blog posts. In November 2026 ai.runonflux.com
+# became a client-rendered app with an empty sitemap (one ~20-word page comes
+# back) and beaverai.app answered HTTP 530, so both contribute nothing until
+# that changes; FluxAI is still covered by fluxai-enterprise below.
 node tools/ingest.js --out "$OUT" --append --tier product \
   --site https://ai.runonflux.com --exclude '/images/' --max-pages 60
 node tools/ingest.js --out "$OUT" --append --tier product \
   --site https://beaverai.app --max-pages 120
 
 # No sitemap on these, so only the landing page is reachable. The gap is filled
-# from their repositories below.
-for SITE in https://fluxedge.ai https://fluxcore.ai https://fluxai.io https://brimley.ai; do
+# from their repositories below. fluxedge.ai and fluxcore.ai are gone: FluxEdge
+# and FluxCore shut down in November 2026, and the docs' shutdown page
+# (flux-docs docs/home/fluxedge-fluxcore-shutdown.md) is what the bot should say.
+for SITE in https://fluxai.io https://brimley.ai; do
   node tools/ingest.js --out "$OUT" --append --tier product --site "$SITE" --max-pages 1
 done
 
@@ -130,7 +155,9 @@ echo "### tier: product-repo (what the thin marketing sites do not say)"
 # product with a different audience; if it needs a bot, it needs its own.
 # DOCKER_IMAGE_FILE_TREE and test logs are engineering exhaust, not documentation.
 SKIP='(ai_university|DOCKER_IMAGE_FILE_TREE|^tests/|/archive/)'
-for NAME in fluxai-enterprise brimley console-api fluxai-beaver fluxai-fluxedge; do
+# console-api (the FluxEdge console) and fluxai-fluxedge (FluxAI on FluxEdge)
+# are left out: they describe a platform that no longer runs.
+for NAME in fluxai-enterprise brimley fluxai-beaver; do
   if [ -d "$R/$NAME/docs" ]; then
     node tools/ingest.js --out "$OUT" --append --tier product-repo --exclude "$SKIP" --dir "$R/$NAME/docs"
   elif [ -d "$R/$NAME" ]; then
@@ -167,3 +194,5 @@ for r in rows: w[r.get('tier','docs')]+=len(r['text'].split())
 print(f"  {len(rows)} chunks, ~{sum(w.values()):,} words")
 for k in t: print(f"    {k:<12} {t[k]:>5} chunks  ~{w[k]:>8,} words")
 PY
+mv "$OUT" "$FINAL"
+echo "  written to $FINAL"

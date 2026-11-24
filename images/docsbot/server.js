@@ -14,6 +14,7 @@ const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
 const { liveContext, initTools } = require('./live.js');
+const { fetchLiveSources } = require('./sources.js');
 
 const PORT = Number(process.env.PORT || 8080);
 const ENGINE = process.env.UPSTREAM || 'http://127.0.0.1:11434';
@@ -118,9 +119,16 @@ const INDEX_DOCS = (process.env.INDEX_DOCS || '').split(',').map(s => s.trim()).
  * endpoint, at docs it lost "which endpoint lists running apps" to them.
  */
 const TIER_WEIGHTS = {
-  facts: 1.35, reference: 1.3, docs: 1.2, academy: 1.1, product: 1.05,
+  facts: 1.35, reference: 1.3, help: 1.25, docs: 1.2, academy: 1.1, releases: 1.1, product: 1.05,
   'product-repo': 1.0, enterprise: 0.95, website: 0.85, whitepaper: 0.8, blog: 0.7,
 };
+// help: the help centre (sources.js). Written from the questions customers
+// actually ask and checked against the code, and newer than the docs, so where
+// the two disagree (a payment method, a menu that moved) the article wins.
+// releases: release notes. Dated and specific: they answer "what changed in
+// 8.24" and "what is the latest version". At 0.9 the API reference's "update to
+// the latest version" endpoints (1.3) beat them on exactly those questions; at
+// the academy's 1.1 they win those and still lose how-to questions to the docs.
 const weightOf = tier => TIER_WEIGHTS[tier] ?? 1.0;
 /**
  * The whitepaper's 0.8 weight keeps it from winning how-to questions, but it
@@ -458,6 +466,45 @@ async function buildIndex() {
   ready = true;
   status = `${index.length} chunks indexed from ${files} sources, models warm`;
   console.log(status);
+
+  // After ready, not before: the first fetch embeds a few hundred chunks, and
+  // the bot can answer from the corpus meanwhile.
+  refreshLiveSources();
+  setInterval(refreshLiveSources, SOURCES_REFRESH_MS).unref();
+}
+
+/**
+ * The help centre and the release notes (sources.js), fetched and embedded
+ * again every SOURCES_REFRESH_MS and swapped into the index. Entries carry the
+ * source they came from (`live`), and each source is replaced on its own, so
+ * one whose fetch failed keeps its previous copy rather than vanishing.
+ * LIVE_SOURCES=0 turns it off.
+ */
+const SOURCES_REFRESH_MS = Number(process.env.SOURCES_REFRESH_MS || 6 * 3600000);
+let liveRefreshing = false;
+async function refreshLiveSources() {
+  if (process.env.LIVE_SOURCES === '0' || liveRefreshing) return;
+  liveRefreshing = true;
+  try {
+    const fetched = await fetchLiveSources();
+    const BATCH = Number(process.env.EMBED_BATCH || 96);
+    for (const [kind, chunks] of Object.entries(fetched)) {
+      if (!chunks || !chunks.length) continue;
+      const vecs = [];
+      for (let i = 0; i < chunks.length; i += BATCH) vecs.push(...await embedBatch(chunks.slice(i, i + BATCH), i));
+      const fresh = chunks.map((c, j) => {
+        const v = Float32Array.from(vecs[j]);
+        return { ...c, live: kind, vec: v, mag: norm(v), tf: termFreq(c.text), len: countTokens(c.text) };
+      });
+      index = index.filter(e => e.live !== kind).concat(fresh);
+      console.log(`live sources: ${fresh.length} ${kind} chunks indexed`);
+    }
+    buildKeywordStats();
+  } catch (err) {
+    console.log(`live sources: refresh failed (${err.message}); keeping the previous copy`);
+  } finally {
+    liveRefreshing = false;
+  }
 }
 
 /**

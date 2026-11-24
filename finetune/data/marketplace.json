@@ -1,10 +1,182 @@
 [
  {
+  "name": "7DaysToDie",
+  "displayName": "7 Days to Die",
+  "category": "NewGames",
+  "description": "Fortify, craft and outlast the 7th-day horde on your own persistent world - with PS5 and Xbox players welcome.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "7daystodie7daystodie",
+    "description": "7 Days to Die",
+    "repotag": "runonflux/7dtd-server-flux:latest",
+    "ports": [
+     26900,
+     26901,
+     26902
+    ],
+    "containerPorts": [
+     26900,
+     26901,
+     26902
+    ],
+    "environmentParameters": [
+     "TZ=Etc/UTC",
+     "FLUX_RESTART_TIME=05:00",
+     "FLUX_BACKUP_KEEP=2",
+     "STEAM_BRANCH=public",
+     "FLUX_CROSSPLAY=true",
+     "SDTD_ServerAllowCrossplay=true",
+     "SDTD_ServerMaxPlayerCount=8"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/7dtd/data|ml:server:/mnt/7dtd/server|m:mods:/mnt/7dtd/mods",
+    "userEnvironmentParameters": [
+     {
+      "name": "SDTD_ServerName",
+      "description": "Server name shown in the server browser.",
+      "placeholder": "My 7 Days to Die Server",
+      "optional": true
+     },
+     {
+      "name": "FLUX_RESTART_TIME",
+      "description": "Daily restart (24h, in the timezone below). Players get a chat warning first; the server updates and the world is backed up on every restart.",
+      "placeholder": "05:00",
+      "optional": true
+     },
+     {
+      "name": "TZ",
+      "description": "Timezone of the daily restart.",
+      "placeholder": "Etc/UTC",
+      "optional": true
+     },
+     {
+      "name": "FLUX_BACKUP_KEEP",
+      "description": "World backups kept, one taken before every start (0 turns them off). Stored in the persistent backups folder.",
+      "placeholder": "2",
+      "optional": true
+     },
+     {
+      "name": "STEAM_BRANCH",
+      "description": "Game build. Crossplay always runs stable, the build PS5 and Xbox run.",
+      "placeholder": "public",
+      "optional": true
+     },
+     {
+      "name": "MODS_URLS",
+      "description": "Comma-separated direct download URLs (.zip or .tar.gz) of mods to install. PC tiers only: a crossplay server never loads mods, consoles cannot join one.",
+      "placeholder": "https://example.com/mymod.zip",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 8000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
+  "name": "AbioticFactor",
+  "displayName": "Abiotic Factor",
+  "category": "NewGames",
+  "description": "Host Abiotic Factor always online for your crew, crossplay with PlayStation and Xbox if you want it: every sandbox rule, worlds and your PC save, admins, automatic backups and updates.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "abioticfactorabioticfactor",
+    "description": "Abiotic Factor dedicated server (Windows server under Wine, autosaves, backups)",
+    "repotag": "runonflux/abioticfactor-server-flux:latest",
+    "ports": [
+     7777,
+     27015
+    ],
+    "containerPorts": [
+     7777,
+     27015
+    ],
+    "environmentParameters": [
+     "ABIOTIC_GAME_PORT=7777",
+     "ABIOTIC_QUERY_PORT=27015",
+     "ABIOTIC_SERVER_NAME=Abiotic Factor on Flux",
+     "ABIOTIC_MAX_PLAYERS=6",
+     "ABIOTIC_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/abiotic/data|ml:server:/mnt/abiotic/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "ABIOTIC_SERVER_NAME",
+      "description": "Server name shown in the in-game server browser.",
+      "placeholder": "My Abiotic Factor Server",
+      "optional": false
+     },
+     {
+      "name": "ABIOTIC_PASSWORD",
+      "description": "Join password (up to 64 characters, no spaces). Empty = anyone who finds the server can join.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "ABIOTIC_MAX_PLAYERS",
+      "description": "Player limit, 1 to 24 (the game's maximum). The player count of your plan is only what we think its CPU and RAM run comfortably, you can set more. Empty = the plan's number.",
+      "placeholder": "6",
+      "optional": true
+     },
+     {
+      "name": "ABIOTIC_ADMIN_PASSWORD",
+      "description": "In-game admin password: a player who enters it in the game becomes an admin. Empty = password admin is off (use the admin SteamIDs below).",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "ABIOTIC_ADMINS",
+      "description": "Server admins (moderators): SteamID64s (17 digits starting 7656119), comma separated. Manage them later in your server panel.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "ABIOTIC_PLATFORM",
+      "description": "Who can join: Crossplay (PC, PlayStation and Xbox), or only PC, only Playstation or only Xbox.",
+      "placeholder": "Crossplay",
+      "optional": true
+     },
+     {
+      "name": "ABIOTIC_WORLD",
+      "description": "Name of the world save (letters, digits, - and _). A name that does not exist is created. Default Cascade.",
+      "placeholder": "Cascade",
+      "optional": true
+     },
+     {
+      "name": "ABIOTIC_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible; it installs game updates. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 5000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
   "name": "AlephiumNode",
   "displayName": "AlephiumNode",
   "category": "Blockchain",
   "description": "Host your Alephium Full Node on the Flux Cloud",
-  "priceUSD": 5.99,
+  "priceUSD": 3.49,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -29,6 +201,465 @@
     "cpu": 0.5,
     "ram": 1000,
     "hdd": 130
+   }
+  ]
+ },
+ {
+  "name": "AmericanTruckSimulator",
+  "displayName": "American Truck Simulator",
+  "category": "NewGames",
+  "description": "Host your own American Truck Simulator convoy server: always online for your trucking group, map DLC and mods from your own game profile, moderators, a password, traffic and damage rules, and restarts onto game updates when nobody is driving.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "americantrucksimulatoramericantrucksimulator",
+    "description": "American Truck Simulator convoy dedicated server",
+    "repotag": "runonflux/truckersim-server-flux:latest",
+    "ports": [
+     27015,
+     27016
+    ],
+    "containerPorts": [
+     27015,
+     27016
+    ],
+    "environmentParameters": [
+     "SCS_GAME=ats",
+     "SCS_PORT=27015",
+     "SCS_QUERY_PORT=27016",
+     "SCS_LOBBY_NAME=American Truck Simulator on Flux"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/scs/data|ml:server:/mnt/scs/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "SCS_LOBBY_NAME",
+      "description": "Convoy name shown in the game's convoy browser (63 characters).",
+      "placeholder": "My American Truck Simulator Convoy",
+      "optional": false
+     },
+     {
+      "name": "SCS_DESCRIPTION",
+      "description": "Short description in the convoy browser.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SCS_WELCOME",
+      "description": "Message players see when they join.",
+      "placeholder": "Welcome!",
+      "optional": true
+     },
+     {
+      "name": "SCS_MODERATORS",
+      "description": "Moderators: SteamID64s, comma separated. Moderators can kick, ban and use /set_time and /set_rain_factor in chat.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "SCS_TRAFFIC",
+      "description": "AI traffic on the roads.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "SCS_PLAYER_DAMAGE",
+      "description": "Players can damage each other's trucks.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "SCS_FORCE_SPEED_LIMITER",
+      "description": "Force the speed limiter on everyone.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "SCS_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, in the server's time zone, UTC unless TZ is set), done once nobody is driving. Empty = none.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 1,
+    "ram": 1500,
+    "hdd": 8
+   }
+  ]
+ },
+ {
+  "name": "ArkSurvivalAscended",
+  "displayName": "ARK: Survival Ascended",
+  "category": "NewGames",
+  "description": "Tame dinosaurs, lead a tribe and run an Unreal Engine 5 ARK world tuned to your rules.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "arksurvivalascendedarksurvivalascended",
+    "description": "ARK Survival Ascended",
+    "repotag": "acekorneya/asa_server:2_1_latest",
+    "ports": [
+     7777,
+     27020
+    ],
+    "containerPorts": [
+     7777,
+     27020
+    ],
+    "environmentParameters": [
+     "INSTANCE_NAME=flux",
+     "MAP_NAME=TheIsland_WP",
+     "ASA_PORT=7777",
+     "RCON_PORT=27020",
+     "RCON_ENABLED=TRUE",
+     "MAX_PLAYERS=10",
+     "UPDATE_SERVER=TRUE",
+     "BATTLEEYE=TRUE",
+     "RESTART_NOTICE_MINUTES=15",
+     "SAVE_WAIT_SECONDS=60",
+     "CUSTOM_SERVER_ARGS=-ServerPlatform=ALL",
+     "TZ=Etc/UTC"
+    ],
+    "commands": [],
+    "containerData": "g:/home/pok/arkserver/ShooterGame/Saved|ml:server:/home/pok/arkserver|ml:game:/home/pok/arkserver/ShooterGame",
+    "userEnvironmentParameters": [
+     {
+      "name": "SESSION_NAME",
+      "description": "Server name shown in the in-game server browser.",
+      "placeholder": "My ARK Server",
+      "optional": false
+     },
+     {
+      "name": "SERVER_ADMIN_PASSWORD",
+      "description": "Admin password used for in-game admin commands and RCON. Required - use a strong password.",
+      "placeholder": "Enter admin password",
+      "optional": false
+     },
+     {
+      "name": "MAP_NAME",
+      "description": "Map the server loads. Astraeos and Lost Colony are paid DLC maps that every player must own. Changing it later starts a separate save for that map.",
+      "placeholder": "Select map",
+      "optional": false
+     },
+     {
+      "name": "SERVER_PASSWORD",
+      "description": "Password players must enter to join, letters and numbers only (leave empty for a public server).",
+      "placeholder": "Enter join password",
+      "optional": true
+     },
+     {
+      "name": "CUSTOM_SERVER_ARGS",
+      "description": "Which platforms can join. ALL = crossplay with PC, PlayStation 5 and Xbox; PC = Steam and Epic players only.",
+      "placeholder": "-ServerPlatform=ALL",
+      "optional": false
+     },
+     {
+      "name": "MOD_IDS",
+      "description": "Comma-separated CurseForge mod IDs to install on boot, in load order.",
+      "placeholder": "927131,893657",
+      "optional": true
+     },
+     {
+      "name": "BATTLEEYE",
+      "description": "BattlEye anti-cheat. Turn off only if your mods require it.",
+      "placeholder": "TRUE",
+      "optional": true
+     },
+     {
+      "name": "TZ",
+      "description": "Timezone used for scheduled updates, restart notices and log timestamps.",
+      "placeholder": "Etc/UTC",
+      "optional": true
+     }
+    ],
+    "cpu": 4,
+    "ram": 16000,
+    "hdd": 60
+   }
+  ]
+ },
+ {
+  "name": "ArkSurvivalEvolved",
+  "displayName": "ARK: Survival Evolved",
+  "category": "NewGames",
+  "description": "Host ARK: Survival Evolved on any official map: rates, breeding, difficulty and every server setting from a panel, Workshop mods unpacked for you, Epic crossplay, a private RCON console, saves before every stop, update restarts with warnings and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "arksurvivalevolvedarksurvivalevolved",
+    "description": "ARK: Survival Evolved dedicated server",
+    "repotag": "runonflux/ase-server-flux:latest",
+    "ports": [
+     7777,
+     7778,
+     27015
+    ],
+    "containerPorts": [
+     7777,
+     7778,
+     27015
+    ],
+    "environmentParameters": [
+     "ASE_PORT=7777",
+     "ASE_QUERY_PORT=27015",
+     "ASE_SESSION_NAME=ARK on Flux",
+     "ASE_MAP=TheIsland",
+     "ASE_MAX_PLAYERS=20"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/ase/data|ml:server:/mnt/ase/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "ASE_SESSION_NAME",
+      "description": "Server name in the server browser.",
+      "placeholder": "My ARK Server",
+      "optional": false
+     },
+     {
+      "name": "ASE_MAP",
+      "description": "Map. All are free to host; players need the DLC for Scorched Earth, Aberration, Extinction, Genesis and Genesis 2.",
+      "placeholder": "TheIsland",
+      "optional": true
+     },
+     {
+      "name": "ASE_CROSSPLAY",
+      "description": "Let Epic Games players join (no mods possible with crossplay).",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "ASE_BATTLEYE",
+      "description": "BattlEye anti-cheat.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "ASE_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), with in-game warnings. Empty = none.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 10000,
+    "hdd": 50
+   }
+  ]
+ },
+ {
+  "name": "ArmaReforger",
+  "displayName": "Arma Reforger",
+  "category": "NewGames",
+  "description": "Run your own Arma Reforger server: Conflict, Combat Ops or Game Master on Everon, Arland or Cain, with Workshop mods and PC/Xbox/PS5 crossplay.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "armareforgerarmareforger",
+    "description": "Arma Reforger dedicated server",
+    "repotag": "runonflux/arma-reforger-server-flux:latest",
+    "ports": [
+     2001,
+     17777,
+     19999
+    ],
+    "containerPorts": [
+     2001,
+     17777,
+     19999
+    ],
+    "environmentParameters": [
+     "SERVER_BIND_PORT=2001",
+     "SERVER_PUBLIC_PORT=2001",
+     "SERVER_A2S_PORT=17777",
+     "RCON_PORT=19999",
+     "GAME_NAME=Flux Arma Reforger Server",
+     "GAME_MAX_PLAYERS=32",
+     "GAME_SCENARIO_ID={ECC61978EDCC2B5A}Missions/23_Campaign.conf",
+     "GAME_SUPPORTED_PLATFORMS=PLATFORM_PC,PLATFORM_XBL,PLATFORM_PSN",
+     "FLUX_RESTART_TIME=05:00",
+     "TZ=Etc/UTC"
+    ],
+    "commands": [],
+    "containerData": "g:/home/profile|ml:server:/reforger|ml:workshop:/reforger/workshop",
+    "userEnvironmentParameters": [
+     {
+      "name": "GAME_NAME",
+      "description": "Server name shown in the in-game server browser.",
+      "placeholder": "My Arma Reforger Server",
+      "optional": false
+     },
+     {
+      "name": "GAME_PASSWORD_ADMIN",
+      "description": "Admin password: type #login <password> in the in-game chat to get admin rights (kick, ban, restart). Required - no spaces.",
+      "placeholder": "Enter admin password",
+      "optional": false
+     },
+     {
+      "name": "GAME_SCENARIO_ID",
+      "description": "Scenario the server runs. Conflict = Everon/Arland/Cain campaign, HQC = HQ Commander, CombatOps = PvE, GM = Game Master, CAH = Capture & Hold. Changing it later starts a separate save.",
+      "placeholder": "Select scenario",
+      "optional": false
+     },
+     {
+      "name": "GAME_SUPPORTED_PLATFORMS",
+      "description": "Which platforms can join: PC+Xbox+PS5 (full crossplay) or PC only. The game refuses PC+Xbox on community servers and will not start. PS5 only loads data mods, so a script mod keeps PS5 players out while PC and Xbox still join. BattlEye must stay on for console players.",
+      "placeholder": "PLATFORM_PC,PLATFORM_XBL,PLATFORM_PSN",
+      "optional": false
+     },
+     {
+      "name": "GAME_PASSWORD",
+      "description": "Password players must enter to join (leave empty for a public server).",
+      "placeholder": "Enter join password",
+      "optional": true
+     },
+     {
+      "name": "GAME_MODS_IDS_LIST",
+      "description": "Comma-separated Arma Reforger Workshop mod IDs (16 characters, e.g. 5965550F24A0C152). The server downloads them on every start; dependencies are pulled automatically.",
+      "placeholder": "5965550F24A0C152,59674C21AA886D57",
+      "optional": true
+     },
+     {
+      "name": "GAME_ADMINS",
+      "description": "Comma-separated identityIds or SteamIDs that are always admins (no #login needed).",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "RCON_PASSWORD",
+      "description": "BattlEye RCon password for external tools (min 3 characters, no spaces). Leave empty to keep RCon disabled.",
+      "placeholder": "Enter RCon password",
+      "optional": true
+     },
+     {
+      "name": "GAME_PROPS_DISABLE_THIRD_PERSON",
+      "description": "Force first-person view only.",
+      "placeholder": "false",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 6000,
+    "hdd": 30
+   }
+  ]
+ },
+ {
+  "name": "BeamMP",
+  "displayName": "BeamMP",
+  "category": "NewGames",
+  "description": "Host your own BeamMP server for BeamNG.drive: any stock or modded map, car and map mods sent to players automatically, Lua plugins, a live console with kicks and bans, and BeamMP updates applied for you.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "beammpbeammp",
+    "description": "BeamMP (BeamNG.drive multiplayer) server",
+    "repotag": "runonflux/beammp-server-flux:latest",
+    "ports": [
+     30814
+    ],
+    "containerPorts": [
+     30814
+    ],
+    "environmentParameters": [
+     "GAME_PORT=30814",
+     "BEAMMP_NAME=BeamMP on Flux",
+     "BEAMMP_MAP=west_coast_usa",
+     "BEAMMP_MAX_PLAYERS=10",
+     "BEAMMP_MAX_CARS=2",
+     "BEAMMP_PRIVATE=false",
+     "BEAMMP_ALLOW_GUESTS=true"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/beammp/data|ml:server:/mnt/beammp/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "BEAMMP_AUTH_KEY",
+      "description": "Your BeamMP AuthKey (required: BeamMP will not start without one). Free at keymaster.beammp.com: sign in with Discord, open Keys, press +, give it any name, Create, then copy the Key. One key runs one server at a time.",
+      "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "optional": false
+     },
+     {
+      "name": "BEAMMP_NAME",
+      "description": "The server's name in the BeamMP server list.",
+      "placeholder": "My BeamMP Server",
+      "optional": false
+     },
+     {
+      "name": "BEAMMP_MAP",
+      "description": "The map the server runs. Any stock BeamNG.drive map; modded maps can be uploaded and picked later in the panel's Maps tab.",
+      "placeholder": "west_coast_usa",
+      "optional": false
+     },
+     {
+      "name": "BEAMMP_PRIVATE",
+      "description": "false = listed in the public BeamMP server list; true = hidden, players join with Direct Connect (address and port).",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "BEAMMP_MAX_PLAYERS",
+      "description": "How many players can be on at once. The plan starts you at 10, 20 or 40, a guide to what its CPU and RAM handle comfortably, not a limit: set any number up to 1000. More players and cars need more CPU and memory.",
+      "placeholder": "The plan's figure",
+      "optional": true
+     },
+     {
+      "name": "BEAMMP_MAX_CARS",
+      "description": "How many cars each player may spawn at once.",
+      "placeholder": "2",
+      "optional": true
+     },
+     {
+      "name": "BEAMMP_ALLOW_GUESTS",
+      "description": "true = players without a BeamMP account (guests) may join.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "BEAMMP_DESCRIPTION",
+      "description": "The description in the server list (BeamNG formatting codes like ^l work).",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "BEAMMP_TAGS",
+      "description": "Search tags, comma separated (Freeroam,Racing,Drift).",
+      "placeholder": "Freeroam",
+      "optional": true
+     }
+    ],
+    "cpu": 0.5,
+    "ram": 1000,
+    "hdd": 10
    }
   ]
  },
@@ -80,7 +711,7 @@
   "displayName": "BLOCX Node",
   "category": "Masternode",
   "description": "Host your BLOCX Masternode on the Flux Cloud",
-  "priceUSD": 6.32,
+  "priceUSD": 3.49,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -117,11 +748,283 @@
   ]
  },
  {
+  "name": "ConanExiles",
+  "displayName": "Conan Exiles",
+  "category": "NewGames",
+  "description": "Host your own Conan Exiles Enhanced server: Steam Workshop mods in load order, PvP and raid hours, rates and rules from your browser, a live RCON console, kicks and bans, daily backups and game updates applied automatically.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "conanexilesconanexiles",
+    "description": "Conan Exiles Enhanced dedicated server",
+    "repotag": "runonflux/conanexiles-server-flux:latest",
+    "ports": [
+     7777,
+     7778,
+     27015
+    ],
+    "containerPorts": [
+     7777,
+     7778,
+     27015
+    ],
+    "environmentParameters": [
+     "CONAN_PORT=7777",
+     "CONAN_QUERY_PORT=27015",
+     "CONAN_MAX_PLAYERS=10",
+     "CONAN_RESTART_TIME=06:00",
+     "TZ=Etc/UTC"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/conan/data|ml:server:/mnt/conan/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "CONAN_SERVER_NAME",
+      "description": "Server name in the server browser.",
+      "placeholder": "My Conan Server",
+      "optional": false
+     },
+     {
+      "name": "CONAN_ADMIN_PASSWORD",
+      "description": "Admin password: in game, Settings > Server Settings > Make Me Admin. Keep it secret.",
+      "placeholder": "",
+      "optional": false
+     },
+     {
+      "name": "CONAN_SERVER_PASSWORD",
+      "description": "Join password. Empty = public server.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "CONAN_MAP_REGIONS",
+      "description": "all = the whole map (Exiled Lands and Isle of Siptah); exiled-lands = the Exiled Lands only, which needs about 3.7 GB less RAM (measured 4.9 GiB against 8.6 GiB idle).",
+      "placeholder": "all",
+      "optional": true
+     },
+     {
+      "name": "CONAN_MAX_PLAYERS",
+      "description": "Max players, 1 to 70. The plan starts you at 10, 20 or 40, a guide to what its RAM handles comfortably, not a limit; more players need more RAM.",
+      "placeholder": "20",
+      "optional": true
+     },
+     {
+      "name": "CONAN_MODS",
+      "description": "Steam Workshop mod IDs or links, comma separated, in load order. Enhanced (UE5) mods only: a UE4 mod is refused by the game, and the panel then tells you which one to remove.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "CONAN_RCON_PASSWORD",
+      "description": "RCON password for outside tools. RCON is not published on the network, so this only matters if you run an RCON client inside the container; the panel's console needs none. Empty = a random one only the server knows.",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 12000,
+    "hdd": 30
+   }
+  ]
+ },
+ {
+  "name": "CoreKeeper",
+  "displayName": "Core Keeper",
+  "category": "NewGames",
+  "description": "Host Core Keeper always online for your crew: join by Steam Game ID or cross-play by IP (Epic, Microsoft Store, GOG), 30 world slots, mods, admins and bans, automatic saves, update restarts and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "corekeepercorekeeper",
+    "description": "Core Keeper dedicated server (Steam Game ID and cross-play by IP)",
+    "repotag": "runonflux/corekeeper-server-flux:latest",
+    "ports": [
+     27015,
+     27016
+    ],
+    "containerPorts": [
+     27015,
+     27016
+    ],
+    "environmentParameters": [
+     "CK_PORT=27015",
+     "CK_WORLD_NAME=Core Keeper on Flux",
+     "CK_WORLD_MODE=Normal",
+     "CK_SEASON=Auto",
+     "CK_ALLOW_ONLY_PLATFORM=All",
+     "CK_RESTART_TIME=06:00",
+     "CK_MAX_PLAYERS=8"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/corekeeper/data|ml:server:/mnt/corekeeper/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "CK_WORLD_NAME",
+      "description": "Server name players see.",
+      "placeholder": "My Core Keeper Server",
+      "optional": false
+     },
+     {
+      "name": "CK_WORLD_MODE",
+      "description": "World mode for a NEW world, as in the game's Create World screen: Normal, Hard (tougher enemies, better loot), Casual (gentler enemies) or Creative (an empty world, build freely). An existing world keeps its mode.",
+      "placeholder": "Normal",
+      "optional": true
+     },
+     {
+      "name": "CK_SEASON",
+      "description": "Seasonal event: Auto follows the calendar; or force one (Halloween, Christmas...) or None.",
+      "placeholder": "Auto",
+      "optional": true
+     },
+     {
+      "name": "CK_ALLOW_ONLY_PLATFORM",
+      "description": "Which PC stores can join: All = cross-play (Steam, Epic, Microsoft Store and GOG), or only one of them.",
+      "placeholder": "All",
+      "optional": true
+     },
+     {
+      "name": "CK_ADMINS",
+      "description": "Admins: SteamID64s (17 digits starting 7656119), comma separated. The first player to join also becomes admin. Manage admins and bans later in the Players tab of your server panel.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "CK_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible. Keeps long-running Core Keeper servers smooth. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 3000,
+    "hdd": 10
+   }
+  ]
+ },
+ {
+  "name": "CounterStrike2",
+  "displayName": "Counter-Strike 2",
+  "category": "NewGames",
+  "description": "Your own Counter-Strike 2 server: every game mode, Workshop maps, Metamod and CounterStrikeSharp plugins (MatchZy, Retakes...) in one click, admins, bans and backups from the panel. Bring your own Steam token.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "counterstrike2counterstrike2",
+    "description": "Counter-Strike 2 dedicated server",
+    "repotag": "runonflux/cs2-server-flux:latest",
+    "ports": [
+     27015
+    ],
+    "containerPorts": [
+     27015
+    ],
+    "environmentParameters": [
+     "GAME_PORT=27015",
+     "CS2_MAXPLAYERS=10",
+     "CS2_HOSTNAME=Counter-Strike 2 on Flux",
+     "CS2_GAME_MODE=competitive",
+     "CS2_MAP=de_dust2",
+     "CS2_GSLT=",
+     "CS2_PASSWORD=",
+     "CS2_RCON_PASSWORD=",
+     "CS2_WORKSHOP_COLLECTION=",
+     "CS2_ADDONS=true",
+     "CS2_EXTRA_ARGS="
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/cs2/data|ml:server:/mnt/cs2/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "CS2_HOSTNAME",
+      "description": "Server name in the server browser.",
+      "placeholder": "My CS2 Server",
+      "optional": false
+     },
+     {
+      "name": "CS2_GSLT",
+      "description": "Your Game Server Login Token for App ID 730 (steamcommunity.com/dev/managegameservers). Without a valid one the server is not in the Internet server list; a rejected token stops players joining.",
+      "placeholder": "32 characters",
+      "optional": true
+     },
+     {
+      "name": "CS2_MAXPLAYERS",
+      "description": "Maximum players, 2 to 64. The plan is only a hardware guide: raise it as far as you like (64 is the game's own maximum), but a busy 64-player server needs the larger plans.",
+      "placeholder": "10",
+      "optional": true
+     },
+     {
+      "name": "CS2_GAME_MODE",
+      "description": "Game mode the server starts in (changeable later in the panel).",
+      "placeholder": "competitive",
+      "optional": true
+     },
+     {
+      "name": "CS2_MAP",
+      "description": "Starting map: a stock map (de_dust2, de_mirage, de_inferno, de_nuke...) or a Workshop map as its ID or link.",
+      "placeholder": "de_dust2",
+      "optional": true
+     },
+     {
+      "name": "CS2_PASSWORD",
+      "description": "Join password. Empty = public.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "CS2_RCON_PASSWORD",
+      "description": "RCON password (the panel's console works without it). Empty = RCON off.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "CS2_WORKSHOP_COLLECTION",
+      "description": "Steam Workshop collection ID or link: its maps become the map group.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "CS2_ADDONS",
+      "description": "true = Metamod:Source and CounterStrikeSharp installed and kept updated (plugins, admins).",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "CS2_EXTRA_ARGS",
+      "description": "Extra launch arguments, e.g. +sv_region 3.",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 3000,
+    "hdd": 100
+   }
+  ]
+ },
+ {
   "name": "Cyberfly",
   "displayName": "Cyberfly",
   "category": "Blockchain",
   "description": "Host your Cyberfly Mainnet Node on FluxCloud",
-  "priceUSD": 1.63,
+  "priceUSD": 2.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -213,7 +1116,7 @@
   "displayName": "DashNode",
   "category": "Masternode",
   "description": "Host your Dash Masternode on the Flux Network (HA: 2 redundant nodes with automatic failover)",
-  "priceUSD": 5,
+  "priceUSD": 3.49,
   "multiplier": 1,
   "instances": 2,
   "lockedValues": [],
@@ -296,7 +1199,7 @@
   "displayName": "DogecoinNode",
   "category": "Blockchain",
   "description": "Host your Dogecoin Full Node on the Flux Network",
-  "priceUSD": 5,
+  "priceUSD": 4.49,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -333,7 +1236,7 @@
   "name": "DontStarveTogether",
   "displayName": "Don't Starve Together",
   "category": "NewGames",
-  "description": "Brave the monsters of The Constant with up to 6 survivors, always online.",
+  "description": "Host Don't Starve Together with the Caves included: your Klei token, any play style, Workshop mods with their settings, automatic saves, update restarts and backups.",
   "priceUSD": 1,
   "multiplier": null,
   "instances": 2,
@@ -343,9 +1246,9 @@
   "visible": true,
   "compose": [
    {
-    "name": "dstdst",
-    "description": "dontstarvetogether",
-    "repotag": "wollwolke/dst-dedicated-server:latest",
+    "name": "dontstarvetogetherdontstarvetogether",
+    "description": "Don't Starve Together dedicated server (surface and caves)",
+    "repotag": "runonflux/dst-server-flux:latest",
     "ports": [
      11000,
      10999
@@ -354,38 +1257,89 @@
      11000,
      10999
     ],
-    "environmentParameters": [],
+    "environmentParameters": [
+     "DST_PORT=11000",
+     "DST_CAVES_PORT=10999",
+     "DST_NAME=Don't Starve Together on Flux",
+     "DST_PASSWORD=",
+     "DST_PLAYSTYLE=survival",
+     "DST_CAVES=true",
+     "DST_MAX_PLAYERS=8",
+     "DST_PAUSE_WHEN_EMPTY=true"
+    ],
     "commands": [],
-    "containerData": "g:/data|m:dst_server:/home/dst/dst_server",
+    "containerData": "g:/mnt/dst/data|ml:server:/mnt/dst/server",
     "userEnvironmentParameters": [
      {
-      "name": "CLUSTER_TOKEN",
-      "description": "Your Klei cluster token (get it from accounts.klei.com > Game Servers > Add New Server)",
-      "placeholder": "Paste your cluster token here",
+      "name": "DST_CLUSTER_TOKEN",
+      "description": "Your Klei cluster token: accounts.klei.com > Games > Game Servers > Add New Server, then copy the token (it starts with pds-g^KU_). Required: Don't Starve Together servers cannot start without one.",
+      "placeholder": "pds-g^KU_...",
       "optional": false
      },
      {
-      "name": "CLUSTER_NAME",
-      "description": "Server name shown in the server browser",
+      "name": "DST_NAME",
+      "description": "Server name shown in the server browser.",
       "placeholder": "My DST Server",
       "optional": false
      },
      {
-      "name": "SHARD_NAME",
-      "description": "Shard name (use Master for single-shard servers)",
-      "placeholder": "Master",
+      "name": "DST_PASSWORD",
+      "description": "Password to join. Leave empty for a public server.",
+      "placeholder": "",
       "optional": true
      },
      {
-      "name": "MAX_PLAYERS",
-      "description": "Maximum players allowed",
-      "placeholder": "6",
+      "name": "DST_PLAYSTYLE",
+      "description": "Play style, as in the game's Host Game screen: survival (classic), relaxed (forgiving, for new players), endless (the world never resets), wilderness (random spawns, no ghosts), lightsout (endless night).",
+      "placeholder": "survival",
+      "optional": false
+     },
+     {
+      "name": "DST_CAVES",
+      "description": "true = the Caves world is included (players go down through sinkholes), false = the surface only.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "DST_PVP",
+      "description": "true = players can attack each other.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "DST_INTENTION",
+      "description": "Server style shown in the browser: cooperative, social, competitive or madness.",
+      "placeholder": "cooperative",
+      "optional": true
+     },
+     {
+      "name": "DST_DESCRIPTION",
+      "description": "Description shown in the server browser.",
+      "placeholder": "Friendly survival server",
+      "optional": true
+     },
+     {
+      "name": "DST_ADMINS",
+      "description": "Admins: Klei user IDs (KU_...), comma separated. Find yours at accounts.klei.com under your account details.",
+      "placeholder": "KU_xxxxxxxx",
+      "optional": true
+     },
+     {
+      "name": "DST_MODS",
+      "description": "Steam Workshop mod IDs or links, comma separated: downloaded and enabled on every start. Configure them later in the Mods tab of your server panel.",
+      "placeholder": "378160973,375859599",
+      "optional": true
+     },
+     {
+      "name": "DST_MOD_COLLECTION",
+      "description": "A Steam Workshop collection ID or link: every mod in it is downloaded and enabled.",
+      "placeholder": "",
       "optional": true
      }
     ],
-    "cpu": 1,
-    "ram": 1500,
-    "hdd": 8
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 15
    }
   ]
  },
@@ -394,7 +1348,7 @@
   "displayName": "Dopex",
   "category": "Front-end",
   "description": "Host your Dopex.io Frontend on the Flux Cloud",
-  "priceUSD": 2.1,
+  "priceUSD": 1.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -438,7 +1392,7 @@
    {
     "name": "dragonwildsdragonwilds",
     "description": "dragonwilds",
-    "repotag": "indifferentbroccoli/runescape-dragonwilds-server-docker:latest",
+    "repotag": "runonflux/dragonwilds-server-flux:latest",
     "ports": [
      27777
     ],
@@ -507,24 +1461,23 @@
    {
     "name": "Enshrouded",
     "description": "Enshrouded",
-    "repotag": "sknnr/enshrouded-dedicated-server:latest",
+    "repotag": "runonflux/enshrouded-server-flux:latest",
     "ports": [
-     15637,
-     27015
+     15637
     ],
     "containerPorts": [
-     15637,
-     27015
+     15637
     ],
     "environmentParameters": [
-     "SERVER_NAME=cloud.runonflux.com"
+     "FLUX_RESTART_TIME=05:00",
+     "TZ=UTC"
     ],
     "commands": [],
-    "containerData": "g:/home/steam/enshrouded/savegame|f:enshrouded_server.json:/home/steam/enshrouded/enshrouded_server.json",
+    "containerData": "g:/home/steam/enshrouded/savegame|f:enshrouded_server.json:/home/steam/enshrouded/enshrouded_server.json|ml:game:/home/steam/enshrouded|m:mods:/home/steam/mods",
     "userEnvironmentParameters": [],
-    "cpu": 2,
+    "cpu": 3,
     "ram": 5000,
-    "hdd": 40
+    "hdd": 50
    }
   ]
  },
@@ -533,7 +1486,7 @@
   "displayName": "Enshrouded - 16 Slots",
   "category": "Games",
   "description": "Host your Enshrouded 16 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 19.99,
+  "priceUSD": 10.49,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -577,7 +1530,7 @@
   "displayName": "Enshrouded - 4 Slots",
   "category": "Games",
   "description": "Host your Enshrouded 4 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 9.99,
+  "priceUSD": 4.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -625,7 +1578,7 @@
   "displayName": "Enshrouded - 8 Slots",
   "category": "Games",
   "description": "Host your Enshrouded 8 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 14.99,
+  "priceUSD": 7.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -665,13 +1618,102 @@
   ]
  },
  {
+  "name": "EuroTruckSimulator2",
+  "displayName": "Euro Truck Simulator 2",
+  "category": "NewGames",
+  "description": "Host your own Euro Truck Simulator 2 convoy server: always online for your trucking group, map DLC and mods from your own game profile, moderators, a password, traffic and damage rules, and restarts onto game updates when nobody is driving.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "eurotrucksimulator2eurotrucksimulator2",
+    "description": "Euro Truck Simulator 2 convoy dedicated server",
+    "repotag": "runonflux/truckersim-server-flux:latest",
+    "ports": [
+     27015,
+     27016
+    ],
+    "containerPorts": [
+     27015,
+     27016
+    ],
+    "environmentParameters": [
+     "SCS_GAME=ets2",
+     "SCS_PORT=27015",
+     "SCS_QUERY_PORT=27016",
+     "SCS_LOBBY_NAME=Euro Truck Simulator 2 on Flux"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/scs/data|ml:server:/mnt/scs/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "SCS_LOBBY_NAME",
+      "description": "Convoy name shown in the game's convoy browser (63 characters).",
+      "placeholder": "My Euro Truck Simulator 2 Convoy",
+      "optional": false
+     },
+     {
+      "name": "SCS_DESCRIPTION",
+      "description": "Short description in the convoy browser.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SCS_WELCOME",
+      "description": "Message players see when they join.",
+      "placeholder": "Welcome!",
+      "optional": true
+     },
+     {
+      "name": "SCS_MODERATORS",
+      "description": "Moderators: SteamID64s, comma separated. Moderators can kick, ban and use /set_time and /set_rain_factor in chat.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "SCS_TRAFFIC",
+      "description": "AI traffic on the roads.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "SCS_PLAYER_DAMAGE",
+      "description": "Players can damage each other's trucks.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "SCS_FORCE_SPEED_LIMITER",
+      "description": "Force the speed limiter on everyone.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "SCS_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, in the server's time zone, UTC unless TZ is set), done once nobody is driving. Empty = none.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 1,
+    "ram": 1500,
+    "hdd": 8
+   }
+  ]
+ },
+ {
   "name": "Factorio",
   "displayName": "Factorio",
   "category": "NewGames",
-  "description": "factorio server",
+  "description": "Host a Factorio 2.0 server on the stable branch, with Space Age on or off, RCON and your saves.",
   "priceUSD": 1,
   "multiplier": null,
-  "instances": 3,
+  "instances": 2,
   "lockedValues": [],
   "geolocationOptions": [],
   "enabled": true,
@@ -679,8 +1721,8 @@
   "compose": [
    {
     "name": "factorio",
-    "description": "factorio",
-    "repotag": "factoriotools/factorio:latest",
+    "description": "Factorio headless server",
+    "repotag": "factoriotools/factorio:stable",
     "ports": [
      34197,
      27015
@@ -689,13 +1731,24 @@
      34197,
      27015
     ],
-    "environmentParameters": [],
+    "environmentParameters": [
+     "PORT=34197",
+     "RCON_PORT=27015",
+     "DLC_SPACE_AGE=true"
+    ],
     "commands": [],
     "containerData": "g:/factorio",
-    "userEnvironmentParameters": [],
+    "userEnvironmentParameters": [
+     {
+      "name": "DLC_SPACE_AGE",
+      "description": "true = Space Age expansion on (players need to own it), false = base game only (anyone can join).",
+      "placeholder": "true",
+      "optional": false
+     }
+    ],
     "cpu": 2,
     "ram": 2000,
-    "hdd": 40
+    "hdd": 15
    }
   ]
  },
@@ -704,7 +1757,7 @@
   "displayName": "FACTOR Node",
   "category": "Blockchain",
   "description": "Host your FACTOR blockchain node on FluxCloud",
-  "priceUSD": 7.3,
+  "priceUSD": 7.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -874,7 +1927,7 @@
   "displayName": "Folding@Home",
   "category": "Productivity",
   "description": "PoUW at Flux layer 2 network. Folding@home is a project focused on disease research. Client Visit was disabled, to check Run On Flux team stats go to https://stats.foldingathome.org/team/262156",
-  "priceUSD": 2.99,
+  "priceUSD": 1.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -915,7 +1968,7 @@
   "name": "GarrysMod",
   "displayName": "Garry's Mod",
   "category": "NewGames",
-  "description": "Host TTT, DarkRP, Prop Hunt, or any gamemode your community can invent.",
+  "description": "Host Sandbox, TTT, DarkRP, Prop Hunt or any gamemode, with your Workshop collection, RCON and the Steam server browser.",
   "priceUSD": 1,
   "multiplier": null,
   "instances": 2,
@@ -926,35 +1979,70 @@
   "compose": [
    {
     "name": "garrysmodgarrysmod",
-    "description": "garrysmod",
-    "repotag": "ich777/steamcmd:garrysmod",
+    "description": "Garry's Mod dedicated server",
+    "repotag": "runonflux/garrysmod-server-flux:latest",
     "ports": [
-     27015,
-     27005
+     27015
     ],
     "containerPorts": [
-     27015,
-     27005
+     27015
     ],
     "environmentParameters": [
-     "GAME_ID=4020",
-     "GAME_NAME=garrysmod",
-     "VALIDATE=true",
-     "DATA_PERM=777"
+     "GAME_PORT=27015",
+     "GMOD_MAXPLAYERS=16",
+     "GMOD_HOSTNAME=Flux GMod Server",
+     "GMOD_GAMEMODE=sandbox",
+     "GMOD_MAP=gm_construct"
     ],
     "commands": [],
-    "containerData": "g:/serverdata/serverfiles",
+    "containerData": "g:/mnt/gmod/server/garrysmod|ml:server:/mnt/gmod/server|ml:cache:/mnt/gmod/server/garrysmod/cache",
     "userEnvironmentParameters": [
      {
-      "name": "GAME_PARAMS",
-      "description": "Server launch parameters",
-      "placeholder": "+maxplayers 24 +gamemode sandbox",
+      "name": "GMOD_HOSTNAME",
+      "description": "Server name in the server browser (63 characters, no double quotes).",
+      "placeholder": "My Garry's Mod Server",
+      "optional": false
+     },
+     {
+      "name": "GMOD_RCON_PASSWORD",
+      "description": "RCON password (no spaces or quotes). Without it RCON stays off.",
+      "placeholder": "A strong password",
+      "optional": false
+     },
+     {
+      "name": "GMOD_GAMEMODE",
+      "description": "Gamemode folder name: sandbox, terrortown, or one from your Workshop collection (darkrp, prop_hunt...).",
+      "placeholder": "sandbox",
+      "optional": true
+     },
+     {
+      "name": "GMOD_MAP",
+      "description": "Start map without .bsp. gm_construct and gm_flatgrass come with the game.",
+      "placeholder": "gm_construct",
+      "optional": true
+     },
+     {
+      "name": "GMOD_WORKSHOP_COLLECTION",
+      "description": "Steam Workshop collection ID: its addons, maps and gamemodes are downloaded on every start.",
+      "placeholder": "e.g. 3528279840",
+      "optional": true
+     },
+     {
+      "name": "GMOD_PASSWORD",
+      "description": "Join password (no spaces). Empty for a public server.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "GMOD_GSLT",
+      "description": "Optional Steam game server token for App ID 4000 (steamcommunity.com/dev/managegameservers): better server-browser ranking.",
+      "placeholder": "32 letters and digits",
       "optional": true
      }
     ],
-    "cpu": 1.5,
-    "ram": 2000,
-    "hdd": 10
+    "cpu": 2,
+    "ram": 3000,
+    "hdd": 20
    }
   ]
  },
@@ -963,7 +2051,7 @@
   "displayName": "Gmx",
   "category": "Front-end",
   "description": "Host your GMX.io Frontend on the Flux Cloud",
-  "priceUSD": 3.16,
+  "priceUSD": 1.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -996,7 +2084,7 @@
   "displayName": "Hermes Agent",
   "category": "Productivity",
   "description": "Deploy Hermes Agent, the self-improving AI agent by Nous Research, on Flux Cloud (4GB RAM). Password-protected dashboard, built-in Tailscale to reach your private network, and bring your own AI provider key (OpenRouter, OpenAI, Anthropic & more).",
-  "priceUSD": 4.02,
+  "priceUSD": 5.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -1078,7 +2166,7 @@
   "displayName": "Hermes Agent Pro",
   "category": "Productivity",
   "description": "Deploy Hermes Agent, the self-improving AI agent by Nous Research, on Flux Cloud — Pro (8GB RAM). Password-protected dashboard, built-in Tailscale to reach your private network, and bring your own AI provider key (OpenRouter, OpenAI, Anthropic & more).",
-  "priceUSD": 7.49,
+  "priceUSD": 9.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -1156,11 +2244,146 @@
   ]
  },
  {
+  "name": "Hytale",
+  "displayName": "Hytale",
+  "category": "NewGames",
+  "description": "Host your Hytale server on Flux Cloud for a 1-month plan",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "hytale",
+    "description": "Hytale dedicated server",
+    "repotag": "indifferentbroccoli/hytale-server-docker:latest",
+    "ports": [
+     5520
+    ],
+    "containerPorts": [
+     5520
+    ],
+    "environmentParameters": [
+     "DEFAULT_PORT=5520",
+     "MAX_MEMORY=3G",
+     "AUTH_MODE=authenticated",
+     "DOWNLOAD_ON_START=true",
+     "USE_AOT_CACHE=true",
+     "DISABLE_SENTRY=true",
+     "ENABLE_BACKUPS=true",
+     "BACKUP_FREQUENCY=60",
+     "BACKUP_MAX_COUNT=5",
+     "TZ=Etc/UTC"
+    ],
+    "commands": [],
+    "containerData": "g:/home/hytale/server-files",
+    "userEnvironmentParameters": [
+     {
+      "name": "PATCHLINE",
+      "description": "Server build channel. Use pre-release only if your players run the pre-release client.",
+      "placeholder": "release",
+      "optional": true
+     },
+     {
+      "name": "TZ",
+      "description": "Timezone used for backups and log timestamps.",
+      "placeholder": "Etc/UTC",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
+  "name": "Icarus",
+  "displayName": "ICARUS",
+  "category": "NewGames",
+  "description": "Host ICARUS always online for your crew: your prospects and worlds, every server setting in your browser, admins and bans, automatic backups and game updates.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "icarusicarus",
+    "description": "Icarus dedicated server (Windows server under Wine, prospects, backups)",
+    "repotag": "runonflux/icarus-server-flux:latest",
+    "ports": [
+     17777,
+     27015
+    ],
+    "containerPorts": [
+     17777,
+     27015
+    ],
+    "environmentParameters": [
+     "ICARUS_GAME_PORT=17777",
+     "ICARUS_QUERY_PORT=27015",
+     "ICARUS_SERVER_NAME=Icarus on Flux",
+     "ICARUS_MAX_PLAYERS=4",
+     "ICARUS_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/icarus/data|ml:server:/mnt/icarus/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "ICARUS_SERVER_NAME",
+      "description": "Server name shown in the in-game server browser (up to 64 characters).",
+      "placeholder": "My Icarus Server",
+      "optional": false
+     },
+     {
+      "name": "ICARUS_ADMIN_PASSWORD",
+      "description": "Admin password: a player types /AdminLogin <password> in the game chat to become an admin. Required (with none, anyone can become an admin). No spaces or quotes.",
+      "placeholder": "",
+      "optional": false
+     },
+     {
+      "name": "ICARUS_JOIN_PASSWORD",
+      "description": "Join password (no spaces or quotes). Empty = anyone who finds the server can join.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "ICARUS_MAX_PLAYERS",
+      "description": "Player limit, 1 to 8 (the game's maximum). The player count of your plan is only what we think its CPU and RAM run comfortably, you can set more. Empty = the plan's number.",
+      "placeholder": "4",
+      "optional": true
+     },
+     {
+      "name": "ICARUS_ADMINS",
+      "description": "Server admins who need no password: SteamID64s (17 digits starting 7656119), comma separated. Manage them later in your server panel.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "ICARUS_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible; it installs game updates. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 10000,
+    "hdd": 25
+   }
+  ]
+ },
+ {
   "name": "IronFishNode",
   "displayName": "IronFIshNode",
   "category": "Blockchain",
   "description": "An IronFish Full Node",
-  "priceUSD": 11,
+  "priceUSD": 9.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -1193,7 +2416,7 @@
   "displayName": "Kadena Chainweb Node",
   "category": "Blockchain",
   "description": "Kadena Chainweb Node with compacted database (~44GB). Includes web dashboard for monitoring. Uses snapshots from chainweb-community.org. Suitable for mining and API access. Initial bootstrap ~15 minutes.",
-  "priceUSD": 15,
+  "priceUSD": 8.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1235,7 +2458,7 @@
   "displayName": "Kaspa Node 16GB RAM",
   "category": "Blockchain",
   "description": "Host your Kaspa Node on FluxCloud with 16GB RAM",
-  "priceUSD": 27.2,
+  "priceUSD": 27.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1286,7 +2509,7 @@
   "displayName": "Kaspa Node 24GB RAM",
   "category": "Blockchain",
   "description": "Host your Kaspa Node on FluxCloud with 24GB RAM",
-  "priceUSD": 31.2,
+  "priceUSD": 31.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1336,7 +2559,7 @@
   "displayName": "Kaspa Testnet Node 16GB RAM",
   "category": "Blockchain",
   "description": "Host your Kaspa Testnet Node on FluxCloud with 16GB RAM",
-  "priceUSD": 27.2,
+  "priceUSD": 27.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1388,7 +2611,7 @@
   "displayName": "Kaspa Testnet Node 24GB RAM",
   "category": "Blockchain",
   "description": "Host your Kaspa Testnet Node on FluxCloud with 24GB RAM",
-  "priceUSD": 31.2,
+  "priceUSD": 31.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1435,11 +2658,108 @@
   ]
  },
  {
+  "name": "KillingFloor2",
+  "displayName": "Killing Floor 2",
+  "category": "NewGames",
+  "description": "Host Killing Floor 2 always online for your squad: every server setting in your browser, Steam Workshop maps and mutators, a map cycle, players, kicks and bans, automatic backups and game updates.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "killingfloor2killingfloor2",
+    "description": "Killing Floor 2 dedicated server (native Linux server, workshop maps, web admin, backups)",
+    "repotag": "runonflux/killingfloor2-server-flux:latest",
+    "ports": [
+     7777,
+     27015
+    ],
+    "containerPorts": [
+     7777,
+     27015
+    ],
+    "environmentParameters": [
+     "KF2_GAME_PORT=7777",
+     "KF2_QUERY_PORT=27015",
+     "KF2_WEB_PORT=8080",
+     "KF2_SERVER_NAME=Killing Floor 2 on Flux",
+     "KF2_MAX_PLAYERS=6",
+     "KF2_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/kf2/data|ml:server:/mnt/kf2/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "KF2_SERVER_NAME",
+      "description": "Server name shown in the in-game server browser.",
+      "placeholder": "My Killing Floor 2 Server",
+      "optional": false
+     },
+     {
+      "name": "KF2_ADMIN_PASSWORD",
+      "description": "Admin password: used for the in-game admin login and for the web admin (user Admin). Required, and it turns the web admin on. No spaces, quotes, ?, & or =.",
+      "placeholder": "",
+      "optional": false
+     },
+     {
+      "name": "KF2_JOIN_PASSWORD",
+      "description": "Join password (same rules). Empty = anyone who finds the server can join.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "KF2_GAME_MODE",
+      "description": "survival, weekly, endless, versus or objective. Change it later in your server panel.",
+      "placeholder": "survival",
+      "optional": true
+     },
+     {
+      "name": "KF2_DIFFICULTY",
+      "description": "normal, hard, suicidal or hell (Hell On Earth). Survival, Endless and Objective.",
+      "placeholder": "normal",
+      "optional": true
+     },
+     {
+      "name": "KF2_GAME_LENGTH",
+      "description": "short (4 waves), medium (7) or long (10). Survival only.",
+      "placeholder": "short",
+      "optional": true
+     },
+     {
+      "name": "KF2_MAX_PLAYERS",
+      "description": "Player limit. The game allows 6 in Survival, Weekly, Endless and Objective, and 12 in Versus. Empty = the plan's number.",
+      "placeholder": "6",
+      "optional": true
+     },
+     {
+      "name": "KF2_WORKSHOP_IDS",
+      "description": "Steam Workshop item ids (or links) of maps and mutators, comma separated. Manage them later in your server panel.",
+      "placeholder": "857015700",
+      "optional": true
+     },
+     {
+      "name": "KF2_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible; it installs game updates. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
   "name": "KusamaNode",
   "displayName": "KusamaNode",
   "category": "Blockchain",
   "description": "Host your Kusama Node on the Flux Network",
-  "priceUSD": 2.5,
+  "priceUSD": 2.49,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -1479,7 +2799,7 @@
   "displayName": "Minecraft16GB",
   "category": "Games",
   "description": "Host your PUBLIC Java Minecraft 16GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 24.99,
+  "priceUSD": 11.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1518,7 +2838,7 @@
   "displayName": "Minecraft1GB",
   "category": "Games",
   "description": "Host your PUBLIC Java Minecraft 1GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 2.99,
+  "priceUSD": 2.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1557,7 +2877,7 @@
   "displayName": "Minecraft2GB",
   "category": "Games",
   "description": "Host your PUBLIC  Java Minecraft 2GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 4.99,
+  "priceUSD": 2.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1596,7 +2916,7 @@
   "displayName": "Minecraft32GB",
   "category": "Games",
   "description": "Host your PUBLIC Java Minecraft 32GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 44.99,
+  "priceUSD": 21.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1635,7 +2955,7 @@
   "displayName": "Minecraft48GB",
   "category": "Games",
   "description": "Host your PUBLIC Java Minecraft 48GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 69.99,
+  "priceUSD": 30.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1674,7 +2994,7 @@
   "displayName": "Minecraft5GB",
   "category": "Games",
   "description": "Host your PUBLIC Java Minecraft 5GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 9.99,
+  "priceUSD": 4.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1713,7 +3033,7 @@
   "displayName": "Minecraft9GB",
   "category": "Games",
   "description": "Host your PUBLIC Java Minecraft 9GB Vanilla Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 14.99,
+  "priceUSD": 7.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1752,7 +3072,7 @@
   "displayName": "MinecraftBedrock16GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 16GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 24.99,
+  "priceUSD": 11.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1790,7 +3110,7 @@
   "displayName": "MinecraftBedrock1GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 1GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 2.99,
+  "priceUSD": 2.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1828,7 +3148,7 @@
   "displayName": "MinecraftBedrock2GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 2GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 4.99,
+  "priceUSD": 2.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1866,7 +3186,7 @@
   "displayName": "MinecraftBedrock32GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 32GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 44.99,
+  "priceUSD": 21.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1904,7 +3224,7 @@
   "displayName": "MinecraftBedrock48GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 48GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 69.99,
+  "priceUSD": 30.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1942,7 +3262,7 @@
   "displayName": "MinecraftBedrock5GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 5GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 9.99,
+  "priceUSD": 4.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -1980,7 +3300,7 @@
   "displayName": "MinecraftBedrock9GB",
   "category": "Games",
   "description": "Host your PUBLIC Minecraft Bedrock 9GB Game Server on Flux Cloud for a one month plan",
-  "priceUSD": 14.99,
+  "priceUSD": 7.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -2171,7 +3491,7 @@
   "displayName": "n8n Pro",
   "category": "Productivity",
   "description": "Self-hosted n8n workflow automation on a high-availability PostgreSQL cluster (auto-failover, 3 nodes) — n8n 4GB + HA PostgreSQL 2GB · 4 CPU · 35GB SSD. Build AI agents and connect 500+ apps. Web UI on port 35678.",
-  "priceUSD": 9.87,
+  "priceUSD": 12.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -2276,7 +3596,7 @@
   "displayName": "n8n Standard",
   "category": "Productivity",
   "description": "Self-hosted n8n workflow automation on a high-availability PostgreSQL cluster (auto-failover, 3 nodes) — n8n 2GB + HA PostgreSQL 1GB · 2.5 CPU · 25GB SSD. Build AI agents and connect 500+ apps. Web UI on port 35678.",
-  "priceUSD": 6.24,
+  "priceUSD": 7.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -2381,7 +3701,7 @@
   "displayName": "n8n Starter",
   "category": "Productivity",
   "description": "Self-hosted n8n workflow automation on a high-availability PostgreSQL cluster (auto-failover, 3 nodes) — n8n 1GB + HA PostgreSQL 1GB · 2 CPU · 15GB SSD. Build AI agents and connect 500+ apps. Web UI on port 35678.",
-  "priceUSD": 5.32,
+  "priceUSD": 6.99,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -2486,7 +3806,7 @@
   "displayName": "Neoxa",
   "category": "Masternode",
   "description": "Host your Neoxa Masternode on the Flux Cloud",
-  "priceUSD": 5,
+  "priceUSD": 3.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -2532,7 +3852,7 @@
   "displayName": "Nextcloud Lite",
   "category": "Productivity",
   "description": "Nextcloud Lite — a private cloud sized for one user. Perfect for phone photo backup, personal documents, calendar, and contacts. Powered by the bundled SQLite database. Upgrade to Nextcloud Personal when you need more storage or want to share with family.",
-  "priceUSD": 3,
+  "priceUSD": 3.99,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -2568,7 +3888,7 @@
   "displayName": "Nextcloud Personal",
   "category": "Productivity",
   "description": "Nextcloud Personal — your own private cloud for up to 5 users. Includes file sync, photo backup, calendar, contacts, and notes. Powered by the bundled SQLite database. Best for households or small teams who need shared storage and collaboration.",
-  "priceUSD": 5.02,
+  "priceUSD": 6.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -2604,7 +3924,7 @@
   "displayName": "OpenClaw AI Assistant",
   "category": "Productivity",
   "description": "OpenClaw is a personal AI assistant you run on your own hardware. Privacy-focused, local-first, with 20+ messaging integrations (WhatsApp, Telegram, Slack, Discord, Signal, Matrix), voice, browser automation and webhooks.",
-  "priceUSD": 4.02,
+  "priceUSD": 5.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -2632,7 +3952,7 @@
     "commands": [
      "sh",
      "-c",
-     "[ -f /home/node/.openclaw/openclaw.json ] || echo '{\"gateway\":{\"mode\":\"local\",\"controlUi\":{\"dangerouslyAllowHostHeaderOriginFallback\":true,\"allowInsecureAuth\":true}}}' > /home/node/.openclaw/openclaw.json; /start.sh gateway --allow-unconfigured --bind lan --port 18789"
+     "[ -f /home/node/.openclaw/openclaw.json ] || echo '{\"gateway\":{\"mode\":\"local\",\"controlUi\":{\"dangerouslyAllowHostHeaderOriginFallback\":true}}}' > /home/node/.openclaw/openclaw.json; /start.sh gateway --allow-unconfigured --bind lan --port 18789"
     ],
     "containerData": "g:/home/node/.openclaw",
     "userEnvironmentParameters": [
@@ -2672,7 +3992,7 @@
   "displayName": "OpenClaw AI Assistant Pro",
   "category": "Productivity",
   "description": "OpenClaw Pro - higher specs for professional usage. Privacy-focused AI assistant with 20+ messaging integrations, voice, browser automation and webhooks.",
-  "priceUSD": 7.49,
+  "priceUSD": 9.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -2700,7 +4020,7 @@
     "commands": [
      "sh",
      "-c",
-     "[ -f /home/node/.openclaw/openclaw.json ] || echo '{\"gateway\":{\"mode\":\"local\",\"controlUi\":{\"dangerouslyAllowHostHeaderOriginFallback\":true,\"allowInsecureAuth\":true}}}' > /home/node/.openclaw/openclaw.json; /start.sh gateway --allow-unconfigured --bind lan --port 18789"
+     "[ -f /home/node/.openclaw/openclaw.json ] || echo '{\"gateway\":{\"mode\":\"local\",\"controlUi\":{\"dangerouslyAllowHostHeaderOriginFallback\":true}}}' > /home/node/.openclaw/openclaw.json; /start.sh gateway --allow-unconfigured --bind lan --port 18789"
     ],
     "containerData": "g:/home/node/.openclaw",
     "userEnvironmentParameters": [
@@ -2794,7 +4114,7 @@
   "displayName": "Palworld - 16 Slots",
   "category": "Games",
   "description": "Host your Palworld 16 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 17.99,
+  "priceUSD": 10.49,
   "multiplier": 1.4,
   "instances": 3,
   "lockedValues": [],
@@ -2841,7 +4161,7 @@
   "displayName": "Palworld - 32 Slots",
   "category": "Games",
   "description": "Host your Palworld 32 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 24.99,
+  "priceUSD": 15.49,
   "multiplier": 1.39,
   "instances": 3,
   "lockedValues": [],
@@ -2888,7 +4208,7 @@
   "displayName": "Palworld - 4 Slots",
   "category": "Games",
   "description": "Host your Palworld 4 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 7.99,
+  "priceUSD": 4.99,
   "multiplier": 1.16,
   "instances": 3,
   "lockedValues": [],
@@ -2939,7 +4259,7 @@
   "displayName": "Palworld - 8 Slots",
   "category": "Games",
   "description": "Host your Palworld 8 slots Game Server on Flux Cloud for a 1-month plan",
-  "priceUSD": 12.99,
+  "priceUSD": 6.49,
   "multiplier": 1.39,
   "instances": 3,
   "lockedValues": [],
@@ -2990,7 +4310,7 @@
   "displayName": "Pangolin",
   "category": "Front-end",
   "description": "Host your Pangolin Frontend on the Flux Cloud",
-  "priceUSD": 2.1,
+  "priceUSD": 1.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -3023,7 +4343,7 @@
   "displayName": "PirateCash Node",
   "category": "Masternode",
   "description": "Host your PirateCash Masternode on the Flux Network (HA: 2 redundant nodes with automatic failover). Collateral: 10,000 PIRATE.",
-  "priceUSD": 5,
+  "priceUSD": 3.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3069,7 +4389,7 @@
   "displayName": "PIVX Node",
   "category": "Masternode",
   "description": "Host your PIVX Masternode on the Flux Cloud",
-  "priceUSD": 5.99,
+  "priceUSD": 4.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -3210,7 +4530,7 @@
   "displayName": "Private SimpleX SMP Server",
   "category": "Hosting",
   "description": "Host your own PRIVATE (password-protected) SimpleX SMP Server with IP + Onion address. Only clients with your password can register.",
-  "priceUSD": 3.06,
+  "priceUSD": 3.99,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3278,8 +4598,8 @@
   "compose": [
    {
     "name": "projectzomboid",
-    "description": "Project Zomboid Build 42 dedicated server (stable, multiplayer). Join at IP:36261 (UDP), Steam invite, or server browser. UDPPORT sets the second UDP port. Restart once after deploy to apply join password and browser name.",
-    "repotag": "danixu86/project-zomboid-dedicated-server:42.20.0-release",
+    "description": "Project Zomboid Build 42 dedicated server (stable, multiplayer). Join at IP:36261 (UDP), Steam invite, or server browser. UDPPORT sets the second UDP port.",
+    "repotag": "runonflux/zomboid-server-flux:b42",
     "ports": [
      36261,
      36262
@@ -3292,10 +4612,12 @@
      "PUBLIC=true",
      "MEMORY=4608m",
      "PORT=36261",
-     "UDPPORT=36262"
+     "UDPPORT=36262",
+     "FLUX_RESTART_TIME=05:00",
+     "TZ=Etc/UTC"
     ],
     "commands": [],
-    "containerData": "g:/home/steam/Zomboid",
+    "containerData": "g:/home/steam/Zomboid|ml:server:/home/steam/pz-dedicated",
     "userEnvironmentParameters": [
      {
       "name": "SERVERNAME",
@@ -3323,7 +4645,7 @@
      },
      {
       "name": "PASSWORD",
-      "description": "Password players must enter to join the server (leave empty for no join password). Applied after the first restart.",
+      "description": "Password players must enter to join the server (leave empty for no join password).",
       "placeholder": "Enter join password",
       "optional": true
      },
@@ -3345,7 +4667,7 @@
   "displayName": "Raptoreum Node",
   "category": "Masternode",
   "description": "Host your Raptoreum Smartnode on the Flux Network (HA: 2 redundant nodes with automatic failover). Collateral: 1,800,000 RTM.",
-  "priceUSD": 5,
+  "priceUSD": 3.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3393,7 +4715,7 @@
   "displayName": "RavenNode",
   "category": "Blockchain",
   "description": "Host your Ravencoin Node on the Flux Network",
-  "priceUSD": 5.99,
+  "priceUSD": 4.49,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -3452,7 +4774,7 @@
    {
     "name": "rust",
     "description": "rust",
-    "repotag": "pfeiffermax/rust-game-server:latest",
+    "repotag": "runonflux/rust-server-flux:latest",
     "ports": [
      28015,
      28016,
@@ -3465,7 +4787,10 @@
      28017,
      28082
     ],
-    "environmentParameters": [],
+    "environmentParameters": [
+     "FLUX_RESTART_TIME=05:00",
+     "TZ=Etc/UTC"
+    ],
     "commands": [
      "+server.port",
      "28015",
@@ -3486,7 +4811,7 @@
      "+app.port",
      "28082"
     ],
-    "containerData": "g:/srv/rust/server/rust",
+    "containerData": "g:/srv/rust/server/rust|ml:game:/srv/rust",
     "userEnvironmentParameters": [
      {
       "name": "SERVER_HOSTNAME",
@@ -3529,7 +4854,7 @@
    {
     "name": "rustoxide",
     "description": "rust-carbon",
-    "repotag": "runonflux/rust-carbon-server:latest",
+    "repotag": "runonflux/rust-server-flux:latest",
     "ports": [
      28015,
      28016,
@@ -3542,7 +4867,11 @@
      28017,
      28082
     ],
-    "environmentParameters": [],
+    "environmentParameters": [
+     "FLUX_FRAMEWORK=carbon",
+     "FLUX_RESTART_TIME=05:00",
+     "TZ=Etc/UTC"
+    ],
     "commands": [
      "+rcon.port",
      "28016",
@@ -3565,7 +4894,7 @@
      "+server.seed",
      "${SERVER_SEED}"
     ],
-    "containerData": "g:/srv/rust/server/rustcarbon|m:carbon:/srv/rust/carbon",
+    "containerData": "g:/srv/rust/server/rustcarbon|ml:game:/srv/rust|m:carbon:/srv/rust/carbon",
     "userEnvironmentParameters": [
      {
       "name": "SERVER_HOSTNAME",
@@ -3638,11 +4967,84 @@
   ]
  },
  {
+  "name": "Scum",
+  "displayName": "SCUM",
+  "category": "NewGames",
+  "description": "Host SCUM always online for your crew: every server setting in your browser, admins, bans and whitelist, raid times and economy rules, automatic backups and game updates.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "scumscum",
+    "description": "SCUM dedicated server (Windows server under Wine, SQLite save, backups)",
+    "repotag": "runonflux/scum-server-flux:latest",
+    "ports": [
+     7777,
+     7778,
+     7779
+    ],
+    "containerPorts": [
+     7777,
+     7778,
+     7779
+    ],
+    "environmentParameters": [
+     "SCUM_GAME_PORT=7777",
+     "SCUM_SERVER_NAME=SCUM on Flux",
+     "SCUM_MAX_PLAYERS=16",
+     "SCUM_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/scum/data|ml:server:/mnt/scum/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "SCUM_SERVER_NAME",
+      "description": "Server name shown in the in-game server list.",
+      "placeholder": "My SCUM Server",
+      "optional": false
+     },
+     {
+      "name": "SCUM_PASSWORD",
+      "description": "Join password. Empty = anyone who finds the server can join.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SCUM_MAX_PLAYERS",
+      "description": "Player limit, 1 to 128. The player count of your plan is only what we think its CPU and RAM run comfortably, you can set more. Empty = the plan's number.",
+      "placeholder": "16",
+      "optional": true
+     },
+     {
+      "name": "SCUM_ADMINS",
+      "description": "Server admins: SteamID64s (17 digits starting 7656119), comma separated. Manage them later in your server panel.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "SCUM_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible; it installs game updates. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 4,
+    "ram": 14000,
+    "hdd": 35
+   }
+  ]
+ },
+ {
   "name": "SimpleXSMP",
   "displayName": "SimpleX SMP Server",
   "category": "Hosting",
   "description": "Host your own PUBLIC SimpleX SMP Server with IP + Onion address. Federated, decentralized messaging relay for the SimpleX Chat network.",
-  "priceUSD": 3.06,
+  "priceUSD": 3.99,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3693,7 +5095,7 @@
   "displayName": "SimpleX xFTP Server",
   "category": "Hosting",
   "description": "Host your own PUBLIC SimpleX xFTP server with a 40 GB quota. Decentralized, end-to-end-encrypted file relay for the SimpleX Chat network.",
-  "priceUSD": 3.06,
+  "priceUSD": 3.99,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3724,11 +5126,191 @@
   ]
  },
  {
+  "name": "SonsOfTheForest",
+  "displayName": "Sons of the Forest",
+  "category": "NewGames",
+  "description": "Host Sons of the Forest always online for up to 8 friends: every server setting and custom game rule in your browser, save slots, upload your co-op save, owners, saves on every stop, automatic updates and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "sonsoftheforestsonsoftheforest",
+    "description": "Sons of the Forest dedicated server (Windows server under Wine, saves on stop, backups)",
+    "repotag": "runonflux/sotf-server-flux:latest",
+    "ports": [
+     8766,
+     27016,
+     9700
+    ],
+    "containerPorts": [
+     8766,
+     27016,
+     9700
+    ],
+    "environmentParameters": [
+     "SOTF_GAME_PORT=8766",
+     "SOTF_QUERY_PORT=27016",
+     "SOTF_BLOBSYNC_PORT=9700",
+     "SOTF_SERVER_NAME=Sons of the Forest on Flux",
+     "SOTF_GAME_MODE=Normal",
+     "SOTF_MAX_PLAYERS=8",
+     "SOTF_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/sotf/data|ml:server:/mnt/sotf/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "SOTF_SERVER_NAME",
+      "description": "Server name shown in the in-game server list.",
+      "placeholder": "My Sons of the Forest Server",
+      "optional": false
+     },
+     {
+      "name": "SOTF_PASSWORD",
+      "description": "Join password (up to 40 characters). Empty = anyone who finds the server can join.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SOTF_GAME_MODE",
+      "description": "Difficulty of a NEW world: Normal, Hard, HardSurvival, Peaceful (no enemies), Creative, or Custom (set every rule in the Server Settings tab of your server panel). An existing world keeps the mode it was made with.",
+      "placeholder": "Normal",
+      "optional": true
+     },
+     {
+      "name": "SOTF_OWNERS",
+      "description": "Server owners (in-game admins): SteamID64s (17 digits starting 7656119), comma separated. Manage them later in the Owners tab of your server panel.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "SOTF_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible; it saves first and installs game updates. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 9000,
+    "hdd": 25
+   }
+  ]
+ },
+ {
+  "name": "Soulmask",
+  "displayName": "Soulmask",
+  "category": "NewGames",
+  "description": "Host your own Soulmask server: Cloud Mist Forest or Shifting Sands, PvE or PvP, every gameplay rate with presets, Workshop mods, a live server console, bans and automatic backups, kept up to date.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "soulmasksoulmask",
+    "description": "Soulmask dedicated server",
+    "repotag": "runonflux/soulmask-server-flux:latest",
+    "ports": [
+     8777,
+     27015
+    ],
+    "containerPorts": [
+     8777,
+     27015
+    ],
+    "environmentParameters": [
+     "GAME_PORT=8777",
+     "QUERY_PORT=27015",
+     "SM_SERVER_NAME=Soulmask on Flux",
+     "SM_MAP=Level01_Main",
+     "SM_MODE=pve",
+     "SM_MAX_PLAYERS=20",
+     "SM_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/soulmask/data|ml:server:/mnt/soulmask/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "SM_SERVER_NAME",
+      "description": "Server name in the in-game server list.",
+      "placeholder": "My Soulmask Server",
+      "optional": false
+     },
+     {
+      "name": "SM_MAP",
+      "description": "Map: Level01_Main = Cloud Mist Forest, DLC_Level01_Main = Shifting Sands (players need the DLC). Each map keeps its own world.",
+      "placeholder": "Level01_Main",
+      "optional": false
+     },
+     {
+      "name": "SM_MODE",
+      "description": "pve = players fight the world together, pvp = players and tribes can fight each other.",
+      "placeholder": "pve",
+      "optional": false
+     },
+     {
+      "name": "SM_PASSWORD",
+      "description": "Join password. Empty = public. No spaces, quotes or backslashes.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SM_ADMIN_PASSWORD",
+      "description": "GM password: in game press ~ and type gm key <password> to become admin. Empty = one is generated and kept on the server.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SM_MAX_PLAYERS",
+      "description": "Max players, 1 to 70. Each plan sets its own; more players need more RAM.",
+      "placeholder": "20",
+      "optional": true
+     },
+     {
+      "name": "SM_MODS",
+      "description": "Steam Workshop mod IDs, comma separated. The server downloads them on start.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "SM_RESTART_TIME",
+      "description": "Daily restart HH:MM (UTC), on an empty server or after a 5-minute countdown in chat. Empty = none.",
+      "placeholder": "06:00",
+      "optional": true
+     },
+     {
+      "name": "SM_SAVE_MINUTES",
+      "description": "Minutes between saves to disk, 1 to 60 (the server also saves on every stop).",
+      "placeholder": "5",
+      "optional": true
+     },
+     {
+      "name": "SM_EXTRA_ARGS",
+      "description": "Extra Soulmask server options, e.g. -initbackup. Ports and passwords cannot be set here.",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 4,
+    "ram": 14000,
+    "hdd": 40
+   }
+  ]
+ },
+ {
   "name": "StreamrNode",
   "displayName": "Streamr Node",
   "category": "Blockchain",
   "description": "The Streamr Node, AutoStaker plugin,  hosted via Flux Cloud. \n\nAdjusting optional environment parameters is done at your own risk. \n\nOfficial Documentation: https://blog.streamr.network/the-autostaker-automated-staking-for-streamr-node-operators/",
-  "priceUSD": 9.7,
+  "priceUSD": 9.99,
   "multiplier": 2.94,
   "instances": 3,
   "lockedValues": [],
@@ -3806,7 +5388,7 @@
   "displayName": "Sushiswap",
   "category": "Front-end",
   "description": "Host your Sushiswap Frontend on the Flux Cloud",
-  "priceUSD": 2.1,
+  "priceUSD": 1.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],
@@ -3835,11 +5417,93 @@
   ]
  },
  {
+  "name": "TeamFortress2",
+  "displayName": "Team Fortress 2",
+  "category": "NewGames",
+  "description": "Host your own Team Fortress 2 server: any stock or Workshop map, SourceMod and Metamod installed and kept updated, a live server console, kicks and bans, and updates applied automatically.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "teamfortress2teamfortress2",
+    "description": "Team Fortress 2 dedicated server",
+    "repotag": "runonflux/tf2-server-flux:latest",
+    "ports": [
+     27015
+    ],
+    "containerPorts": [
+     27015
+    ],
+    "environmentParameters": [
+     "GAME_PORT=27015",
+     "TF2_MAXPLAYERS=24",
+     "TF2_HOSTNAME=Team Fortress 2 on Flux",
+     "TF2_MAP=ctf_2fort",
+     "TF2_SOURCEMOD=true"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/tf2/data|ml:server:/mnt/tf2/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "TF2_HOSTNAME",
+      "description": "Server name in the server browser.",
+      "placeholder": "My TF2 Server",
+      "optional": false
+     },
+     {
+      "name": "TF2_MAP",
+      "description": "Starting map: a stock map (ctf_2fort, pl_upward, koth_harvest_final, cp_badlands...) or a Workshop map as workshop/<id>.",
+      "placeholder": "ctf_2fort",
+      "optional": false
+     },
+     {
+      "name": "TF2_GSLT",
+      "description": "Game Server Login Token (steamcommunity.com/dev/managegameservers, App ID 440). Without one the server is hidden from the Internet server list.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "TF2_PASSWORD",
+      "description": "Join password. Empty = public.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "TF2_RCON_PASSWORD",
+      "description": "RCON password (the panel's console works without it). Empty = RCON off.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "TF2_SOURCEMOD",
+      "description": "true = Metamod:Source and SourceMod installed and kept updated: admin commands, plugins.",
+      "placeholder": "true",
+      "optional": true
+     },
+     {
+      "name": "TF2_EXTRA_ARGS",
+      "description": "Extra launch arguments, e.g. +sv_pure 1 +tf_server_identity_disable_quickplay 1.",
+      "placeholder": "",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 3000,
+    "hdd": 30
+   }
+  ]
+ },
+ {
   "name": "Teamspeak",
   "displayName": "Teamspeak",
   "category": "Hosting",
   "description": "16 Slot Teamspeak 3 Server. Use crystal clear sound to communicate with your team mates cross-platform with military-grade security, lag-free performance & unparalleled reliability and uptime.",
-  "priceUSD": 1.79,
+  "priceUSD": 1.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3878,7 +5542,7 @@
   "displayName": "Teamspeak6",
   "category": "Hosting",
   "description": "32 Slot Teamspeak 6 Server. Use crystal clear sound to communicate with your team mates cross-platform with military-grade security, lag-free performance & unparalleled reliability and uptime.\n",
-  "priceUSD": 3.99,
+  "priceUSD": 3.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -3917,7 +5581,7 @@
   "name": "Terraria",
   "displayName": "Terraria",
   "category": "NewGames",
-  "description": "Keep a persistent 2D sandbox running 24/7 for your whole party.",
+  "description": "Terraria 1.4.5.8 with TShock admin tools, plugins and no player cap, running 24/7 with automatic failover.",
   "priceUSD": 1,
   "multiplier": null,
   "instances": 2,
@@ -3929,25 +5593,29 @@
    {
     "name": "terrariaterraria",
     "description": "terraria",
-    "repotag": "ryshe/terraria:tshock-latest",
+    "repotag": "ghcr.io/pryaxis/tshock:6",
     "ports": [
-     7777
+     7777,
+     7878
     ],
     "containerPorts": [
-     7777
+     7777,
+     7878
     ],
     "environmentParameters": [
      "WORLD_FILENAME=FluxWorld.wld"
     ],
     "commands": [
+     "-world",
+     "/tshock/FluxWorld.wld",
      "-autocreate",
      "2",
      "-worldname",
      "FluxWorld",
      "-maxplayers",
-     "8"
+     "255"
     ],
-    "containerData": "g:/root/.local/share/Terraria/Worlds",
+    "containerData": "g:/tshock|m:ServerPlugins:/plugins",
     "userEnvironmentParameters": [],
     "cpu": 1,
     "ram": 1000,
@@ -3956,11 +5624,157 @@
   ]
  },
  {
+  "name": "TheForest",
+  "displayName": "The Forest",
+  "category": "NewGames",
+  "description": "Host The Forest always online for up to 8 friends: every server setting in your browser, five save slots, upload your co-op save, an admin password for the in-game commands, automatic updates and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "theforesttheforest",
+    "description": "The Forest dedicated server (Windows server under Wine, backups, no save on quit: it autosaves)",
+    "repotag": "runonflux/theforest-server-flux:latest",
+    "ports": [
+     8766,
+     27015,
+     27016
+    ],
+    "containerPorts": [
+     8766,
+     27015,
+     27016
+    ],
+    "environmentParameters": [
+     "FOREST_STEAM_PORT=8766",
+     "FOREST_GAME_PORT=27015",
+     "FOREST_QUERY_PORT=27016",
+     "FOREST_SERVER_NAME=The Forest on Flux",
+     "FOREST_DIFFICULTY=Normal",
+     "FOREST_RESTART_TIME=06:00"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/theforest/data|ml:server:/mnt/theforest/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "FOREST_SERVER_NAME",
+      "description": "Server name shown in the in-game server list (up to 60 characters).",
+      "placeholder": "My The Forest Server",
+      "optional": false
+     },
+     {
+      "name": "FOREST_PASSWORD",
+      "description": "Join password (up to 40 characters). Empty = anyone who finds the server can join.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "FOREST_DIFFICULTY",
+      "description": "Difficulty of a NEW world: Peaceful (no enemies), Normal or Hard. An existing world keeps the difficulty it was made with; start a new world in the Save Slots tab of your server panel to change it.",
+      "placeholder": "Normal",
+      "optional": true
+     },
+     {
+      "name": "FOREST_ADMIN_PASSWORD",
+      "description": "Admin password (up to 40 characters). A player who joins with it as the admin password can use /kick, /ban, /save, /restart and /shutdown in the in-game chat. Empty = nobody can.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "FOREST_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC), done when nobody is playing if possible, because the game saves when its last player leaves and not when it stops; it also installs game updates. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 3,
+    "ram": 4000,
+    "hdd": 12
+   }
+  ]
+ },
+ {
+  "name": "TheIsle",
+  "displayName": "The Isle: Evrima",
+  "category": "NewGames",
+  "description": "Host your own The Isle Evrima community server: playable classes, AI, growth, migrations and every Game.ini setting from a panel, admins, whitelist and VIPs, a join queue, in-game announcements, kicks and bans, update restarts with warnings and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "theisletheisle",
+    "description": "The Isle (Evrima) dedicated server",
+    "repotag": "runonflux/theisle-server-flux:latest",
+    "ports": [
+     7777,
+     10000
+    ],
+    "containerPorts": [
+     7777,
+     10000
+    ],
+    "environmentParameters": [
+     "ISLE_PORT=7777",
+     "ISLE_QUEUE_PORT=10000",
+     "ISLE_SERVER_NAME=The Isle on Flux",
+     "ISLE_MAX_PLAYERS=30"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/isle/data|ml:server:/mnt/isle/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "ISLE_SERVER_NAME",
+      "description": "Server name shown in the in-game server browser.",
+      "placeholder": "My Isle Server",
+      "optional": false
+     },
+     {
+      "name": "ISLE_ADMINS",
+      "description": "Admins: SteamID64s (17 digits starting 7656119), comma separated. Manage admins, whitelist, classes, AI and every other setting later in your server panel.",
+      "placeholder": "76561198000000000",
+      "optional": true
+     },
+     {
+      "name": "ISLE_DISCORD",
+      "description": "Your community's Discord invite, offered to players in game.",
+      "placeholder": "https://discord.gg/...",
+      "optional": true
+     },
+     {
+      "name": "ISLE_GROWTH_MULTIPLIER",
+      "description": "Growth speed multiplier (1 = normal). Leave empty to set it in your server panel.",
+      "placeholder": "1",
+      "optional": true
+     },
+     {
+      "name": "ISLE_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC); players are warned in game first. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 6000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
   "name": "TimpiCollector",
   "displayName": "Timpi Collector",
   "category": "Blockchain",
   "description": "Timpi Collectors are decentralized “workers” crawling the web collecting information about websites and their pages. This system remains invisible from front-end services, safeguarding the security of our Collectors.",
-  "priceUSD": 3.3,
+  "priceUSD": 3.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [],
@@ -4046,10 +5860,106 @@
   ]
  },
  {
+  "name": "tModLoader",
+  "displayName": "tModLoader (Modded Terraria)",
+  "category": "NewGames",
+  "description": "Host modded Terraria with tModLoader: Steam Workshop mods with their dependencies resolved automatically (players download them from the server when they join), any world size and difficulty, a live console, automatic saves, update restarts and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "tmodloadertmodloader",
+    "description": "tModLoader (Terraria with mods) dedicated server",
+    "repotag": "runonflux/tmodloader-server-flux:latest",
+    "ports": [
+     7777
+    ],
+    "containerPorts": [
+     7777
+    ],
+    "environmentParameters": [
+     "TML_PORT=7777",
+     "TML_WORLD_NAME=Terraria on Flux",
+     "TML_WORLD_SIZE=medium",
+     "TML_DIFFICULTY=classic",
+     "TML_MAX_PLAYERS=8",
+     "TML_VERSION=stable",
+     "TML_MODS="
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/tml/data|ml:server:/mnt/tml/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "TML_WORLD_NAME",
+      "description": "World name (also shown to players).",
+      "placeholder": "My Modded World",
+      "optional": false
+     },
+     {
+      "name": "TML_MODS",
+      "description": "Steam Workshop mods for tModLoader, by ID or link, comma separated (e.g. Calamity 2824688072). Everything they require is added automatically, and players get the mods from the server when they join. Add more later in the Mods tab of your server panel.",
+      "placeholder": "2824688072",
+      "optional": true
+     },
+     {
+      "name": "TML_WORLD_SIZE",
+      "description": "Size of a NEW world: small, medium or large. An existing world keeps its size.",
+      "placeholder": "medium",
+      "optional": true
+     },
+     {
+      "name": "TML_DIFFICULTY",
+      "description": "Difficulty of a NEW world: classic, expert, master or journey.",
+      "placeholder": "classic",
+      "optional": true
+     },
+     {
+      "name": "TML_SEED",
+      "description": "Seed for a NEW world (secret seeds work too, e.g. not the bees). Empty = random.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "TML_MAX_PLAYERS",
+      "description": "How many players can be on at once (1-255).",
+      "placeholder": "8",
+      "optional": true
+     },
+     {
+      "name": "TML_MOTD",
+      "description": "Message of the day, shown to players when they join.",
+      "placeholder": "Welcome!",
+      "optional": true
+     },
+     {
+      "name": "TML_VERSION",
+      "description": "tModLoader build: stable (recommended) or preview (the next version early).",
+      "placeholder": "stable",
+      "optional": true
+     },
+     {
+      "name": "TML_RESTART_TIME",
+      "description": "Daily restart at this time (HH:MM, UTC); players are warned in chat first. Empty = no daily restart.",
+      "placeholder": "06:00",
+      "optional": true
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 3000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
   "name": "Unturned",
   "displayName": "Unturned",
   "category": "NewGames",
-  "description": "Run a zombie-survival sandbox with mods, plugins, and full admin control.",
+  "description": "Run an Unturned server on any official or Workshop map, with your Steam login token, Workshop mods, RocketMod plugins, automatic saves and backups.",
   "priceUSD": 1,
   "multiplier": null,
   "instances": 2,
@@ -4060,8 +5970,8 @@
   "compose": [
    {
     "name": "unturnedunturned",
-    "description": "unturned",
-    "repotag": "ich777/steamcmd:unturned",
+    "description": "Unturned dedicated server",
+    "repotag": "runonflux/unturned-server-flux:latest",
     "ports": [
      27015,
      27016
@@ -4071,17 +5981,70 @@
      27016
     ],
     "environmentParameters": [
-     "GAME_ID=1110390",
-     "VALIDATE=true",
-     "DATA_PERM=777",
-     "GAME_PARAMS=+secureserver/Default"
+     "FLUX_PORT=27015",
+     "UNT_MAX_PLAYERS=12",
+     "UNT_NAME=Flux Unturned Server",
+     "UNT_MAP=PEI",
+     "UNT_MODE=Normal",
+     "UNT_PERSPECTIVE=Both",
+     "UNT_PASSWORD=",
+     "FLUX_AUTOSAVE_MINUTES=10"
     ],
     "commands": [],
-    "containerData": "g:/serverdata/serverfiles",
-    "userEnvironmentParameters": [],
-    "cpu": 1,
-    "ram": 2000,
-    "hdd": 8
+    "containerData": "g:/mnt/unturned/data|ml:server:/mnt/unturned/server|ml:workshop:/mnt/unturned/data/Default/Workshop/Steam",
+    "userEnvironmentParameters": [
+     {
+      "name": "UNT_NAME",
+      "description": "Server name shown in the server list (50 characters at most).",
+      "placeholder": "My Unturned Server",
+      "optional": false
+     },
+     {
+      "name": "UNT_GSLT",
+      "description": "Game Server Login Token for app 304930, from steamcommunity.com/dev/managegameservers. Without it the server cannot be joined over the Internet.",
+      "placeholder": "32 letters and digits",
+      "optional": true
+     },
+     {
+      "name": "UNT_MAP",
+      "description": "Map. Workshop maps (Hawaii, Greece, Elver...) need their Workshop ID in UNT_WORKSHOP_IDS and their name here.",
+      "placeholder": "PEI",
+      "optional": false
+     },
+     {
+      "name": "UNT_MODE",
+      "description": "Difficulty: Easy, Normal or Hard. Sets the defaults for loot, zombies, vehicles and survival; each can still be changed in Config.txt.",
+      "placeholder": "Normal",
+      "optional": false
+     },
+     {
+      "name": "UNT_PASSWORD",
+      "description": "Join password, no spaces. Empty for a public server.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "UNT_OWNER",
+      "description": "Your SteamID64 (17 digits): the owner gets admin rights in game.",
+      "placeholder": "7656119xxxxxxxxxx",
+      "optional": true
+     },
+     {
+      "name": "UNT_ROCKETMOD",
+      "description": "true = RocketMod plugin framework on (the Rocket build that ships with Unturned; upload plugin .dll files to Default/Rocket/Plugins), false = vanilla server.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "UNT_WORKSHOP_IDS",
+      "description": "Comma-separated Steam Workshop file IDs (maps and mods); downloaded on every start.",
+      "placeholder": "1753134636,1753131903",
+      "optional": true
+     }
+    ],
+    "cpu": 1.5,
+    "ram": 2500,
+    "hdd": 15
    }
   ]
  },
@@ -4090,7 +6053,7 @@
   "displayName": "UptimeKuma",
   "category": "Productivity",
   "description": "Uptime Kuma is an easy-to-use self-hosted monitoring tool. ",
-  "priceUSD": 5.99,
+  "priceUSD": 1.49,
   "multiplier": null,
   "instances": 3,
   "lockedValues": [
@@ -4136,7 +6099,7 @@
    {
     "name": "valheimvalheim",
     "description": "valheim",
-    "repotag": "lloesche/valheim-server:latest",
+    "repotag": "runonflux/valheim-server-flux:latest",
     "ports": [
      2456,
      2457,
@@ -4151,7 +6114,8 @@
      "SERVER_ARGS=-crossplay",
      "RESTART_CRON=0 5 * * *",
      "RESTART_IF_IDLE=true",
-     "TZ=Etc/UTC"
+     "TZ=Etc/UTC",
+     "PRE_SERVER_RUN_HOOK=mkdir -p /config/sync-conflicts && find /config/worlds_local -type f -name \"*.sync-conflict-*\" -print -exec mv -f {} /config/sync-conflicts/ \\; ; true"
     ],
     "commands": [],
     "containerData": "g:/config",
@@ -4186,7 +6150,7 @@
   "displayName": "Vaultwarden",
   "category": "Productivity",
   "description": "Deploy your own Vaultwarden password manager on Flux Cloud",
-  "priceUSD": 2.55,
+  "priceUSD": 3.49,
   "multiplier": null,
   "instances": 2,
   "lockedValues": [],
@@ -4222,6 +6186,104 @@
   ]
  },
  {
+  "name": "VintageStory",
+  "displayName": "Vintage Story",
+  "category": "NewGames",
+  "description": "Host Vintage Story on your own server: any play style and world settings, mods from the official ModDB with their dependencies, version pinning, automatic saves, update restarts and backups.",
+  "priceUSD": 1,
+  "multiplier": null,
+  "instances": 2,
+  "lockedValues": [],
+  "geolocationOptions": [],
+  "enabled": true,
+  "visible": true,
+  "compose": [
+   {
+    "name": "vintagestoryvintagestory",
+    "description": "Vintage Story dedicated server (runonflux/vintagestory-server-flux)",
+    "repotag": "runonflux/vintagestory-server-flux:latest",
+    "ports": [
+     42420
+    ],
+    "containerPorts": [
+     42420
+    ],
+    "environmentParameters": [
+     "VS_PORT=42420",
+     "VS_MAX_CLIENTS=8",
+     "VS_VERSION=latest"
+    ],
+    "commands": [],
+    "containerData": "g:/mnt/vs/data|ml:server:/mnt/vs/server",
+    "userEnvironmentParameters": [
+     {
+      "name": "VS_NAME",
+      "description": "Server name, shown in the multiplayer screen and, if listed, on the public server list.",
+      "placeholder": "My Vintage Story Server",
+      "optional": false
+     },
+     {
+      "name": "VS_PASSWORD",
+      "description": "Password players type to join. Leave empty for no password (then use the whitelist, or anyone who has the address can join).",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "VS_PLAYSTYLE",
+      "description": "The first world's play style, as on the Create World screen: surviveandbuild (Standard), exploration (relaxed, passive creatures), wildernesssurvival (harsh, random respawn), homosapiens (no lore, realistic), creativebuilding (flat, unlimited blocks). Change it later by creating a new world in the World tab of your server panel.",
+      "placeholder": "surviveandbuild",
+      "optional": false
+     },
+     {
+      "name": "VS_WORLD_NAME",
+      "description": "The first world's name.",
+      "placeholder": "A new world",
+      "optional": true
+     },
+     {
+      "name": "VS_SEED",
+      "description": "The first world's seed (a number). Leave empty for a random world.",
+      "placeholder": "",
+      "optional": true
+     },
+     {
+      "name": "VS_WORLD_SIZE",
+      "description": "The first world's width and length in blocks: 1024000 is the game's default; smaller worlds make climate zones closer together.",
+      "placeholder": "1024000",
+      "optional": true
+     },
+     {
+      "name": "VS_WHITELIST",
+      "description": "true = only players on the whitelist can join (add them by name in the Players tab of your server panel). false = anyone with the address (and the password, if set) can join.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "VS_ADVERTISE",
+      "description": "true = the server is listed on Vintage Story's public server list.",
+      "placeholder": "false",
+      "optional": true
+     },
+     {
+      "name": "VS_ADMINS",
+      "description": "Admins: Vintage Story player names, comma separated. They get the Admin role once the server is up.",
+      "placeholder": "PlayerName",
+      "optional": true
+     },
+     {
+      "name": "VS_MODS",
+      "description": "Mods from mods.vintagestory.at by id or link, comma separated (e.g. carryon): installed with their dependencies on start. Easier: the Mods tab of your server panel, which searches the ModDB. Players download the server's mods when they join.",
+      "placeholder": "carryon",
+      "optional": true
+     }
+    ],
+    "cpu": 2,
+    "ram": 4000,
+    "hdd": 15
+   }
+  ]
+ },
+ {
   "name": "VRising",
   "displayName": "V Rising",
   "category": "NewGames",
@@ -4237,32 +6299,48 @@
    {
     "name": "vrisingvrising",
     "description": "vrising",
-    "repotag": "trueosiris/vrising:latest",
+    "repotag": "runonflux/vrising-server-flux:latest",
     "ports": [
      9876,
-     9877
+     9877,
+     25575
     ],
     "containerPorts": [
      9876,
-     9877
+     9877,
+     25575
     ],
-    "environmentParameters": [],
-    "commands": [
-     "bash",
-     "-c",
-     "sed -i 's/\\r$//' /start.sh && exec /start.sh"
+    "environmentParameters": [
+     "VR_RCON_ENABLED=true",
+     "VR_RCON_PORT=25575",
+     "VR_LIST_ON_STEAM=true",
+     "VR_LIST_ON_EOS=true",
+     "ENABLE_MODS=true"
     ],
-    "containerData": "g:/mnt/vrising/persistentdata|m:server:/mnt/vrising/server",
+    "commands": [],
+    "containerData": "g:/mnt/vrising/persistentdata|m:server:/mnt/vrising/server|m:mods:/mnt/vrising/mods",
     "userEnvironmentParameters": [
      {
-      "name": "SERVERNAME",
+      "name": "VR_SERVER_NAME",
       "description": "Server name shown in the server browser",
       "placeholder": "My V Rising Server",
       "optional": false
+     },
+     {
+      "name": "VR_RCON_PASSWORD",
+      "description": "Password for RCON remote console access (required)",
+      "placeholder": "Choose a strong RCON password",
+      "optional": false
+     },
+     {
+      "name": "VR_PASSWORD",
+      "description": "Password players need to join the server. Leave empty for a public server",
+      "placeholder": "",
+      "optional": true
      }
     ],
     "cpu": 2,
-    "ram": 4000,
+    "ram": 8000,
     "hdd": 10
    }
   ]
@@ -4271,7 +6349,7 @@
   "name": "Windrose",
   "displayName": "Windrose",
   "category": "NewGames",
-  "description": "Sail the skies in this co-op survival adventure — your crew's island, always online. Early Access; requires an AVX2-capable CPU.",
+  "description": "Co-op pirate survival adventure — your crew's world, always online. Early Access; requires an AVX2-capable CPU.",
   "priceUSD": 1,
   "multiplier": null,
   "instances": 2,
@@ -4283,7 +6361,7 @@
    {
     "name": "windrosewindrose",
     "description": "windrose",
-    "repotag": "indifferentbroccoli/windrose-server-docker:latest",
+    "repotag": "runonflux/windrose-server-flux:latest",
     "ports": [
      7777
     ],
@@ -4330,7 +6408,7 @@
   "displayName": "Yearn",
   "category": "Front-end",
   "description": "Host your Yearn Finance Frontend on the Flux Cloud",
-  "priceUSD": 3.16,
+  "priceUSD": 1.99,
   "multiplier": 1,
   "instances": 3,
   "lockedValues": [],

@@ -73,4 +73,4 @@ Worked example — 9.5 cores, 28000 MB RAM, 67 GB SSD, enterprise, 1 instance, o
 
 Every application gets its own docker network. A component reaches another component of the same application at `flux<component>_<appname>` on its container port, with nothing published.
 
-_Generated 2026-09-14 from FluxOS config; regenerate when the source changes._
+_Generated 2026-11-24 from FluxOS config; regenerate when the source changes._

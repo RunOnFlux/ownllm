@@ -4,6 +4,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY server.js /app/server.js
 COPY live.js /app/live.js
+COPY sources.js /app/sources.js
 COPY docs /app/docs
 ENV PORT=8080 DOCS_DIR=/app/docs
 EXPOSE 8080

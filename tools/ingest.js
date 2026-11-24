@@ -63,15 +63,25 @@ const keepUrl = u => (!INCLUDE || INCLUDE.test(u)) && (!EXCLUDE || !EXCLUDE.test
  * So the default is to refuse, name what was refused, and require
  * --allow-internal to override.
  */
-const INTERNAL = /(^|\/|_)(plan|roadmap|deck|narrative|prep|playbook|audit|internal|private|secret|strategy|principles|instructions|meeting|outreach|growth|launch-copy)([._-]|$)/i;
+const INTERNAL = /(^|\/|_)(plan|roadmap|deck|narrative|prep|playbook|audit|internal|private|secret|strategy|principles|instructions|meeting|outreach|growth|launch-copy|design|todo|competitors?|competitive|landscape)([._-]|$)/i;
+// The November 2026 build let through what the list above could not name:
+// brimley's state-and-roadmap.md and apollo-notes.md (a hyphen before the word),
+// deployment and archive notes, an AI assistant's CLAUDE.md, unreleased feature
+// designs (WALLETCONNECT_ENTERPRISE_PHASE2_DESIGN.md) and a sales folder
+// (docs/company: competitor battle cards, investor plans). 399 chunks of it had
+// been in the corpus since September. Release notes stay in.
+const INTERNAL_HYPHENATED = /(^|[\/_-])(roadmap|(?<!release[._-])notes)([._-]|$)/i;
+const ASSISTANT_FILES = /^(claude|agents|gemini|copilot-instructions)\.md$/i;
+const INTERNAL_DIRS = /(^|\/)(company|audits?|internal|private)\//i;
 const IN_WORKTREE = /(^|\/)(\.claude|\.git|worktrees|node_modules)(\/|$)/;
 const ALLOW_INTERNAL = argv.includes('--allow-internal');
 const refused = [];
 const skipped = [];
 
 function isInternal(relPath) {
-  if (IN_WORKTREE.test(relPath)) return true;
-  return INTERNAL.test(relPath.split('/').pop());
+  if (IN_WORKTREE.test(relPath) || INTERNAL_DIRS.test(relPath)) return true;
+  const name = relPath.split('/').pop();
+  return INTERNAL.test(name) || INTERNAL_HYPHENATED.test(name) || ASSISTANT_FILES.test(name);
 }
 
 const chunks = [];
@@ -405,7 +415,9 @@ async function ingestApi(endpoint) {
   if (dropped) console.log(`  deduplicated: dropped ${dropped} repeated chunks`);
   chunks.length = 0; chunks.push(...deduped);
 
-  const line = `${chunks.map(c => JSON.stringify(c)).join('\n')}\n`;
+  // Nothing found (a site that is down) writes nothing: an empty line breaks every
+  // reader that parses the corpus line by line.
+  const line = chunks.length ? `${chunks.map(c => JSON.stringify(c)).join('\n')}\n` : '';
   if (argv.includes('--append') && fs.existsSync(OUT)) fs.appendFileSync(OUT, line);
   else fs.writeFileSync(OUT, line);
   const words = chunks.reduce((a, c) => a + c.text.split(/\s+/).length, 0);
